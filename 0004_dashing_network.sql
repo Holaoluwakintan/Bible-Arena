@@ -1,0 +1,1 @@
+ALTER TABLE `multiplayer_rooms` ADD `roomVersion` int DEFAULT 0 NOT NULL;
