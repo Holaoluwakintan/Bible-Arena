@@ -1,5 +1,9 @@
 // Load environment variables with proper priority (system > .env)
-import "./scripts/load-env.js";
+try {
+  require("dotenv/config");
+} catch {
+  // dotenv loaded by bundler or environment
+}
 import type { ExpoConfig } from "expo/config";
 
 const rawBundleId = "com.app.biblearenamobile";
@@ -90,6 +94,11 @@ const config: ExpoConfig = {
     ],
   ],
   experiments: { typedRoutes: true, reactCompiler: true },
+  extra: {
+    eas: {
+      projectId: "eacd9a71-f4bc-4a75-8d9f-63be32273ca6",
+    },
+  },
 };
 
 export default config;

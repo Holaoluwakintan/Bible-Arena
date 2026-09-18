@@ -1,2 +1,21 @@
-# Google App Engine generated folder
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+.expo/
+
+# Environment variables
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Google App Engine
 appengine-generated/
+
+# SQLite database (local dev)
+*.sqlite
+*.db
