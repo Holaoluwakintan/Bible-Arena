@@ -1,10 +1,12 @@
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { useEffect, useState } from "react";
 import { ScrollView, Pressable, StyleSheet, Text, View, Platform } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
+import { loadProgressState } from "@/domain/local-storage";
 
 function tapFeedback() {
   if (Platform.OS !== "web") {
@@ -14,6 +16,15 @@ function tapFeedback() {
 
 export default function HomeScreen() {
   const colors = useColors();
+  const [onboardingNeeded, setOnboardingNeeded] = useState(false);
+
+  useEffect(() => {
+    void loadProgressState().then((state) => {
+      if (!state.hasCompletedOnboarding) {
+        setOnboardingNeeded(true);
+      }
+    });
+  }, []);
 
   return (
     <ScreenContainer className="px-5" containerClassName="bg-background">
@@ -28,6 +39,27 @@ export default function HomeScreen() {
             <Text style={[styles.avatarText, { color: colors.background }]}>G</Text>
           </View>
         </View>
+
+        {onboardingNeeded && (
+          <View style={[styles.onboardingBanner, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
+            <View style={[styles.onboardingBadge, { backgroundColor: colors.primary }]}>
+              <IconSymbol name="sparkles" size={16} color={colors.background} />
+            </View>
+            <View style={styles.onboardingCopy}>
+              <Text style={[styles.onboardingTitle, { color: colors.foreground }]}>New to the Arena?</Text>
+              <Text style={[styles.onboardingSubtitle, { color: colors.muted }]}>Take the 60s interactive tour & claim +100 Starter XP!</Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Start onboarding tour"
+              onPress={() => { tapFeedback(); router.push("/onboarding"); }}
+              style={({ pressed }) => [styles.onboardingBtn, { backgroundColor: colors.primary }, pressed && styles.pressed]}
+            >
+              <Text style={[styles.onboardingBtnText, { color: colors.background }]}>Start</Text>
+              <IconSymbol name="chevron.right" size={14} color={colors.background} />
+            </Pressable>
+          </View>
+        )}
 
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroCopy}>
@@ -137,4 +169,11 @@ const styles = StyleSheet.create({
   quoteMark: { fontSize: 38, lineHeight: 30, fontWeight: "800" },
   quoteText: { fontSize: 17, fontWeight: "700", lineHeight: 24, marginTop: 4 },
   quoteCaption: { fontSize: 12, marginTop: 10 },
+  onboardingBanner: { borderRadius: 20, borderWidth: 1.5, padding: 14, flexDirection: "row", alignItems: "center", gap: 12 },
+  onboardingBadge: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  onboardingCopy: { flex: 1 },
+  onboardingTitle: { fontSize: 14, fontWeight: "800" },
+  onboardingSubtitle: { fontSize: 11, marginTop: 2, lineHeight: 15 },
+  onboardingBtn: { borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 4 },
+  onboardingBtnText: { fontSize: 12, fontWeight: "800" },
 });

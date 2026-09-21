@@ -9,10 +9,13 @@ import { AI_DIFFICULTIES, getAiAnswer, type AiDifficulty } from "@/domain/ai-bat
 import { calculateResult, createGameSession, getCurrentQuestion, submitAnswer, type GameResult, type GameSession } from "@/domain/game-engine";
 import { getVerifiedQuestions } from "@/domain/questions";
 import { useProgression } from "@/lib/progression-provider";
+import { calculateLevel } from "@/domain/progression";
+import { shareGameResult } from "@/lib/share";
 
 export default function AiBattleScreen() {
   const colors = useColors();
-  const { recordSession } = useProgression();
+  const { recordSession, state } = useProgression();
+  const progression = state.progression;
   const questions = useMemo(() => getVerifiedQuestions(5), []);
   const [difficulty, setDifficulty] = useState<AiDifficulty>("medium");
   const [started, setStarted] = useState(false);
@@ -73,6 +76,23 @@ export default function AiBattleScreen() {
       <Text style={[styles.eyebrow, { color: colors.primary }]}>BATTLE COMPLETE</Text>
       <Text style={[styles.title, { color: colors.foreground }]}>{result.score >= aiScore ? "You held your ground." : "Your rival edged ahead."}</Text>
       <View style={[styles.scoreCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.scoreLine, { color: colors.foreground }]}>You <Text style={{ color: colors.primary }}>{result.score}</Text></Text><Text style={[styles.scoreLine, { color: colors.foreground }]}>AI <Text style={{ color: colors.muted }}>{aiScore}</Text></Text><Text style={[styles.resultMeta, { color: colors.muted }]}>{result.accuracy}% accuracy · +{result.xpEarned} XP</Text></View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Share your AI battle result"
+        onPress={() => {
+          void shareGameResult({
+            modeName: `AI Battle (${AI_DIFFICULTIES[difficulty].label})`,
+            score: result.score,
+            accuracy: result.accuracy,
+            streak: progression.currentStreak,
+            level: calculateLevel(progression.totalXp),
+          });
+        }}
+        style={({ pressed }) => [styles.shareButton, { backgroundColor: colors.surface, borderColor: colors.primary }, pressed && styles.pressed]}
+      >
+        <IconSymbol name="sparkles" size={18} color={colors.primary} />
+        <Text style={[styles.shareButtonText, { color: colors.primary }]}>Share Result</Text>
+      </Pressable>
       <Pressable onPress={startBattle} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.primaryButtonText, { color: colors.background }]}>Rematch</Text></Pressable>
     </ScrollView></ScreenContainer>;
   }
@@ -86,4 +106,6 @@ export default function AiBattleScreen() {
 
 const styles = StyleSheet.create({
   content: { paddingTop: 18, paddingBottom: 38, gap: 18 }, back: { fontSize: 13, fontWeight: "800" }, eyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1.7 }, title: { fontSize: 30, fontWeight: "800", lineHeight: 37, letterSpacing: -0.7 }, subtitle: { fontSize: 15, lineHeight: 22 }, difficultyList: { gap: 10, marginTop: 10 }, difficultyCard: { minHeight: 76, borderRadius: 19, borderWidth: 1, padding: 13, flexDirection: "row", alignItems: "center", gap: 12 }, difficultyIcon: { width: 42, height: 42, borderRadius: 13, alignItems: "center", justifyContent: "center" }, difficultyCopy: { flex: 1 }, difficultyTitle: { fontSize: 15, fontWeight: "800" }, difficultyMeta: { fontSize: 12, marginTop: 4 }, check: { fontSize: 18, fontWeight: "800" }, primaryButton: { minHeight: 54, borderRadius: 16, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, primaryButtonText: { fontSize: 13, fontWeight: "800" }, pressed: { opacity: 0.78, transform: [{ scale: 0.985 }] }, resultIcon: { width: 66, height: 66, borderRadius: 23, alignItems: "center", justifyContent: "center", alignSelf: "center" }, scoreCard: { borderRadius: 22, borderWidth: 1, padding: 20, gap: 10 }, scoreLine: { fontSize: 20, fontWeight: "800" }, resultMeta: { fontSize: 13, marginTop: 5 }, topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, questionCount: { fontSize: 13, fontWeight: "800" }, matchup: { borderRadius: 20, borderWidth: 1, padding: 16, flexDirection: "row", justifyContent: "space-around", alignItems: "center" }, matchupName: { fontSize: 17, fontWeight: "800" }, vs: { fontSize: 12, fontWeight: "900", letterSpacing: 1.4 }, question: { fontSize: 27, lineHeight: 35, fontWeight: "800", letterSpacing: -0.5, marginTop: 12 }, options: { gap: 10 }, option: { minHeight: 64, borderRadius: 17, borderWidth: 1, padding: 12, flexDirection: "row", alignItems: "center", gap: 12 }, letter: { width: 33, height: 33, borderRadius: 10, alignItems: "center", justifyContent: "center" }, letterText: { fontSize: 13, fontWeight: "800" }, optionText: { flex: 1, fontSize: 15, fontWeight: "700" },
+  shareButton: { minHeight: 52, borderRadius: 16, borderWidth: 1.5, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 10 },
+  shareButtonText: { fontSize: 14, fontWeight: "800" },
 });

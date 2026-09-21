@@ -6,6 +6,8 @@ import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { useProgression } from "@/lib/progression-provider";
+import { calculateLevel } from "@/domain/progression";
+import { shareGameResult } from "@/lib/share";
 import {
   calculateResult,
   createGameSession,
@@ -26,8 +28,9 @@ export default function BibleQuizScreen() {
   const isBibleOrMyth = gameMode === "bible_or_myth";
   const isWordPuzzle = gameMode === "word_puzzle";
   const isDailyChallenge = gameMode === "daily_challenge";
-  const { recordSession } = useProgression();
-  const questions = useMemo(() => getVerifiedQuestionsForMode(gameMode, gameMode === "bible_quiz" ? 10 : 5), [gameMode]);
+  const { recordSession, state } = useProgression();
+  const progression = state.progression;
+  const questions = useMemo(() => getVerifiedQuestionsForMode(gameMode, gameMode === "bible_quiz" ? 10 : 5, true), [gameMode]);
   const [session, setSession] = useState<GameSession>(() => createGameSession(questions, { mode: gameMode }));
   const [questionStartedAt, setQuestionStartedAt] = useState(() => Date.now());
   const [remainingMs, setRemainingMs] = useState(RESPONSE_WINDOW_MS);
@@ -102,6 +105,24 @@ export default function BibleQuizScreen() {
               <Text style={[styles.reference, { color: colors.primary }]}>{feedback.reference}</Text>
             </View>
           )}
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Share your score"
+            onPress={() => {
+              void shareGameResult({
+                modeName: isBibleOrMyth ? "Bible or Myth" : isWordPuzzle ? "Word Puzzle" : isDailyChallenge ? "Daily Challenge" : "Bible Quiz",
+                score: result.score,
+                accuracy: result.accuracy,
+                streak: progression.currentStreak,
+                level: calculateLevel(progression.totalXp),
+              });
+            }}
+            style={({ pressed }) => [styles.shareButton, { backgroundColor: colors.surface, borderColor: colors.primary }, pressed && styles.pressed]}
+          >
+            <IconSymbol name="sparkles" size={18} color={colors.primary} />
+            <Text style={[styles.shareButtonText, { color: colors.primary }]}>Share Result</Text>
+          </Pressable>
 
           <Pressable accessibilityRole="button" accessibilityLabel="Return to play" onPress={() => router.replace("/play")} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}>
             <Text style={[styles.primaryButtonText, { color: colors.background }]}>Play again</Text>
@@ -248,4 +269,6 @@ const styles = StyleSheet.create({
   resultStat: { alignItems: "center", gap: 4 },
   resultStatValue: { fontSize: 16, fontWeight: "800" },
   resultStatLabel: { fontSize: 11 },
+  shareButton: { minHeight: 52, borderRadius: 16, borderWidth: 1.5, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  shareButtonText: { fontSize: 14, fontWeight: "800" },
 });

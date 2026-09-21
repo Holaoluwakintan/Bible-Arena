@@ -146,6 +146,16 @@ function initSchema(db: DatabaseSync) {
       claimedAt INTEGER NOT NULL,
       PRIMARY KEY (userId, seasonId, rewardId)
     );
+
+    CREATE TABLE IF NOT EXISTS push_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER,
+      token TEXT NOT NULL UNIQUE,
+      platform TEXT,
+      dailyReminders INTEGER NOT NULL DEFAULT 1,
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
   `);
 }
 
@@ -1028,3 +1038,36 @@ export async function rematchMultiplayerRoom(roomId: string, userId: number, exp
   broadcastRoom(roomId, updated);
   return updated;
 }
+
+export function registerPushToken(
+  token: string,
+  userId?: number | null,
+  platform?: string,
+): { success: boolean } {
+  const db = getDb();
+  const now = Date.now();
+  db.prepare(`
+    INSERT INTO push_tokens (userId, token, platform, dailyReminders, createdAt, updatedAt)
+    VALUES (?, ?, ?, 1, ?, ?)
+    ON CONFLICT(token) DO UPDATE SET
+      userId = COALESCE(excluded.userId, push_tokens.userId),
+      platform = COALESCE(excluded.platform, push_tokens.platform),
+      updatedAt = excluded.updatedAt
+  `).run(userId ?? null, token, platform ?? "unknown", now, now);
+  return { success: true };
+}
+
+export function updateNotificationPreferences(
+  token: string,
+  dailyReminders: boolean,
+): { success: boolean } {
+  const db = getDb();
+  const now = Date.now();
+  db.prepare(`
+    UPDATE push_tokens
+    SET dailyReminders = ?, updatedAt = ?
+    WHERE token = ?
+  `).run(dailyReminders ? 1 : 0, now, token);
+  return { success: true };
+}
+

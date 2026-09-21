@@ -1,10 +1,16 @@
-import { useState } from "react";
+import { router } from "expo-router";
+import { useEffect, useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
+import {
+  getNotificationPreferences,
+  scheduleDailyStreakReminder,
+  cancelDailyStreakReminder,
+} from "@/lib/notifications";
 
 function toggleFeedback() {
   if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -13,7 +19,21 @@ function toggleFeedback() {
 export default function SettingsScreen() {
   const colors = useColors();
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+
+  useEffect(() => {
+    void getNotificationPreferences().then((p) => setNotificationsEnabled(p.dailyStreakReminder));
+  }, []);
+
+  const handleToggleReminders = async (enabled: boolean) => {
+    toggleFeedback();
+    setNotificationsEnabled(enabled);
+    if (enabled) {
+      await scheduleDailyStreakReminder(20, 0);
+    } else {
+      await cancelDailyStreakReminder();
+    }
+  };
 
   return (
     <ScreenContainer className="px-5" containerClassName="bg-background">
@@ -53,11 +73,27 @@ export default function SettingsScreen() {
               <Switch
                 accessibilityLabel="Toggle daily reminders"
                 value={notificationsEnabled}
-                onValueChange={(value) => { toggleFeedback(); setNotificationsEnabled(value); }}
+                onValueChange={handleToggleReminders}
                 trackColor={{ false: colors.border, true: colors.primary }}
                 thumbColor={colors.foreground}
               />
             </View>
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Review onboarding walkthrough"
+              onPress={() => { toggleFeedback(); router.push("/onboarding"); }}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+            >
+              <View style={[styles.rowIcon, { backgroundColor: "#243650" }]}>
+                <IconSymbol name="sparkles" size={19} color={colors.primary} />
+              </View>
+              <View style={styles.rowCopy}>
+                <Text style={[styles.rowTitle, { color: colors.foreground }]}>Onboarding tour</Text>
+                <Text style={[styles.rowSubtitle, { color: colors.muted }]}>Replay the 3-step interactive intro</Text>
+              </View>
+              <IconSymbol name="chevron.right" size={16} color={colors.muted} />
+            </Pressable>
           </View>
         </View>
 
@@ -110,4 +146,5 @@ const styles = StyleSheet.create({
   status: { fontSize: 11, fontWeight: "800" },
   divider: { height: 1 },
   footer: { textAlign: "center", fontSize: 11, lineHeight: 17, marginTop: 6 },
+  pressed: { opacity: 0.8 },
 });

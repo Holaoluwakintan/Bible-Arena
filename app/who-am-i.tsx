@@ -7,6 +7,8 @@ import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { useProgression } from "@/lib/progression-provider";
+import { calculateLevel } from "@/domain/progression";
+import { shareGameResult } from "@/lib/share";
 import {
   calculateWhoAmIPoints,
   calculateWhoAmIResult,
@@ -32,7 +34,8 @@ function errorFeedback() {
 
 export default function WhoAmIScreen() {
   const colors = useColors();
-  const { recordSession } = useProgression();
+  const { recordSession, state } = useProgression();
+  const progression = state.progression;
 
   // Shuffle and pick 5 questions for variety
   const questions = useMemo(() => {
@@ -142,6 +145,24 @@ export default function WhoAmIScreen() {
               </View>
             </View>
           </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Share your Who Am I score"
+            onPress={() => {
+              void shareGameResult({
+                modeName: "Who Am I? (Biblical Deduction)",
+                score: result.score,
+                accuracy: result.accuracy,
+                streak: progression.currentStreak,
+                level: calculateLevel(progression.totalXp),
+              });
+            }}
+            style={({ pressed }) => [styles.shareButton, { backgroundColor: colors.surface, borderColor: colors.primary }, pressed && styles.pressed]}
+          >
+            <IconSymbol name="sparkles" size={18} color={colors.primary} />
+            <Text style={[styles.shareButtonText, { color: colors.primary }]}>Share Result</Text>
+          </Pressable>
 
           <Pressable
             accessibilityRole="button"
@@ -446,4 +467,6 @@ const styles = StyleSheet.create({
   resultStat: { alignItems: "center", gap: 4 },
   resultStatValue: { fontSize: 16, fontWeight: "800" },
   resultStatLabel: { fontSize: 11 },
+  shareButton: { minHeight: 52, borderRadius: 16, borderWidth: 1.5, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 8 },
+  shareButtonText: { fontSize: 14, fontWeight: "800" },
 });

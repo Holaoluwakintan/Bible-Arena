@@ -82,6 +82,8 @@ export function getLevelForXp(xp: number): number {
   return level;
 }
 
+export const calculateLevel = getLevelForXp;
+
 export function getLevelName(level: number): string {
   return LEVEL_NAMES[Math.min(Math.max(level - 1, 0), LEVEL_NAMES.length - 1)];
 }

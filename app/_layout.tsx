@@ -1,13 +1,18 @@
 import { Tabs } from "expo-router";
 import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { ProgressionProvider } from "@/lib/progression-provider";
 import { HapticTab } from "@/components/haptic-tab";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
+import {
+  getNotificationPreferences,
+  registerForPushNotificationsAsync,
+  scheduleDailyStreakReminder,
+} from "@/lib/notifications";
 
 export default function RootLayout() {
   const colors = useColors();
@@ -26,6 +31,19 @@ export default function RootLayout() {
       }),
   );
   const [trpcClient] = useState(() => createTRPCClient());
+
+  useEffect(() => {
+    void (async () => {
+      const prefs = await getNotificationPreferences();
+      if (prefs.dailyStreakReminder) {
+        void scheduleDailyStreakReminder(prefs.reminderHour, prefs.reminderMinute);
+      }
+      const token = await registerForPushNotificationsAsync();
+      if (token) {
+        trpcClient.notifications.registerToken.mutate({ token, platform: Platform.OS }).catch(() => null);
+      }
+    })();
+  }, [trpcClient]);
 
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
@@ -79,6 +97,8 @@ export default function RootLayout() {
               }}
             />
             <Tabs.Screen name="quiz" options={{ href: null }} />
+            <Tabs.Screen name="who-am-i" options={{ href: null }} />
+            <Tabs.Screen name="onboarding" options={{ href: null }} />
             <Tabs.Screen name="room" options={{ href: null }} />
             <Tabs.Screen name="challenges" options={{ href: null }} />
             <Tabs.Screen name="ai-battle" options={{ href: null }} />

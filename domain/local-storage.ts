@@ -21,6 +21,7 @@ export interface LocalProgressState {
   sessions: SessionHistoryEntry[];
   achievements: UnlockedAchievement[];
   challenges: FriendChallenge[];
+  hasCompletedOnboarding?: boolean;
 }
 
 const STORAGE_KEY = "bible-arena:local-progress:v1";
@@ -30,6 +31,7 @@ export const EMPTY_PROGRESS_STATE: LocalProgressState = {
   sessions: [],
   achievements: [],
   challenges: [],
+  hasCompletedOnboarding: false,
 };
 
 export function toHistoryEntry(result: GameResult): SessionHistoryEntry {
@@ -55,6 +57,7 @@ export async function loadProgressState(): Promise<LocalProgressState> {
       sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
       achievements: Array.isArray(parsed.achievements) ? parsed.achievements : [],
       challenges: Array.isArray(parsed.challenges) ? parsed.challenges : [],
+      hasCompletedOnboarding: Boolean(parsed.hasCompletedOnboarding),
     };
   } catch {
     return EMPTY_PROGRESS_STATE;
@@ -63,4 +66,9 @@ export async function loadProgressState(): Promise<LocalProgressState> {
 
 export async function saveProgressState(state: LocalProgressState): Promise<void> {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+export async function setOnboardingCompleted(completed = true): Promise<void> {
+  const current = await loadProgressState();
+  await saveProgressState({ ...current, hasCompletedOnboarding: completed });
 }

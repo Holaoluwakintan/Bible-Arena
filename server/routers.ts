@@ -182,6 +182,14 @@ export const appRouter = router({
       .input(z.object({ seasonId: z.string().min(1), rewardId: z.string().min(1) }))
       .mutation(({ ctx, input }) => db.claimSeasonReward(ctx.user.id, input.seasonId, input.rewardId)),
   }),
+  notifications: router({
+    registerToken: publicProcedure
+      .input(z.object({ token: z.string().min(1), platform: z.string().optional() }))
+      .mutation(({ ctx, input }) => db.registerPushToken(input.token, ctx.user?.id ?? null, input.platform)),
+    updatePreferences: publicProcedure
+      .input(z.object({ token: z.string().min(1), dailyReminders: z.boolean() }))
+      .mutation(({ input }) => db.updateNotificationPreferences(input.token, input.dailyReminders)),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
