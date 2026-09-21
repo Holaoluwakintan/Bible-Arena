@@ -156,6 +156,19 @@ function initSchema(db: DatabaseSync) {
       createdAt INTEGER NOT NULL,
       updatedAt INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS friendships (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      requesterId INTEGER NOT NULL,
+      addresseeId INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL,
+      UNIQUE (requesterId, addresseeId)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_friendships_requester ON friendships (requesterId);
+    CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships (addresseeId);
   `);
 }
 
@@ -1069,5 +1082,123 @@ export function updateNotificationPreferences(
     WHERE token = ?
   `).run(dailyReminders ? 1 : 0, now, token);
   return { success: true };
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Social Graph: Friends
+// ──────────────────────────────────────────────────────────────────
+
+export interface FriendRow {
+  id: number;
+  requesterId: number;
+  addresseeId: number;
+  status: "pending" | "accepted";
+  createdAt: number;
+  updatedAt: number;
+  // joined from users
+  friendId: number;
+  friendName: string | null;
+  friendOpenId: string;
+}
+
+export function sendFriendRequest(requesterId: number, addresseeId: number): { success: boolean; error?: string } {
+  if (requesterId === addresseeId) return { success: false, error: "Cannot befriend yourself" };
+  const db = getDb();
+  const now = Date.now();
+  // Check reverse direction already exists
+  const existing = db.prepare(
+    `SELECT id, status FROM friendships WHERE (requesterId = ? AND addresseeId = ?) OR (requesterId = ? AND addresseeId = ?)`
+  ).get(requesterId, addresseeId, addresseeId, requesterId) as { id: number; status: string } | undefined;
+  if (existing) {
+    if (existing.status === "accepted") return { success: false, error: "Already friends" };
+    return { success: false, error: "Request already sent" };
+  }
+  db.prepare(
+    `INSERT INTO friendships (requesterId, addresseeId, status, createdAt, updatedAt) VALUES (?, ?, 'pending', ?, ?)`
+  ).run(requesterId, addresseeId, now, now);
+  return { success: true };
+}
+
+export function respondFriendRequest(
+  requestId: number,
+  addresseeId: number,
+  accept: boolean,
+): { success: boolean; error?: string } {
+  const db = getDb();
+  const now = Date.now();
+  const row = db.prepare(
+    `SELECT id, addresseeId FROM friendships WHERE id = ? AND addresseeId = ? AND status = 'pending'`
+  ).get(requestId, addresseeId) as { id: number; addresseeId: number } | undefined;
+  if (!row) return { success: false, error: "Request not found" };
+  if (accept) {
+    db.prepare(`UPDATE friendships SET status = 'accepted', updatedAt = ? WHERE id = ?`).run(now, requestId);
+  } else {
+    db.prepare(`DELETE FROM friendships WHERE id = ?`).run(requestId);
+  }
+  return { success: true };
+}
+
+export function listFriends(userId: number): {
+  friends: Array<{ id: number; friendId: number; friendName: string | null; friendOpenId: string; since: number }>;
+  pending: Array<{ id: number; fromId: number; fromName: string | null; fromOpenId: string; sentAt: number }>;
+} {
+  const db = getDb();
+  // Accepted: user is either requester or addressee
+  const acceptedRows = db.prepare(`
+    SELECT f.id, f.createdAt,
+      CASE WHEN f.requesterId = ? THEN f.addresseeId ELSE f.requesterId END AS friendId,
+      u.name AS friendName, u.openId AS friendOpenId
+    FROM friendships f
+    JOIN users u ON u.id = CASE WHEN f.requesterId = ? THEN f.addresseeId ELSE f.requesterId END
+    WHERE (f.requesterId = ? OR f.addresseeId = ?) AND f.status = 'accepted'
+  `).all(userId, userId, userId, userId) as Array<{ id: number; createdAt: number; friendId: number; friendName: string | null; friendOpenId: string }>;
+  // Pending requests addressed to this user
+  const pendingRows = db.prepare(`
+    SELECT f.id, f.requesterId AS fromId, f.createdAt AS sentAt, u.name AS fromName, u.openId AS fromOpenId
+    FROM friendships f
+    JOIN users u ON u.id = f.requesterId
+    WHERE f.addresseeId = ? AND f.status = 'pending'
+  `).all(userId) as Array<{ id: number; fromId: number; sentAt: number; fromName: string | null; fromOpenId: string }>;
+  return {
+    friends: acceptedRows.map((r) => ({ id: r.id, friendId: r.friendId, friendName: r.friendName, friendOpenId: r.friendOpenId, since: r.createdAt })),
+    pending: pendingRows.map((r) => ({ id: r.id, fromId: r.fromId, fromName: r.fromName, fromOpenId: r.fromOpenId, sentAt: r.sentAt })),
+  };
+}
+
+export function searchUsers(
+  query: string,
+  excludeUserId: number,
+  limit = 20,
+): Array<{ id: number; name: string | null; openId: string }> {
+  if (!query || query.trim().length < 2) return [];
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT id, name, openId FROM users
+    WHERE id != ? AND (name LIKE ? OR openId LIKE ?)
+    ORDER BY name ASC LIMIT ?
+  `).all(excludeUserId, `%${query}%`, `%${query}%`, limit) as Array<{ id: number; name: string | null; openId: string }>;
+  return rows;
+}
+
+export function getFriendsLeaderboard(
+  userId: number,
+): Array<{ rank: number; playerId: number; displayName: string; totalXp: number; currentStreak: number }> {
+  const db = getDb();
+  // Get IDs of all accepted friends + self
+  const friendIds = db.prepare(`
+    SELECT CASE WHEN requesterId = ? THEN addresseeId ELSE requesterId END AS fid
+    FROM friendships WHERE (requesterId = ? OR addresseeId = ?) AND status = 'accepted'
+  `).all(userId, userId, userId) as Array<{ fid: number }>;
+  const ids = [userId, ...friendIds.map((r) => r.fid)];
+  const placeholders = ids.map(() => "?").join(",");
+  const rows = db.prepare(`
+    SELECT u.id AS playerId, COALESCE(u.name, 'Player') AS displayName,
+      COALESCE(pp.totalXp, 0) AS totalXp, COALESCE(pp.currentStreak, 0) AS currentStreak
+    FROM users u
+    LEFT JOIN player_progress pp ON pp.userId = u.id
+    WHERE u.id IN (${placeholders})
+    ORDER BY totalXp DESC
+  `).all(...ids) as Array<{ playerId: number; displayName: string; totalXp: number; currentStreak: number }>;
+  return rows.map((r, i) => ({ rank: i + 1, ...r }));
 }
 

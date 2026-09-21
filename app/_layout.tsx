@@ -103,6 +103,7 @@ export default function RootLayout() {
             <Tabs.Screen name="challenges" options={{ href: null }} />
             <Tabs.Screen name="ai-battle" options={{ href: null }} />
             <Tabs.Screen name="leaderboards" options={{ href: null }} />
+            <Tabs.Screen name="friends" options={{ href: null }} />
             <Tabs.Screen name="callback" options={{ href: null }} />
           </Tabs>
         </ProgressionProvider>

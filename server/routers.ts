@@ -190,6 +190,19 @@ export const appRouter = router({
       .input(z.object({ token: z.string().min(1), dailyReminders: z.boolean() }))
       .mutation(({ input }) => db.updateNotificationPreferences(input.token, input.dailyReminders)),
   }),
+  friends: router({
+    list: protectedProcedure.query(({ ctx }) => db.listFriends(ctx.user.id)),
+    search: protectedProcedure
+      .input(z.object({ query: z.string().min(2).max(60) }))
+      .query(({ ctx, input }) => db.searchUsers(input.query, ctx.user.id)),
+    request: protectedProcedure
+      .input(z.object({ addresseeId: z.number().int().positive() }))
+      .mutation(({ ctx, input }) => db.sendFriendRequest(ctx.user.id, input.addresseeId)),
+    respond: protectedProcedure
+      .input(z.object({ requestId: z.number().int().positive(), accept: z.boolean() }))
+      .mutation(({ ctx, input }) => db.respondFriendRequest(input.requestId, ctx.user.id, input.accept)),
+    leaderboard: protectedProcedure.query(({ ctx }) => db.getFriendsLeaderboard(ctx.user.id)),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

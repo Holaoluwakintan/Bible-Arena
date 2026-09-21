@@ -1,4 +1,5 @@
 import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
@@ -108,6 +109,28 @@ export default function ProfileScreen() {
             </Pressable>
           </View>
         )}
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open Friends and Fellowship"
+          onPress={() => { tapFeedback(); router.push("/friends"); }}
+          style={({ pressed }) => [
+            styles.accountCard,
+            { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 16 },
+            pressed && styles.pressed,
+          ]}
+        >
+          <View style={[styles.accountIcon, { backgroundColor: colors.primary }]}>
+            <IconSymbol name="person.crop.circle.fill" size={20} color={colors.background} />
+          </View>
+          <View style={styles.accountCopy}>
+            <Text style={[styles.accountTitle, { color: colors.foreground }]}>Friends & Fellowship</Text>
+            <Text style={[styles.accountBody, { color: colors.muted }]}>
+              Add fellow disciples, send friend challenge duels, and view circle standings.
+            </Text>
+          </View>
+          <IconSymbol name="chevron.right" size={18} color={colors.primary} />
+        </Pressable>
 
         <View style={[styles.levelCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
           <View style={styles.levelTop}>
