@@ -22,6 +22,8 @@ const MAPPING: IconMapping = {
   "bolt.fill": "bolt",
   "chevron.left.forwardslash.chevron.right": "code",
   "chevron.right": "chevron-right",
+  "arrow.down.circle": "file-download",
+  "trash": "delete-outline",
 };
 
 export function IconSymbol({

@@ -64,10 +64,10 @@ export function useAuth(options?: UseAuthOptions) {
     }
   }, []);
 
-  const loginAsGuest = useCallback(async (seed?: string) => {
+  const loginAsGuest = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await Api.loginAsGuest(seed);
+      const res = await Api.loginAsGuest();
       if (res.user) {
         const userInfo: Auth.User = {
           id: res.user.id,

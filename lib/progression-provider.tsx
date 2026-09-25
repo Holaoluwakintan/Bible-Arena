@@ -5,7 +5,7 @@ import { createFriendChallenge, joinFriendChallenge, type FriendChallenge } from
 import { applyCompletedSession, unlockAchievements } from "@/domain/progression";
 import { EMPTY_PROGRESS_STATE, loadProgressState, saveProgressState, toHistoryEntry, type LocalProgressState } from "@/domain/local-storage";
 import type { GameMode } from "@/domain/questions";
-import { mergeCloudState, toRemoteProgress, toRemoteSession } from "@/domain/cloud-sync";
+import { mergeCloudState } from "@/domain/cloud-sync";
 import { useAuth } from "@/hooks/use-auth";
 import { trpc } from "@/lib/trpc";
 
@@ -29,7 +29,6 @@ export function ProgressionProvider({ children }: { children: ReactNode }) {
   const [syncStatus, setSyncStatus] = useState<ProgressionContextValue["syncStatus"]>("local");
   const syncedUserId = useRef<number | null>(null);
   const syncQuery = trpc.sync.get.useQuery(undefined, { enabled: isAuthenticated, staleTime: 30_000 });
-  const migrateMutation = trpc.sync.migrate.useMutation();
   const recordMutation = trpc.sync.recordSession.useMutation();
   const createChallengeMutation = trpc.challenges.create.useMutation();
   const joinChallengeMutation = trpc.challenges.join.useMutation();
@@ -48,10 +47,9 @@ export function ProgressionProvider({ children }: { children: ReactNode }) {
     const merged = mergeCloudState(state, syncQuery.data);
     setState(merged);
     void saveProgressState(merged);
-    void migrateMutation.mutateAsync({ progress: toRemoteProgress(merged), sessions: merged.sessions.map(toRemoteSession) })
-      .then(() => setSyncStatus("synced"))
-      .catch(() => setSyncStatus("error"));
-  }, [isLoading, isAuthenticated, user, syncQuery.data, state, migrateMutation]);
+    // Existing local summaries are intentionally not uploaded: they have no server-verifiable answer evidence.
+    setSyncStatus("synced");
+  }, [isLoading, isAuthenticated, user, syncQuery.data, state]);
 
   const recordSession = useCallback(async (result: GameResult) => {
     let nextState: LocalProgressState | null = null;
@@ -65,7 +63,11 @@ export function ProgressionProvider({ children }: { children: ReactNode }) {
     });
     if (isAuthenticated && nextState) {
       setSyncStatus("syncing");
-      try { await recordMutation.mutateAsync({ progress: toRemoteProgress(nextState), session: toRemoteSession(toHistoryEntry(result)) }); setSyncStatus("synced"); }
+      try {
+        if (!result.answers?.length) throw new Error("This session has no server-verifiable answer evidence.");
+        await recordMutation.mutateAsync({ id: result.sessionId, mode: result.mode, answers: result.answers });
+        setSyncStatus("synced");
+      }
       catch { setSyncStatus("error"); }
     }
   }, [isAuthenticated, recordMutation]);

@@ -7,6 +7,7 @@ import {
 describe("Notifications and Streak Reminder Engine", () => {
   it("defines sensible default notification preferences", () => {
     expect(DEFAULT_NOTIFICATION_PREFERENCES.dailyStreakReminder).toBe(true);
+    expect(DEFAULT_NOTIFICATION_PREFERENCES.soundEnabled).toBe(true);
     expect(DEFAULT_NOTIFICATION_PREFERENCES.reminderHour).toBe(20);
     expect(DEFAULT_NOTIFICATION_PREFERENCES.reminderMinute).toBe(0);
     expect(DEFAULT_NOTIFICATION_PREFERENCES.pushToken).toBeNull();

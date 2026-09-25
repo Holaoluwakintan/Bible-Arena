@@ -53,17 +53,6 @@ export function getApiBaseUrl(): string {
 export const SESSION_TOKEN_KEY = "app_session_token";
 export const USER_INFO_KEY = "manus-runtime-user-info";
 
-const encodeState = (value: string) => {
-  if (typeof globalThis.btoa === "function") {
-    return globalThis.btoa(value);
-  }
-  const BufferImpl = (globalThis as Record<string, any>).Buffer;
-  if (BufferImpl) {
-    return BufferImpl.from(value, "utf-8").toString("base64");
-  }
-  return value;
-};
-
 export const getRedirectUri = () => {
   if (ReactNative.Platform.OS === "web") {
     return `${getApiBaseUrl()}/api/oauth/callback`;
@@ -74,9 +63,11 @@ export const getRedirectUri = () => {
   }
 };
 
-export const getLoginUrl = () => {
+export const getLoginUrl = async () => {
   const redirectUri = getRedirectUri();
-  const state = encodeState(redirectUri);
+  const stateResponse = await fetch(`${getApiBaseUrl()}/api/oauth/state?redirectUri=${encodeURIComponent(redirectUri)}`);
+  if (!stateResponse.ok) throw new Error("Unable to start secure OAuth login");
+  const { state } = (await stateResponse.json()) as { state: string };
 
   const url = new URL(`${OAUTH_PORTAL_URL || "https://auth.example.com"}/app-auth`);
   url.searchParams.set("appId", APP_ID);
@@ -88,7 +79,7 @@ export const getLoginUrl = () => {
 };
 
 export async function startOAuthLogin(): Promise<string | null> {
-  const loginUrl = getLoginUrl();
+  const loginUrl = await getLoginUrl();
 
   if (ReactNative.Platform.OS === "web") {
     if (typeof window !== "undefined") {

@@ -10,6 +10,7 @@ export interface CloudSession {
   totalQuestions: number;
   xpEarned: number;
   completedAt: Date;
+  answers?: Array<{ questionId: string; answerId: string | null }>;
 }
 
 export interface CloudSyncResult {

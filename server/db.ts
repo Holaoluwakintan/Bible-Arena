@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { ENV } from "./_core/env";
+import { applyMigrations } from "./migrations";
 import type { InsertUser, User, FriendChallenge, MultiplayerRoom, SessionRecord } from "../drizzle/schema";
 import { VERIFIED_BIBLE_QUIZ_QUESTIONS, type GameMode } from "../domain/questions";
 import {
@@ -12,8 +13,8 @@ import {
   MULTIPLAYER_ROUND_DURATION_MS,
 } from "../domain/multiplayer";
 import { broadcastRoom } from "./realtime";
-import { aggregateMultiplayerRankings, type MultiplayerRankingScope } from "../domain/multiplayer-rankings";
-import { findQueueMatch, MATCHMAKING_QUEUE_TTL_MS, ratingFromRanking } from "../domain/ranked-competition";
+import { getRankedDivision, type MultiplayerRankingScope } from "../domain/multiplayer-rankings";
+import { evaluateMatchRisk, findQueueMatch, MATCHMAKING_QUEUE_TTL_MS, ratingFromRanking } from "../domain/ranked-competition";
 import {
   AUTUMN_ASCENSION_REWARDS,
   calculateSeasonTier,
@@ -26,150 +27,9 @@ let _sqlite: DatabaseSync | null = null;
 export function getDb(): DatabaseSync {
   if (!_sqlite) {
     _sqlite = new DatabaseSync(ENV.sqlitePath);
-    initSchema(_sqlite);
+    applyMigrations(_sqlite);
   }
   return _sqlite;
-}
-
-function initSchema(db: DatabaseSync) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      openId TEXT NOT NULL UNIQUE,
-      name TEXT,
-      email TEXT,
-      loginMethod TEXT,
-      role TEXT NOT NULL DEFAULT 'user',
-      createdAt INTEGER NOT NULL,
-      updatedAt INTEGER NOT NULL,
-      lastSignedIn INTEGER NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS player_progress (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      userId INTEGER NOT NULL UNIQUE,
-      totalXp INTEGER NOT NULL DEFAULT 0,
-      currentStreak INTEGER NOT NULL DEFAULT 0,
-      bestStreak INTEGER NOT NULL DEFAULT 0,
-      lastEligibleDate TEXT,
-      achievementsJson TEXT NOT NULL DEFAULT '[]',
-      updatedAt INTEGER NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS session_records (
-      id TEXT PRIMARY KEY,
-      userId INTEGER NOT NULL,
-      mode TEXT NOT NULL,
-      score INTEGER NOT NULL,
-      accuracy INTEGER NOT NULL,
-      correctAnswers INTEGER NOT NULL,
-      totalQuestions INTEGER NOT NULL,
-      xpEarned INTEGER NOT NULL,
-      completedAt INTEGER NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS friend_challenges (
-      id TEXT PRIMARY KEY,
-      shareCode TEXT NOT NULL UNIQUE,
-      creatorUserId INTEGER NOT NULL,
-      opponentUserId INTEGER,
-      mode TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'open',
-      createdAt INTEGER NOT NULL,
-      expiresAt INTEGER NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS multiplayer_rooms (
-      id TEXT PRIMARY KEY,
-      roomCode TEXT NOT NULL UNIQUE,
-      hostUserId INTEGER NOT NULL,
-      guestUserId INTEGER,
-      mode TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'lobby',
-      currentQuestionIndex INTEGER NOT NULL DEFAULT 0,
-      hostReady INTEGER NOT NULL DEFAULT 0,
-      guestReady INTEGER NOT NULL DEFAULT 0,
-      hostAnsweredIndex INTEGER NOT NULL DEFAULT -1,
-      guestAnsweredIndex INTEGER NOT NULL DEFAULT -1,
-      hostScore INTEGER NOT NULL DEFAULT 0,
-      guestScore INTEGER NOT NULL DEFAULT 0,
-      winnerUserId INTEGER,
-      roundToken TEXT NOT NULL DEFAULT '',
-      roundDeadline INTEGER,
-      roomVersion INTEGER NOT NULL DEFAULT 0,
-      createdAt INTEGER NOT NULL,
-      updatedAt INTEGER NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS tournament_seasons (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      startsAt INTEGER NOT NULL,
-      endsAt INTEGER NOT NULL,
-      status TEXT NOT NULL DEFAULT 'active',
-      createdAt INTEGER NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS matchmaking_queue (
-      id TEXT PRIMARY KEY,
-      userId INTEGER NOT NULL UNIQUE,
-      seasonId TEXT NOT NULL,
-      division TEXT NOT NULL,
-      rating INTEGER NOT NULL DEFAULT 0,
-      status TEXT NOT NULL DEFAULT 'waiting',
-      matchedRoomId TEXT,
-      createdAt INTEGER NOT NULL,
-      expiresAt INTEGER NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS multiplayer_matches (
-      id TEXT PRIMARY KEY,
-      roomId TEXT NOT NULL,
-      seasonId TEXT NOT NULL DEFAULT 'season-legacy',
-      hostUserId INTEGER NOT NULL,
-      guestUserId INTEGER NOT NULL,
-      hostScore INTEGER NOT NULL,
-      guestScore INTEGER NOT NULL,
-      winnerUserId INTEGER,
-      hostXp INTEGER NOT NULL,
-      guestXp INTEGER NOT NULL,
-      resultReason TEXT NOT NULL,
-      isSuspicious INTEGER NOT NULL DEFAULT 0,
-      suspicionReason TEXT,
-      completedAt INTEGER NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS player_season_rewards (
-      userId INTEGER NOT NULL,
-      seasonId TEXT NOT NULL,
-      rewardId TEXT NOT NULL,
-      claimedAt INTEGER NOT NULL,
-      PRIMARY KEY (userId, seasonId, rewardId)
-    );
-
-    CREATE TABLE IF NOT EXISTS push_tokens (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      userId INTEGER,
-      token TEXT NOT NULL UNIQUE,
-      platform TEXT,
-      dailyReminders INTEGER NOT NULL DEFAULT 1,
-      createdAt INTEGER NOT NULL,
-      updatedAt INTEGER NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS friendships (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      requesterId INTEGER NOT NULL,
-      addresseeId INTEGER NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
-      createdAt INTEGER NOT NULL,
-      updatedAt INTEGER NOT NULL,
-      UNIQUE (requesterId, addresseeId)
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_friendships_requester ON friendships (requesterId);
-    CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships (addresseeId);
-  `);
 }
 
 function toUnix(date?: Date | null): number {
@@ -307,7 +167,7 @@ export async function saveSessionRecord(input: {
   const db = getDb();
   const completedAt = toUnix(input.completedAt);
   db.prepare(`
-    INSERT OR REPLACE INTO session_records (id, userId, mode, score, accuracy, correctAnswers, totalQuestions, xpEarned, completedAt)
+    INSERT OR IGNORE INTO session_records (id, userId, mode, score, accuracy, correctAnswers, totalQuestions, xpEarned, completedAt)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     input.id,
@@ -450,31 +310,40 @@ export async function getMultiplayerRankingRows(scope: MultiplayerRankingScope, 
   weekStart.setDate(weekStart.getDate() - ((day + 6) % 7));
   const season = getSeasonDescriptor(now);
 
-  let whereClause = "";
-  if (scope === "weekly") {
-    whereClause = `WHERE completedAt >= ${toUnix(weekStart)}`;
-  } else if (scope === "season") {
-    whereClause = `WHERE seasonId = '${season.id}'`;
-  }
-
-  const matchesRaw = db.prepare(`SELECT * FROM multiplayer_matches ${whereClause} ORDER BY completedAt DESC LIMIT 10000`).all() as any[];
-  const matches = matchesRaw.map((m) => ({
-    ...m,
-    completedAt: fromUnix(m.completedAt)!,
+  const filters = scope === "weekly" ? "WHERE completedAt >= ?" : scope === "season" ? "WHERE seasonId = ?" : "";
+  const filterArgs = scope === "weekly" ? [toUnix(weekStart)] : scope === "season" ? [season.id] : [];
+  const rows = db.prepare(`
+    WITH player_results AS (
+      SELECT hostUserId AS playerId, hostXp AS xp, 1 AS matches,
+        CASE WHEN winnerUserId = hostUserId THEN 1 ELSE 0 END AS wins,
+        CASE WHEN winnerUserId IS NOT NULL AND winnerUserId != hostUserId THEN 1 ELSE 0 END AS losses,
+        CASE WHEN winnerUserId IS NULL THEN 1 ELSE 0 END AS draws
+      FROM multiplayer_matches ${filters}
+      UNION ALL
+      SELECT guestUserId AS playerId, guestXp AS xp, 1 AS matches,
+        CASE WHEN winnerUserId = guestUserId THEN 1 ELSE 0 END AS wins,
+        CASE WHEN winnerUserId IS NOT NULL AND winnerUserId != guestUserId THEN 1 ELSE 0 END AS losses,
+        CASE WHEN winnerUserId IS NULL THEN 1 ELSE 0 END AS draws
+      FROM multiplayer_matches ${filters}
+    )
+    SELECT playerId, SUM(wins) AS wins, SUM(losses) AS losses, SUM(draws) AS draws,
+      SUM(xp) AS xp, SUM(matches) AS matches, COALESCE(u.name, 'Bible Arena Player') AS displayName
+    FROM player_results LEFT JOIN users u ON u.id = player_results.playerId
+    GROUP BY playerId, u.name
+    ORDER BY wins DESC, xp DESC, matches DESC
+    LIMIT 100
+  `).all(...filterArgs, ...filterArgs) as Array<{ playerId: number; displayName: string; wins: number; losses: number; draws: number; xp: number; matches: number }>;
+  return rows.map((row, index) => ({
+    playerId: String(row.playerId),
+    displayName: row.displayName,
+    wins: Number(row.wins),
+    losses: Number(row.losses),
+    draws: Number(row.draws),
+    xp: Number(row.xp),
+    matches: Number(row.matches),
+    rank: index + 1,
+    division: getRankedDivision(Number(row.wins), Number(row.draws)),
   }));
-
-  const ids = Array.from(new Set(matches.flatMap((m) => [m.hostUserId, m.guestUserId])));
-  const names = new Map<number, string>();
-
-  if (ids.length) {
-    const placeholders = ids.map(() => "?").join(",");
-    const people = db.prepare(`SELECT id, name FROM users WHERE id IN (${placeholders})`).all(...ids) as any[];
-    for (const p of people) {
-      names.set(p.id, p.name || "Bible Arena Player");
-    }
-  }
-
-  return aggregateMultiplayerRankings(matches, names as any);
 }
 
 export async function rolloverExpiredSeasons(now = new Date()) {
@@ -585,8 +454,12 @@ export async function joinMatchmakingQueue(userId: number, now = new Date()) {
   };
 
   db.prepare(`
-    INSERT OR REPLACE INTO matchmaking_queue (id, userId, seasonId, division, rating, status, matchedRoomId, createdAt, expiresAt)
+    INSERT INTO matchmaking_queue (id, userId, seasonId, division, rating, status, matchedRoomId, createdAt, expiresAt)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(userId) DO UPDATE SET
+      seasonId = excluded.seasonId, division = excluded.division, rating = excluded.rating,
+      status = excluded.status, matchedRoomId = excluded.matchedRoomId,
+      createdAt = excluded.createdAt, expiresAt = excluded.expiresAt
   `).run(
     entry.id,
     entry.userId,
@@ -683,9 +556,20 @@ async function awardMatch(
   const existing = db.prepare("SELECT id FROM multiplayer_matches WHERE id = ? LIMIT 1").get(id);
   if (existing) return { hostXp, guestXp };
 
+  const repeatedPairCount = Number((db.prepare(`
+    SELECT COUNT(*) AS count FROM multiplayer_matches
+    WHERE (hostUserId = ? AND guestUserId = ?) OR (hostUserId = ? AND guestUserId = ?)
+  `).get(room.hostUserId, guestUserId, guestUserId, room.hostUserId) as { count: number }).count);
+  const risk = evaluateMatchRisk({
+    durationMs: Math.max(0, now.getTime() - new Date(room.createdAt).getTime()),
+    answerCount: reason === "answers" ? ROOM_QUESTION_COUNT * 2 : Math.max(0, room.currentQuestionIndex),
+    questionCount: ROOM_QUESTION_COUNT,
+    repeatedPairCount,
+  });
+
   db.prepare(`
-    INSERT INTO multiplayer_matches (id, roomId, seasonId, hostUserId, guestUserId, hostScore, guestScore, winnerUserId, hostXp, guestXp, resultReason, completedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO multiplayer_matches (id, roomId, seasonId, hostUserId, guestUserId, hostScore, guestScore, winnerUserId, hostXp, guestXp, resultReason, isSuspicious, suspicionReason, completedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     room.id,
@@ -698,6 +582,8 @@ async function awardMatch(
     hostXp,
     guestXp,
     reason,
+    risk.isSuspicious ? 1 : 0,
+    risk.reason,
     toUnix(now)
   );
 
@@ -1071,7 +957,7 @@ export function registerPushToken(
 }
 
 export function updateNotificationPreferences(
-  token: string,
+  userId: number,
   dailyReminders: boolean,
 ): { success: boolean } {
   const db = getDb();
@@ -1079,8 +965,8 @@ export function updateNotificationPreferences(
   db.prepare(`
     UPDATE push_tokens
     SET dailyReminders = ?, updatedAt = ?
-    WHERE token = ?
-  `).run(dailyReminders ? 1 : 0, now, token);
+    WHERE userId = ?
+  `).run(dailyReminders ? 1 : 0, now, userId);
   return { success: true };
 }
 
@@ -1202,3 +1088,83 @@ export function getFriendsLeaderboard(
   return rows.map((r, i) => ({ rank: i + 1, ...r }));
 }
 
+
+// ──────────────────────────────────────────────────────────────────
+// Content governance, moderation, and privacy
+// ──────────────────────────────────────────────────────────────────
+
+export function checkDatabaseHealth(): { ok: true } {
+  getDb().prepare("SELECT 1").get();
+  return { ok: true };
+}
+
+export function createQuestionReport(input: {
+  reporterUserId: number;
+  questionId: string;
+  reason: string;
+  details?: string;
+}) {
+  const db = getDb();
+  const id = randomUUID();
+  db.prepare(`
+    INSERT INTO question_reports (id, reporterUserId, questionId, reason, details, status, createdAt)
+    VALUES (?, ?, ?, ?, ?, 'open', ?)
+  `).run(id, input.reporterUserId, input.questionId, input.reason, input.details?.trim() || null, toUnix());
+  return { id, status: "open" as const };
+}
+
+export function createModerationFlag(input: {
+  reporterUserId: number;
+  subjectUserId?: number;
+  matchId?: string;
+  reason: string;
+  evidence?: Record<string, unknown>;
+}) {
+  const db = getDb();
+  const id = randomUUID();
+  db.prepare(`
+    INSERT INTO moderation_flags (id, reporterUserId, subjectUserId, matchId, reason, evidenceJson, status, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, 'open', ?)
+  `).run(id, input.reporterUserId, input.subjectUserId ?? null, input.matchId ?? null, input.reason, JSON.stringify(input.evidence ?? {}), toUnix());
+  return { id, status: "open" as const };
+}
+
+export function listOpenModerationFlags(limit = 100) {
+  const rows = getDb().prepare(`
+    SELECT id, reporterUserId, subjectUserId, matchId, reason, evidenceJson, status, createdAt
+    FROM moderation_flags WHERE status = 'open' ORDER BY createdAt ASC LIMIT ?
+  `).all(Math.min(Math.max(limit, 1), 100)) as any[];
+  return rows.map((row) => ({ ...row, evidence: JSON.parse(row.evidenceJson || "{}") }));
+}
+
+export function exportUserData(userId: number) {
+  const db = getDb();
+  const user = db.prepare("SELECT id, openId, name, email, loginMethod, createdAt, updatedAt, lastSignedIn FROM users WHERE id = ?").get(userId);
+  if (!user) throw new Error("User not found.");
+  return {
+    exportedAt: new Date().toISOString(),
+    user,
+    progress: db.prepare("SELECT totalXp, currentStreak, bestStreak, lastEligibleDate, achievementsJson, updatedAt FROM player_progress WHERE userId = ?").get(userId) ?? null,
+    sessions: db.prepare("SELECT id, mode, score, accuracy, correctAnswers, totalQuestions, xpEarned, completedAt FROM session_records WHERE userId = ? ORDER BY completedAt DESC").all(userId),
+    challenges: db.prepare("SELECT id, shareCode, mode, status, createdAt, expiresAt FROM friend_challenges WHERE creatorUserId = ? OR opponentUserId = ? ORDER BY createdAt DESC").all(userId, userId),
+    matches: db.prepare("SELECT id, roomId, seasonId, hostUserId, guestUserId, hostScore, guestScore, winnerUserId, hostXp, guestXp, resultReason, isSuspicious, completedAt FROM multiplayer_matches WHERE hostUserId = ? OR guestUserId = ? ORDER BY completedAt DESC").all(userId, userId),
+    friendships: db.prepare("SELECT requesterId, addresseeId, status, createdAt, updatedAt FROM friendships WHERE requesterId = ? OR addresseeId = ?").all(userId, userId),
+  };
+}
+
+export function deleteUserAccount(userId: number): void {
+  const db = getDb();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare("DELETE FROM users WHERE id = ?").run(userId);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+export function getUserRole(userId: number): string | null {
+  const row = getDb().prepare("SELECT role FROM users WHERE id = ?").get(userId) as { role?: string } | undefined;
+  return row?.role ?? null;
+}

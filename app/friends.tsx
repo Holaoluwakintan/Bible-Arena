@@ -66,7 +66,7 @@ export default function FriendsScreen() {
   return (
     <ScreenContainer className="px-5" containerClassName="bg-background">
       <ScrollView contentContainerStyle={styles.content}>
-        <Pressable onPress={() => router.back()}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()}>
           <Text style={[styles.back, { color: colors.primary }]}>‹ Back</Text>
         </Pressable>
 
@@ -83,6 +83,9 @@ export default function FriendsScreen() {
         {/* Tab Navigation */}
         <View style={[styles.tabs, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === "friends" }}
+            accessibilityLabel={`Friends tab, ${friendList.length} friends`}
             onPress={() => setActiveTab("friends")}
             style={[styles.tab, activeTab === "friends" && { backgroundColor: colors.primary }]}
           >
@@ -92,6 +95,9 @@ export default function FriendsScreen() {
           </Pressable>
 
           <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === "requests" }}
+            accessibilityLabel={`Friend requests tab, ${pendingRequests.length} pending`}
             onPress={() => setActiveTab("requests")}
             style={[styles.tab, activeTab === "requests" && { backgroundColor: colors.primary }]}
           >
@@ -101,6 +107,9 @@ export default function FriendsScreen() {
           </Pressable>
 
           <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === "search" }}
+            accessibilityLabel="Find players tab"
             onPress={() => setActiveTab("search")}
             style={[styles.tab, activeTab === "search" && { backgroundColor: colors.primary }]}
           >
@@ -141,10 +150,12 @@ export default function FriendsScreen() {
                     </Text>
                   </View>
                   <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Challenge ${getPlayerDisplayName(friend.friendName, friend.friendOpenId)}`}
                     onPress={handleChallenge}
                     style={[styles.duelButton, { backgroundColor: colors.primary }]}
                   >
-                    <Text style={[styles.duelButtonText, { color: colors.background }]}>Challenge ⚔️</Text>
+                      <Text style={[styles.duelButtonText, { color: colors.background }]}>Challenge</Text>
                   </Pressable>
                 </View>
               ))
@@ -178,12 +189,16 @@ export default function FriendsScreen() {
                   </View>
                   <View style={styles.requestActions}>
                     <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Accept friend request from ${getPlayerDisplayName(req.fromName, req.fromOpenId)}`}
                       onPress={() => respondMutation.mutate({ requestId: req.id, accept: true })}
                       style={[styles.acceptButton, { backgroundColor: colors.primary }]}
                     >
                       <Text style={[styles.buttonText, { color: colors.background }]}>Accept</Text>
                     </Pressable>
                     <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Decline friend request from ${getPlayerDisplayName(req.fromName, req.fromOpenId)}`}
                       onPress={() => respondMutation.mutate({ requestId: req.id, accept: false })}
                       style={[styles.declineButton, { borderColor: colors.border }]}
                     >
@@ -247,6 +262,8 @@ export default function FriendsScreen() {
                       </View>
                     ) : (
                       <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Add ${getPlayerDisplayName(user.name, user.openId)} as a friend`}
                         onPress={() => requestMutation.mutate({ addresseeId: user.id })}
                         disabled={requestMutation.isPending}
                         style={[styles.addButton, { backgroundColor: colors.primary }]}
@@ -287,11 +304,11 @@ const styles = StyleSheet.create({
   playerInfo: { flex: 1 },
   playerName: { fontSize: 15, fontWeight: "800" },
   playerMeta: { fontSize: 11, marginTop: 3 },
-  duelButton: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },
+  duelButton: { minHeight: 44, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, justifyContent: "center" },
   duelButtonText: { fontSize: 12, fontWeight: "800" },
   requestActions: { flexDirection: "row", gap: 8 },
-  acceptButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 9 },
-  declineButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 9, borderWidth: 1 },
+  acceptButton: { minHeight: 44, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 9, justifyContent: "center" },
+  declineButton: { minHeight: 44, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 9, borderWidth: 1, justifyContent: "center" },
   buttonText: { fontSize: 12, fontWeight: "800" },
   searchSection: { gap: 14 },
   searchInput: {
@@ -302,7 +319,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   loader: { marginVertical: 12 },
-  addButton: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },
+  addButton: { minHeight: 44, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, justifyContent: "center" },
   tag: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
   tagText: { fontSize: 11, fontWeight: "700" },
   emptyCard: { borderRadius: 20, borderWidth: 1, padding: 24, alignItems: "center", gap: 8 },

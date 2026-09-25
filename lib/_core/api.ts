@@ -5,6 +5,7 @@ import * as Auth from "./auth";
 export async function apiCall<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    "X-Client-Platform": Platform.OS,
     ...((options.headers as Record<string, string>) || {}),
   };
 
@@ -62,10 +63,10 @@ export async function exchangeOAuthCode(
   };
 }
 
-export async function loginAsGuest(seed?: string): Promise<{ sessionToken?: string; user: any }> {
+export async function loginAsGuest(): Promise<{ sessionToken?: string; user: any }> {
   const result = await apiCall<{ ok: boolean; token?: string; user: any }>("/api/auth/guest", {
     method: "POST",
-    body: JSON.stringify({ seed }),
+    body: JSON.stringify({}),
   });
   if (result.token) {
     await Auth.setSessionToken(result.token);

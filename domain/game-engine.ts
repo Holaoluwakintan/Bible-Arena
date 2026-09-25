@@ -39,6 +39,17 @@ export interface AnswerFeedback {
   reference: string;
 }
 
+export interface AnswerReview {
+  questionId: string;
+  isCorrect: boolean;
+  timedOut: boolean;
+  points: number;
+  answerLabel: string;
+  correctAnswerLabel: string;
+  explanation: string;
+  reference: string;
+}
+
 export interface GameResult {
   sessionId: string;
   mode: GameMode;
@@ -48,6 +59,8 @@ export interface GameResult {
   accuracy: number;
   xpEarned: number;
   completedAt: number;
+  answers?: Array<Pick<AnswerAttempt, "questionId" | "answerId">>;
+  review?: AnswerReview[];
 }
 
 export function createGameSession(
@@ -139,5 +152,21 @@ export function calculateResult(session: GameSession): GameResult {
     accuracy: calculateAccuracy(session),
     xpEarned: calculateXp(session),
     completedAt: session.completedAt,
+    answers: session.answers.map(({ questionId, answerId }) => ({ questionId, answerId })),
+    review: session.answers.map((answer) => {
+      const question = session.questions.find((item) => item.id === answer.questionId);
+      const answerLabel = question?.options.find((option) => option.id === answer.answerId)?.label ?? (answer.timedOut ? "Time expired" : "No answer");
+      const correctAnswerLabel = question?.options.find((option) => option.id === question.correctAnswer)?.label ?? question?.correctAnswer ?? "See the explanation";
+      return {
+        questionId: answer.questionId,
+        isCorrect: answer.isCorrect,
+        timedOut: answer.timedOut,
+        points: answer.points,
+        answerLabel,
+        correctAnswerLabel,
+        explanation: question?.explanation ?? "Review the verified question explanation.",
+        reference: question ? `${question.reference.book} ${question.reference.chapter}:${question.reference.verse ?? ""}` : "Scripture reference unavailable",
+      };
+    }),
   };
 }

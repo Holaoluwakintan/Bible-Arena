@@ -14,10 +14,7 @@ export type User = {
 export async function getSessionToken(): Promise<string | null> {
   try {
     if (Platform.OS === "web") {
-      // In web, check localStorage first for dev/guest token or rely on cookie
-      if (typeof window !== "undefined") {
-        return window.localStorage.getItem(SESSION_TOKEN_KEY);
-      }
+      // Browser sessions are carried by the server's HttpOnly cookie.
       return null;
     }
     return await SecureStore.getItemAsync(SESSION_TOKEN_KEY);
@@ -30,9 +27,6 @@ export async function getSessionToken(): Promise<string | null> {
 export async function setSessionToken(token: string): Promise<void> {
   try {
     if (Platform.OS === "web") {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(SESSION_TOKEN_KEY, token);
-      }
       return;
     }
     await SecureStore.setItemAsync(SESSION_TOKEN_KEY, token);
@@ -45,9 +39,6 @@ export async function setSessionToken(token: string): Promise<void> {
 export async function removeSessionToken(): Promise<void> {
   try {
     if (Platform.OS === "web") {
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem(SESSION_TOKEN_KEY);
-      }
       return;
     }
     await SecureStore.deleteItemAsync(SESSION_TOKEN_KEY);

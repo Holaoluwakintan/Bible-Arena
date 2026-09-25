@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { ProgressionProvider } from "@/lib/progression-provider";
+import { useAuth } from "@/hooks/use-auth";
 import { HapticTab } from "@/components/haptic-tab";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
@@ -16,6 +17,7 @@ import {
 
 export default function RootLayout() {
   const colors = useColors();
+  const { isAuthenticated } = useAuth();
   const insets = useSafeAreaInsets();
   const bottomPadding = Platform.OS === "web" ? 12 : Math.max(insets.bottom, 8);
 
@@ -38,12 +40,12 @@ export default function RootLayout() {
       if (prefs.dailyStreakReminder) {
         void scheduleDailyStreakReminder(prefs.reminderHour, prefs.reminderMinute);
       }
-      const token = await registerForPushNotificationsAsync();
-      if (token) {
+      const token = isAuthenticated ? await registerForPushNotificationsAsync() : null;
+      if (token && isAuthenticated) {
         trpcClient.notifications.registerToken.mutate({ token, platform: Platform.OS }).catch(() => null);
       }
     })();
-  }, [trpcClient]);
+  }, [isAuthenticated, trpcClient]);
 
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>

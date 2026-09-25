@@ -71,25 +71,25 @@ export default function PlayScreen() {
             </View>
             <View style={styles.featuredCopy}>
               <Text style={[styles.featuredLabel, { color: colors.primary }]}>START HERE</Text>
-              <Text style={[styles.featuredTitle, { color: colors.foreground }]}>Quick Play</Text>
+            <Text style={[styles.featuredTitle, { color: colors.foreground }]}>Play a quick round</Text>
             </View>
             <Text style={[styles.duration, { color: colors.muted }]}>~5 min</Text>
           </View>
           <Text style={[styles.featuredBody, { color: colors.muted }]}>A focused ten-question Bible Quiz session with feedback after every answer.</Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Start Quick Play"
+            accessibilityLabel="Play a quick round"
             onPress={() => handleModePress(MODES[0])}
             style={({ pressed }) => [styles.startButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
           >
-            <Text style={[styles.startButtonText, { color: colors.background }]}>Start Quick Play</Text>
+            <Text style={[styles.startButtonText, { color: colors.background }]}>Play a quick round</Text>
             <IconSymbol name="chevron.right" size={18} color={colors.background} />
           </Pressable>
         </View>
 
         <View style={styles.sectionHeading}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>More ways to play</Text>
-          <Text style={[styles.sectionCaption, { color: colors.muted }]}>Coming in sequence</Text>
+          <Text style={[styles.sectionCaption, { color: colors.muted }]}>Explore after your first round</Text>
         </View>
 
         <View style={styles.modeList}>

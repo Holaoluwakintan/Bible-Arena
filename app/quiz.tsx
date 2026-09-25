@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -8,6 +8,7 @@ import { useColors } from "@/hooks/use-colors";
 import { useProgression } from "@/lib/progression-provider";
 import { calculateLevel } from "@/domain/progression";
 import { shareGameResult } from "@/lib/share";
+import { trpc } from "@/lib/trpc";
 import {
   calculateResult,
   createGameSession,
@@ -28,7 +29,8 @@ export default function BibleQuizScreen() {
   const isBibleOrMyth = gameMode === "bible_or_myth";
   const isWordPuzzle = gameMode === "word_puzzle";
   const isDailyChallenge = gameMode === "daily_challenge";
-  const { recordSession, state } = useProgression();
+  const { recordSession, state, isAuthenticated } = useProgression();
+  const reportMutation = trpc.reports.question.useMutation({ onSuccess: () => Alert.alert("Report received", "Thanks. The content team will review this question.") });
   const progression = state.progression;
   const questions = useMemo(() => getVerifiedQuestionsForMode(gameMode, gameMode === "bible_quiz" ? 10 : 5, true), [gameMode]);
   const [session, setSession] = useState<GameSession>(() => createGameSession(questions, { mode: gameMode }));
@@ -98,13 +100,22 @@ export default function BibleQuizScreen() {
             </View>
           </View>
 
-          {feedback && (
-            <View style={[styles.feedbackCard, { backgroundColor: feedback.isCorrect ? "#173A35" : colors.surface, borderColor: feedback.isCorrect ? colors.success : colors.border }]}>
-              <Text style={[styles.feedbackTitle, { color: feedback.isCorrect ? colors.success : colors.foreground }]}>{feedback.isCorrect ? "You got it." : "Keep going."}</Text>
-              <Text style={[styles.feedbackBody, { color: feedback.isCorrect ? "#D5F0E3" : colors.muted }]}>{feedback.explanation}</Text>
-              <Text style={[styles.reference, { color: colors.primary }]}>{feedback.reference}</Text>
+          <View style={styles.reviewHeader}>
+            <Text style={[styles.reviewTitle, { color: colors.foreground }]}>Answer review</Text>
+            <Text style={[styles.reviewSubtitle, { color: colors.muted }]}>Learn why each answer is right and where it appears in Scripture.</Text>
+          </View>
+          {(result.review ?? []).map((review, index) => (
+            <View key={review.questionId} style={[styles.reviewCard, { backgroundColor: colors.surface, borderColor: review.isCorrect ? colors.success : colors.border }]}>
+              <View style={styles.reviewTopRow}>
+                <Text style={[styles.reviewNumber, { color: colors.primary }]}>Question {index + 1}</Text>
+                <Text style={[styles.reviewOutcome, { color: review.isCorrect ? colors.success : colors.error }]}>{review.isCorrect ? `Correct · +${review.points}` : review.timedOut ? "Time expired" : "Review needed"}</Text>
+              </View>
+              <Text style={[styles.reviewAnswer, { color: colors.foreground }]}>Your answer: {review.answerLabel}</Text>
+              {!review.isCorrect && <Text style={[styles.reviewAnswer, { color: colors.success }]}>Correct answer: {review.correctAnswerLabel}</Text>}
+              <Text style={[styles.reviewExplanation, { color: colors.muted }]}>{review.explanation}</Text>
+              <Text style={[styles.reference, { color: colors.primary }]}>{review.reference}</Text>
             </View>
-          )}
+          ))}
 
           <Pressable
             accessibilityRole="button"
@@ -208,6 +219,9 @@ export default function BibleQuizScreen() {
             <Text style={[styles.feedbackTitle, { color: feedback.isCorrect ? colors.success : colors.foreground }]}>{feedback.isCorrect ? `Correct · +${feedback.points}` : feedback.timedOut ? "Time's up" : "Not quite"}</Text>
             <Text style={[styles.feedbackBody, { color: feedback.isCorrect ? "#D5F0E3" : colors.muted }]}>{feedback.explanation}</Text>
             <Text style={[styles.reference, { color: colors.primary }]}>{feedback.reference}</Text>
+            {isAuthenticated && <Pressable accessibilityRole="button" accessibilityLabel="Report this question" disabled={reportMutation.isPending} onPress={() => reportMutation.mutate({ questionId: question.id, reason: "other", details: "Reported from in-game feedback." })}>
+              <Text style={[styles.reportLink, { color: colors.muted }]}>{reportMutation.isPending ? "Sending report…" : "Report a problem with this question"}</Text>
+            </Pressable>}
             <Pressable accessibilityRole="button" accessibilityLabel="Continue to next question" onPress={continueToNext} style={({ pressed }) => [styles.continueButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}>
               <Text style={[styles.primaryButtonText, { color: colors.background }]}>{session.status === "complete" ? "See results" : "Next question"}</Text>
               <IconSymbol name="chevron.right" size={18} color={colors.background} />
@@ -256,6 +270,7 @@ const styles = StyleSheet.create({
   feedbackTitle: { fontSize: 17, fontWeight: "800" },
   feedbackBody: { fontSize: 13, lineHeight: 19 },
   reference: { fontSize: 12, fontWeight: "800", marginTop: 2 },
+  reportLink: { fontSize: 12, fontWeight: "700", textDecorationLine: "underline", marginTop: 10, paddingVertical: 8 },
   pressed: { opacity: 0.78, transform: [{ scale: 0.985 }] },
   resultContent: { paddingTop: 34, paddingBottom: 38, gap: 18 },
   resultIcon: { width: 68, height: 68, borderRadius: 24, alignItems: "center", justifyContent: "center", alignSelf: "center" },
@@ -271,4 +286,13 @@ const styles = StyleSheet.create({
   resultStatLabel: { fontSize: 11 },
   shareButton: { minHeight: 52, borderRadius: 16, borderWidth: 1.5, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   shareButtonText: { fontSize: 14, fontWeight: "800" },
+  reviewHeader: { gap: 4, marginTop: 4 },
+  reviewTitle: { fontSize: 20, fontWeight: "800" },
+  reviewSubtitle: { fontSize: 13, lineHeight: 19 },
+  reviewCard: { borderRadius: 18, borderWidth: 1, padding: 15, gap: 7 },
+  reviewTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  reviewNumber: { fontSize: 11, fontWeight: "800", letterSpacing: 1 },
+  reviewOutcome: { fontSize: 11, fontWeight: "800" },
+  reviewAnswer: { fontSize: 13, fontWeight: "700", lineHeight: 19 },
+  reviewExplanation: { fontSize: 13, lineHeight: 19, marginTop: 2 },
 });

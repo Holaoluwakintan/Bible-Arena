@@ -14,6 +14,7 @@ export interface SessionHistoryEntry {
   totalQuestions: number;
   xpEarned: number;
   completedAt: number;
+  answers?: Array<{ questionId: string; answerId: string | null }>;
 }
 
 export interface LocalProgressState {
@@ -44,6 +45,7 @@ export function toHistoryEntry(result: GameResult): SessionHistoryEntry {
     totalQuestions: result.totalQuestions,
     xpEarned: result.xpEarned,
     completedAt: result.completedAt,
+    answers: result.answers,
   };
 }
 

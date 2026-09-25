@@ -1,13 +1,15 @@
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, Share, StyleSheet, Switch, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
+import { trpc } from "@/lib/trpc";
 import {
   getNotificationPreferences,
+  saveNotificationPreferences,
   scheduleDailyStreakReminder,
   cancelDailyStreakReminder,
 } from "@/lib/notifications";
@@ -20,19 +22,46 @@ export default function SettingsScreen() {
   const colors = useColors();
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const exportQuery = trpc.privacy.export.useQuery(undefined, { enabled: false });
+  const deleteMutation = trpc.privacy.deleteAccount.useMutation({ onSuccess: () => router.replace("/onboarding") });
 
   useEffect(() => {
-    void getNotificationPreferences().then((p) => setNotificationsEnabled(p.dailyStreakReminder));
+    void getNotificationPreferences().then((p) => {
+      setNotificationsEnabled(p.dailyStreakReminder);
+      setSoundEnabled(p.soundEnabled);
+      setSettingsLoaded(true);
+    });
   }, []);
 
   const handleToggleReminders = async (enabled: boolean) => {
     toggleFeedback();
     setNotificationsEnabled(enabled);
     if (enabled) {
-      await scheduleDailyStreakReminder(20, 0);
+      const scheduled = await scheduleDailyStreakReminder(20, 0);
+      if (!scheduled) setNotificationsEnabled(false);
     } else {
       await cancelDailyStreakReminder();
     }
+  };
+
+  const handleToggleSound = async (enabled: boolean) => {
+    toggleFeedback();
+    setSoundEnabled(enabled);
+    await saveNotificationPreferences({ soundEnabled: enabled });
+    if (notificationsEnabled) await scheduleDailyStreakReminder(20, 0);
+  };
+
+  const exportData = async () => {
+    const result = await exportQuery.refetch();
+    if (result.data) await Share.share({ title: "Bible Arena data export", message: JSON.stringify(result.data, null, 2) });
+  };
+
+  const confirmDelete = () => {
+    Alert.alert("Delete account?", "This permanently removes your cloud profile, progress, sessions, friendships, and match history.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete permanently", style: "destructive", onPress: () => deleteMutation.mutate() },
+    ]);
   };
 
   return (
@@ -40,7 +69,7 @@ export default function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={[styles.eyebrow, { color: colors.primary }]}>SETTINGS</Text>
         <Text style={[styles.title, { color: colors.foreground }]}>Make it yours.</Text>
-        <Text style={[styles.subtitle, { color: colors.muted }]}>Tune the experience now. Account sync and notification delivery come later.</Text>
+        <Text style={[styles.subtitle, { color: colors.muted }]}>Your preferences are saved on this device and apply to future reminders.</Text>
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Preferences</Text>
@@ -50,13 +79,14 @@ export default function SettingsScreen() {
                 <IconSymbol name="sparkles" size={19} color={colors.primary} />
               </View>
               <View style={styles.rowCopy}>
-                <Text style={[styles.rowTitle, { color: colors.foreground }]}>Game sound</Text>
-                <Text style={[styles.rowSubtitle, { color: colors.muted }]}>Feedback and session sounds</Text>
+                <Text style={[styles.rowTitle, { color: colors.foreground }]}>Reminder sound</Text>
+                <Text style={[styles.rowSubtitle, { color: colors.muted }]}>Play a sound with scheduled streak reminders</Text>
               </View>
               <Switch
-                accessibilityLabel="Toggle game sound"
+                accessibilityLabel="Toggle reminder sound"
                 value={soundEnabled}
-                onValueChange={(value) => { toggleFeedback(); setSoundEnabled(value); }}
+                disabled={!settingsLoaded}
+                onValueChange={handleToggleSound}
                 trackColor={{ false: colors.border, true: colors.primary }}
                 thumbColor={colors.foreground}
               />
@@ -121,6 +151,18 @@ export default function SettingsScreen() {
               </View>
               <Text style={[styles.status, { color: colors.muted }]}>Ready</Text>
             </View>
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <Pressable accessibilityRole="button" accessibilityLabel="Export my Bible Arena data" disabled={exportQuery.isFetching} onPress={exportData} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+              <View style={[styles.rowIcon, { backgroundColor: "#243650" }]}><IconSymbol name="arrow.down.circle" size={19} color={colors.primary} /></View>
+              <View style={styles.rowCopy}><Text style={[styles.rowTitle, { color: colors.foreground }]}>Export my data</Text><Text style={[styles.rowSubtitle, { color: colors.muted }]}>Share a copy of your account and progress data</Text></View>
+              <Text style={[styles.status, { color: colors.primary }]}>{exportQuery.isFetching ? "Preparing…" : "Export"}</Text>
+            </Pressable>
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <Pressable accessibilityRole="button" accessibilityLabel="Delete my Bible Arena account" disabled={deleteMutation.isPending} onPress={confirmDelete} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+              <View style={[styles.rowIcon, { backgroundColor: "#3B2728" }]}><IconSymbol name="trash" size={19} color={colors.error} /></View>
+              <View style={styles.rowCopy}><Text style={[styles.rowTitle, { color: colors.error }]}>Delete account</Text><Text style={[styles.rowSubtitle, { color: colors.muted }]}>Permanently remove your cloud data</Text></View>
+              <Text style={[styles.status, { color: colors.error }]}>{deleteMutation.isPending ? "Deleting…" : "Delete"}</Text>
+            </Pressable>
           </View>
         </View>
 

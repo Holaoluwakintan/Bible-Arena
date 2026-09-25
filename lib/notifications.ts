@@ -84,16 +84,17 @@ export async function scheduleDailyStreakReminder(
   if (Platform.OS === "web") return false;
 
   try {
+    const preferences = await getNotificationPreferences();
     // Cancel existing reminder first
     await cancelDailyStreakReminder();
 
     await Notifications.scheduleNotificationAsync({
       identifier: STREAK_REMINDER_ID,
       content: {
-        title: "🔥 Keep Your Daily Flame Burning!",
+        title: "Keep your daily Bible Arena streak",
         body: "Your daily Bible Arena streak is waiting. Complete 1 quick session to protect your streak and earn today's XP!",
         data: { route: "/play" },
-        sound: true,
+        sound: preferences.soundEnabled ? "default" : undefined,
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,

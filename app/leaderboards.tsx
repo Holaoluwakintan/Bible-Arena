@@ -35,19 +35,19 @@ export default function LeaderboardsScreen() {
 
   return <ScreenContainer className="px-5" containerClassName="bg-background"><ScrollView contentContainerStyle={styles.content}>
     <View style={styles.headerRow}>
-      <Pressable onPress={() => router.back()}><Text style={[styles.back, { color: colors.primary }]}>‹ Back</Text></Pressable>
-      <Pressable onPress={() => router.push("/friends")} style={[styles.friendsShortcut, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Text style={[styles.friendsShortcutText, { color: colors.primary }]}>👥 Friends Hub</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()}><Text style={[styles.back, { color: colors.primary }]}>‹ Back</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Open Friends Hub" onPress={() => router.push("/friends")} style={[styles.friendsShortcut, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.friendsShortcutText, { color: colors.primary }]}>Friends Hub</Text>
       </Pressable>
     </View>
 
     <Text style={[styles.eyebrow, { color: colors.primary }]}>COMPETE</Text>
     <Text style={[styles.title, { color: colors.foreground }]}>{board === "multiplayer" ? "Arena rankings." : board === "friends" ? "Friends circle." : "Leaderboards."}</Text>
-    <Text style={[styles.subtitle, { color: colors.muted }]}>{isAuthenticated ? `Server-backed rankings · ${syncStatus}` : "Local preview · sign in to compete across devices."}</Text>
+    <Text style={[styles.subtitle, { color: colors.muted }]}>{board === "friends" ? "Friends leaderboard · compare with your circle." : board === "multiplayer" ? `${multiplayerScope === "season" ? "Season" : multiplayerScope === "weekly" ? "Weekly" : "Global"} rankings · ${isAuthenticated ? syncStatus : "sign in to sync"}` : `${isAuthenticated ? "Global leaderboard" : "Local leaderboard"} · ${isAuthenticated ? syncStatus : "this device only"}.`}</Text>
 
     <View style={[styles.boardTabs, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       {(["sessions", "multiplayer", "friends"] as Board[]).map((item) => (
-        <Pressable key={item} onPress={() => setBoard(item)} style={[styles.boardTab, board === item && { backgroundColor: colors.primary }]}>
+        <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: board === item }} accessibilityLabel={`Show ${item === "sessions" ? "all games" : item} leaderboard`} onPress={() => setBoard(item)} style={[styles.boardTab, board === item && { backgroundColor: colors.primary }]}>
           <Text style={[styles.scopeText, { color: board === item ? colors.background : colors.muted }]}>
             {item === "sessions" ? "All games" : item === "multiplayer" ? "Multiplayer" : "Friends"}
           </Text>
@@ -77,7 +77,7 @@ export default function LeaderboardsScreen() {
               <Text style={[styles.rank, { color: colors.primary }]}>{row.rank}</Text>
               <View style={styles.entryCopy}>
                 <Text style={[styles.name, { color: colors.foreground }]}>{row.displayName}</Text>
-                <Text style={[styles.meta, { color: colors.muted }]}>{row.currentStreak} Day Streak 🔥</Text>
+                <Text style={[styles.meta, { color: colors.muted }]}>{row.currentStreak} day streak</Text>
               </View>
               <View style={styles.pointsCopy}>
                 <Text style={[styles.points, { color: colors.foreground }]}>{row.totalXp}</Text>
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
   content: { paddingTop: 18, paddingBottom: 38, gap: 17 },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   back: { fontSize: 13, fontWeight: "800" },
-  friendsShortcut: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
+  friendsShortcut: { minHeight: 44, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, justifyContent: "center" },
   friendsShortcutText: { fontSize: 12, fontWeight: "800" },
   eyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1.7 },
   title: { fontSize: 30, fontWeight: "800", letterSpacing: -0.7 },
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
   meta: { fontSize: 11, marginTop: 4 },
   pointsCopy: { alignItems: "flex-end" },
   points: { fontSize: 17, fontWeight: "900" },
-  challengeButton: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, marginLeft: 8 },
+  challengeButton: { minHeight: 44, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, marginLeft: 8, justifyContent: "center" },
   challengeButtonText: { fontSize: 11, fontWeight: "800" },
   empty: { borderRadius: 22, borderWidth: 1, padding: 22, alignItems: "center" },
   emptyTitle: { fontSize: 17, fontWeight: "800" },

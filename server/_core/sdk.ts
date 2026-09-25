@@ -32,7 +32,13 @@ class OAuthService {
   constructor(private client: AxiosInstance) {}
 
   private decodeState(state: string): string {
-    return atob(state);
+    const decoded = atob(state);
+    try {
+      const parsed = JSON.parse(decoded) as { redirectUri?: unknown };
+      return typeof parsed.redirectUri === "string" ? parsed.redirectUri : decoded;
+    } catch {
+      return decoded;
+    }
   }
 
   async getTokenByCode(code: string, state: string): Promise<ExchangeTokenResponse> {
@@ -138,6 +144,9 @@ class SDKServer {
       appId: payload.appId,
       name: payload.name,
     })
+      .setSubject(payload.openId)
+      .setIssuer("bible-arena")
+      .setAudience(ENV.appId)
       .setProtectedHeader({ alg: "HS256", typ: "JWT" })
       .setExpirationTime(expirationSeconds)
       .sign(secretKey);
@@ -152,10 +161,13 @@ class SDKServer {
       const secretKey = this.getSessionSecret();
       const { payload } = await jwtVerify(cookieValue, secretKey, {
         algorithms: ["HS256"],
+        issuer: "bible-arena",
+        audience: ENV.appId,
       });
       const { openId, appId, name } = payload as Record<string, unknown>;
 
-      if (!isNonEmptyString(openId) || !isNonEmptyString(appId)) return null;
+      if (!isNonEmptyString(openId) || !isNonEmptyString(appId) || appId !== ENV.appId) return null;
+      if (payload.sub !== openId) return null;
 
       return {
         openId,

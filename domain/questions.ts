@@ -172,3 +172,12 @@ export function getVerifiedQuestionsForMode(mode: GameMode, count: number, shuff
   const shuffled = [...eligible].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count);
 }
+
+export function getVerifiedQuestionById(mode: GameMode, id: string): BibleQuestion | undefined {
+  const pool = mode === "bible_or_myth"
+    ? VERIFIED_BIBLE_OR_MYTH_QUESTIONS
+    : mode === "word_puzzle"
+      ? VERIFIED_WORD_PUZZLE_QUESTIONS
+      : VERIFIED_BIBLE_QUIZ_QUESTIONS;
+  return pool.find((question) => question.id === id && isCompetitiveQuestion(question));
+}

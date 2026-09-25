@@ -60,5 +60,9 @@ describe("Bible Arena game engine", () => {
     expect(result.accuracy).toBe(50);
     expect(result.score).toBe(148);
     expect(result.xpEarned).toBe(150);
+    expect(result.review).toHaveLength(2);
+    expect(result.review?.[0].explanation).toBe(questions[0].explanation);
+    expect(result.review?.[0].reference).toContain(questions[0].reference.book);
+    expect(result.review?.[1].correctAnswerLabel).toBe(questions[1].options.find((option) => option.id === questions[1].correctAnswer)?.label);
   });
 });

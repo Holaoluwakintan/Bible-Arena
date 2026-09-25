@@ -32,8 +32,8 @@ export default function HomeScreen() {
         <View style={styles.headerRow}>
           <View>
             <Text style={[styles.eyebrow, { color: colors.primary }]}>BIBLE ARENA</Text>
-            <Text style={[styles.greeting, { color: colors.foreground }]}>Welcome back</Text>
-            <Text style={[styles.subtle, { color: colors.muted }]}>Guest player · ready to grow</Text>
+            <Text style={[styles.greeting, { color: colors.foreground }]}>Welcome to Bible Arena</Text>
+            <Text style={[styles.subtle, { color: colors.muted }]}>Local progress · ready to grow</Text>
           </View>
           <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
             <Text style={[styles.avatarText, { color: colors.background }]}>G</Text>
@@ -65,17 +65,17 @@ export default function HomeScreen() {
           <View style={styles.heroCopy}>
             <View style={styles.kickerRow}>
               <IconSymbol name="sparkles" size={16} color={colors.primary} />
-              <Text style={[styles.kicker, { color: colors.primary }]}>YOUR NEXT SESSION</Text>
+            <Text style={[styles.kicker, { color: colors.primary }]}>START HERE</Text>
             </View>
-            <Text style={[styles.heroTitle, { color: colors.foreground }]}>Know the Word.</Text>
-            <Text style={[styles.heroBody, { color: colors.muted }]}>Challenge yourself with a quick Bible knowledge session.</Text>
+            <Text style={[styles.heroTitle, { color: colors.foreground }]}>Play a quick round.</Text>
+            <Text style={[styles.heroBody, { color: colors.muted }]}>Ten timed Bible questions with an explanation and Scripture reference after every answer.</Text>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Explore game modes"
-              onPress={() => { tapFeedback(); router.push("/play"); }}
+              accessibilityLabel="Play a quick round"
+              onPress={() => { tapFeedback(); router.push("/quiz"); }}
               style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
             >
-              <Text style={[styles.primaryButtonText, { color: colors.background }]}>Explore game modes</Text>
+              <Text style={[styles.primaryButtonText, { color: colors.background }]}>Play a quick round</Text>
               <IconSymbol name="chevron.right" size={18} color={colors.background} />
             </Pressable>
           </View>

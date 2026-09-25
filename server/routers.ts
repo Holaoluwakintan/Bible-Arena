@@ -3,9 +3,10 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import * as db from "./db";
 import { z } from "zod";
+import { recordAuthoritativeSession } from "./authoritative-session";
 
 const gameMode = z.enum(["bible_quiz", "bible_or_myth", "word_puzzle", "daily_challenge"]);
-const sessionInput = z.object({
+const legacySessionInput = z.object({
   id: z.string().min(1).max(128),
   mode: gameMode,
   score: z.number().int().min(0).max(1_000_000),
@@ -15,18 +16,16 @@ const sessionInput = z.object({
   xpEarned: z.number().int().min(0).max(1_000_000),
   completedAt: z.coerce.date(),
 });
-const progressInput = z.object({
-  totalXp: z.number().int().min(0),
-  currentStreak: z.number().int().min(0),
-  bestStreak: z.number().int().min(0),
-  lastEligibleDate: z.string().nullable(),
-  achievementsJson: z.string().max(100_000),
+const authoritativeSessionInput = z.object({
+  id: z.string().min(1).max(128),
+  mode: gameMode,
+  answers: z.array(z.object({ questionId: z.string().min(1).max(128), answerId: z.string().max(256).nullable() })).min(1).max(20),
 });
 const roomId = z.string().min(1).max(160);
 
 export const appRouter = router({
   system: router({
-    health: publicProcedure.query(() => ({ status: "ok" as const })),
+    health: publicProcedure.query(() => ({ status: "ok" as const, database: db.checkDatabaseHealth().ok })),
   }),
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
@@ -53,20 +52,14 @@ export const appRouter = router({
       };
     }),
     migrate: protectedProcedure
-      .input(z.object({ progress: progressInput, sessions: z.array(sessionInput).max(50) }))
-      .mutation(async ({ ctx, input }) => {
-        await db.saveCloudProgress({ userId: ctx.user.id, ...input.progress });
-        for (const session of input.sessions) {
-          await db.saveSessionRecord({ ...session, userId: ctx.user.id });
-        }
-        return { success: true } as const;
+      .input(z.object({ progress: z.unknown(), sessions: z.array(legacySessionInput).max(50) }))
+      .mutation(() => {
+        throw new Error("Legacy client progression migration is disabled; complete a new verified session instead.");
       }),
     recordSession: protectedProcedure
-      .input(z.object({ progress: progressInput, session: sessionInput }))
-      .mutation(async ({ ctx, input }) => {
-        await db.saveCloudProgress({ userId: ctx.user.id, ...input.progress });
-        await db.saveSessionRecord({ ...input.session, userId: ctx.user.id });
-        return { success: true } as const;
+      .input(authoritativeSessionInput)
+      .mutation(({ ctx, input }) => {
+        return recordAuthoritativeSession({ ...input, userId: ctx.user.id });
       }),
   }),
   challenges: router({
@@ -183,12 +176,12 @@ export const appRouter = router({
       .mutation(({ ctx, input }) => db.claimSeasonReward(ctx.user.id, input.seasonId, input.rewardId)),
   }),
   notifications: router({
-    registerToken: publicProcedure
+    registerToken: protectedProcedure
       .input(z.object({ token: z.string().min(1), platform: z.string().optional() }))
-      .mutation(({ ctx, input }) => db.registerPushToken(input.token, ctx.user?.id ?? null, input.platform)),
-    updatePreferences: publicProcedure
-      .input(z.object({ token: z.string().min(1), dailyReminders: z.boolean() }))
-      .mutation(({ input }) => db.updateNotificationPreferences(input.token, input.dailyReminders)),
+      .mutation(({ ctx, input }) => db.registerPushToken(input.token, ctx.user.id, input.platform)),
+    updatePreferences: protectedProcedure
+      .input(z.object({ dailyReminders: z.boolean() }))
+      .mutation(({ ctx, input }) => db.updateNotificationPreferences(ctx.user.id, input.dailyReminders)),
   }),
   friends: router({
     list: protectedProcedure.query(({ ctx }) => db.listFriends(ctx.user.id)),
@@ -202,6 +195,36 @@ export const appRouter = router({
       .input(z.object({ requestId: z.number().int().positive(), accept: z.boolean() }))
       .mutation(({ ctx, input }) => db.respondFriendRequest(input.requestId, ctx.user.id, input.accept)),
     leaderboard: protectedProcedure.query(({ ctx }) => db.getFriendsLeaderboard(ctx.user.id)),
+  }),
+  reports: router({
+    question: protectedProcedure
+      .input(z.object({
+        questionId: z.string().min(1).max(128),
+        reason: z.enum(["incorrect_answer", "bad_reference", "unclear_wording", "sensitive_content", "other"]),
+        details: z.string().max(2_000).optional(),
+      }))
+      .mutation(({ ctx, input }) => db.createQuestionReport({ ...input, reporterUserId: ctx.user.id })),
+    match: protectedProcedure
+      .input(z.object({
+        subjectUserId: z.number().int().positive().optional(),
+        matchId: z.string().max(128).optional(),
+        reason: z.enum(["cheating", "abuse", "connection_manipulation", "other"]),
+        evidence: z.record(z.string(), z.unknown()).optional(),
+      }))
+      .mutation(({ ctx, input }) => db.createModerationFlag({ ...input, reporterUserId: ctx.user.id })),
+  }),
+  privacy: router({
+    export: protectedProcedure.query(({ ctx }) => db.exportUserData(ctx.user.id)),
+    deleteAccount: protectedProcedure.mutation(({ ctx }) => {
+      db.deleteUserAccount(ctx.user.id);
+      return { success: true as const };
+    }),
+  }),
+  moderation: router({
+    openFlags: protectedProcedure.query(({ ctx }) => {
+      if (db.getUserRole(ctx.user.id) !== "admin") throw new Error("Admin access required.");
+      return db.listOpenModerationFlags();
+    }),
   }),
 });
 
