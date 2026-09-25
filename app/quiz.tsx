@@ -18,13 +18,14 @@ import {
   type GameResult,
   type GameSession,
 } from "@/domain/game-engine";
-import { getVerifiedQuestionsForMode, type GameMode } from "@/domain/questions";
+import type { GameMode } from "@/domain/questions";
+import { getAdaptiveDifficulty, getAdaptiveQuestionsForMode, getQuestionsForPack, type ContentPackId } from "@/domain/phase8";
 
 const RESPONSE_WINDOW_MS = 20_000;
 
 export default function BibleQuizScreen() {
   const colors = useColors();
-  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const { mode, pack } = useLocalSearchParams<{ mode?: string; pack?: string }>();
   const gameMode: GameMode = mode === "bible_or_myth" || mode === "word_puzzle" || mode === "daily_challenge" ? mode : "bible_quiz";
   const isBibleOrMyth = gameMode === "bible_or_myth";
   const isWordPuzzle = gameMode === "word_puzzle";
@@ -32,7 +33,8 @@ export default function BibleQuizScreen() {
   const { recordSession, state, isAuthenticated } = useProgression();
   const reportMutation = trpc.reports.question.useMutation({ onSuccess: () => Alert.alert("Report received", "Thanks. The content team will review this question.") });
   const progression = state.progression;
-  const questions = useMemo(() => getVerifiedQuestionsForMode(gameMode, gameMode === "bible_quiz" ? 10 : 5, true), [gameMode]);
+  const packId = pack === "people-and-places" || pack === "teachings-and-wisdom" || pack === "new-testament" ? pack as ContentPackId : null;
+  const questions = useMemo(() => packId ? getQuestionsForPack(packId, 5) : getAdaptiveQuestionsForMode(gameMode, gameMode === "bible_quiz" ? 10 : 5, state.sessions), [gameMode, packId, state.sessions]);
   const [session, setSession] = useState<GameSession>(() => createGameSession(questions, { mode: gameMode }));
   const [questionStartedAt, setQuestionStartedAt] = useState(() => Date.now());
   const [remainingMs, setRemainingMs] = useState(RESPONSE_WINDOW_MS);
@@ -127,6 +129,7 @@ export default function BibleQuizScreen() {
                 accuracy: result.accuracy,
                 streak: progression.currentStreak,
                 level: calculateLevel(progression.totalXp),
+                learningNote: result.review?.length ? `${result.review.filter((item) => !item.isCorrect).length} answer${result.review.filter((item) => !item.isCorrect).length === 1 ? "" : "s"} reviewed with Scripture explanations.` : "Keep building your Scripture rhythm.",
               });
             }}
             style={({ pressed }) => [styles.shareButton, { backgroundColor: colors.surface, borderColor: colors.primary }, pressed && styles.pressed]}
@@ -160,7 +163,7 @@ export default function BibleQuizScreen() {
           <Pressable accessibilityRole="button" accessibilityLabel="Exit quiz" onPress={() => router.back()} style={({ pressed }) => [styles.exitButton, { borderColor: colors.border }, pressed && styles.pressed]}>
             <Text style={[styles.exitText, { color: colors.muted }]}>Exit</Text>
           </Pressable>
-          <Text style={[styles.modeLabel, { color: colors.primary }]}>{isBibleOrMyth ? "BIBLE OR MYTH" : isWordPuzzle ? "WORD PUZZLE" : isDailyChallenge ? "DAILY CHALLENGE" : "BIBLE QUIZ"}</Text>
+            <Text style={[styles.modeLabel, { color: colors.primary }]}>{packId ? packId.replaceAll("-", " ").toUpperCase() : isBibleOrMyth ? "BIBLE OR MYTH" : isWordPuzzle ? "WORD PUZZLE" : isDailyChallenge ? "DAILY CHALLENGE" : `BIBLE QUIZ · ${getAdaptiveDifficulty(state.sessions).toUpperCase()}`}</Text>
           <Text style={[styles.questionCount, { color: colors.muted }]}>{questionNumber}/{session.questions.length}</Text>
         </View>
 

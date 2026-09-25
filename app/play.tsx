@@ -5,6 +5,7 @@ import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
+import { CONTENT_PACKS } from "@/domain/phase8";
 
 const MODES = [
   { icon: "book.fill" as const, title: "Bible Quiz", subtitle: "10 questions · timed", accent: "primary" as const, available: true },
@@ -88,6 +89,20 @@ export default function PlayScreen() {
         </View>
 
         <View style={styles.sectionHeading}>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Focus packs</Text>
+          <Text style={[styles.sectionCaption, { color: colors.muted }]}>Learn by theme</Text>
+        </View>
+        <View style={styles.packList}>
+          {CONTENT_PACKS.map((pack) => (
+            <Pressable key={pack.id} accessibilityRole="button" accessibilityLabel={`Open ${pack.title} focus pack`} onPress={() => router.push({ pathname: "/quiz", params: { pack: pack.id } })} style={({ pressed }) => [styles.packCard, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
+              <View style={[styles.packIcon, { backgroundColor: "#203957" }]}><IconSymbol name="book.fill" size={18} color={colors.primary} /></View>
+              <View style={styles.modeCopy}><Text style={[styles.modeTitle, { color: colors.foreground }]}>{pack.title}</Text><Text style={[styles.modeSubtitle, { color: colors.muted }]}>{pack.subtitle}</Text></View>
+              <IconSymbol name="chevron.right" size={18} color={colors.muted} />
+            </Pressable>
+          ))}
+        </View>
+
+        <View style={styles.sectionHeading}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>More ways to play</Text>
           <Text style={[styles.sectionCaption, { color: colors.muted }]}>Explore after your first round</Text>
         </View>
@@ -148,6 +163,9 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 19, fontWeight: "800" },
   sectionCaption: { fontSize: 12 },
   modeList: { gap: 10 },
+  packList: { gap: 10 },
+  packCard: { minHeight: 70, borderRadius: 19, borderWidth: 1, padding: 13, flexDirection: "row", alignItems: "center", gap: 12 },
+  packIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   modeCard: { minHeight: 78, borderRadius: 19, borderWidth: 1, padding: 13, flexDirection: "row", alignItems: "center", gap: 12 },
   modeIcon: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   modeCopy: { flex: 1 },

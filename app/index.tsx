@@ -7,6 +7,9 @@ import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { loadProgressState } from "@/domain/local-storage";
+import type { LocalProgressState } from "@/domain/local-storage";
+import { getDailyHabitSnapshot, getAdaptiveDifficulty } from "@/domain/phase8";
+import { getLevelForXp } from "@/domain/progression";
 
 function tapFeedback() {
   if (Platform.OS !== "web") {
@@ -17,9 +20,11 @@ function tapFeedback() {
 export default function HomeScreen() {
   const colors = useColors();
   const [onboardingNeeded, setOnboardingNeeded] = useState(false);
+  const [progress, setProgress] = useState<LocalProgressState | null>(null);
 
   useEffect(() => {
     void loadProgressState().then((state) => {
+      setProgress(state);
       if (!state.hasCompletedOnboarding) {
         setOnboardingNeeded(true);
       }
@@ -90,9 +95,9 @@ export default function HomeScreen() {
         </View>
         <View style={styles.statGrid}>
           {[
-            { icon: "flame.fill" as const, label: "Streak", value: "Not started" },
-            { icon: "trophy.fill" as const, label: "Level", value: "Ready to earn" },
-            { icon: "chart.bar.fill" as const, label: "Accuracy", value: "No sessions" },
+            { icon: "flame.fill" as const, label: "Streak", value: progress ? `${getDailyHabitSnapshot(progress.sessions).streak} days` : "Loading…" },
+            { icon: "trophy.fill" as const, label: "Level", value: progress ? `Level ${getLevelForXp(progress.progression.totalXp)}` : "Loading…" },
+            { icon: "chart.bar.fill" as const, label: "Accuracy", value: progress?.sessions.length ? `${Math.round(progress.sessions.reduce((sum, session) => sum + session.accuracy, 0) / progress.sessions.length)}%` : "No sessions" },
           ].map((stat) => (
             <View key={stat.label} style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <IconSymbol name={stat.icon} size={20} color={colors.primary} />
@@ -111,13 +116,13 @@ export default function HomeScreen() {
             <IconSymbol name="sparkles" size={22} color={colors.primary} />
           </View>
           <View style={styles.challengeCopy}>
-            <Text style={[styles.challengeTitle, { color: colors.background }]}>Daily Challenge</Text>
-            <Text style={[styles.challengeBody, { color: colors.background }]}>One focused session. A stronger streak.</Text>
+            <Text style={[styles.challengeTitle, { color: colors.background }]}>{progress && getDailyHabitSnapshot(progress.sessions).completedToday ? "Daily session complete" : "Daily Scripture habit"}</Text>
+            <Text style={[styles.challengeBody, { color: colors.background }]}>{progress ? `${getDailyHabitSnapshot(progress.sessions).streak}-day rhythm · ${getAdaptiveDifficulty(progress.sessions)} level today` : "One focused session. A stronger streak."}</Text>
           </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Open daily challenge"
-            onPress={() => { tapFeedback(); router.push("/play"); }}
+            onPress={() => { tapFeedback(); router.push({ pathname: "/quiz", params: { mode: "daily_challenge" } }); }}
             style={({ pressed }) => [styles.roundButton, { backgroundColor: colors.background }, pressed && styles.pressed]}
           >
             <IconSymbol name="chevron.right" size={18} color={colors.primary} />

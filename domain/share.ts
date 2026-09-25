@@ -6,6 +6,7 @@
   level?: number;
   customQuote?: string;
   challengeCode?: string;
+  learningNote?: string;
 }
 
 export const INSPIRATIONAL_VERSES = [
@@ -22,7 +23,7 @@ export function getInspirationalVerse(seed = 0): string {
 }
 
 export function generateShareMessage(options: ShareResultOptions): string {
-  const { modeName, score, accuracy, streak, level, challengeCode } = options;
+  const { modeName, score, accuracy, streak, level, challengeCode, learningNote } = options;
   const quote = options.customQuote ?? getInspirationalVerse(score);
 
   const lines = [
@@ -42,6 +43,8 @@ export function generateShareMessage(options: ShareResultOptions): string {
   if (challengeCode) {
     lines.push(`Challenge Code: ${challengeCode}`);
   }
+
+  if (learningNote) lines.push(`Learning takeaway: ${learningNote}`);
 
   lines.push("");
   lines.push(quote);

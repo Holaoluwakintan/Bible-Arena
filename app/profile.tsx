@@ -10,6 +10,7 @@ import { useProgression } from "@/lib/progression-provider";
 import { useAuth } from "@/hooks/use-auth";
 import { startOAuthLogin } from "@/constants/oauth";
 import { trpc } from "@/lib/trpc";
+import { buildLearningAnalytics } from "@/domain/phase8";
 
 function tapFeedback() {
   if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -39,6 +40,7 @@ export default function ProfileScreen() {
   const levelName = getLevelName(level);
   const nextLevelXp = getXpToNextLevel(progression.totalXp);
   const latestSession = state.sessions[0];
+  const analytics = buildLearningAnalytics(state.sessions);
 
   return (
     <ScreenContainer className="px-5" containerClassName="bg-background">
@@ -161,6 +163,13 @@ export default function ProfileScreen() {
             <Text style={[styles.statValue, { color: colors.foreground }]}>{state.sessions.length}</Text>
             <Text style={[styles.statLabel, { color: colors.muted }]}>Sessions</Text>
           </View>
+        </View>
+
+        <View style={[styles.analyticsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.sectionHeader}><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Learning insights</Text><Text style={[styles.sectionCaption, { color: colors.primary }]}>Local only</Text></View>
+          <Text style={[styles.analyticsBody, { color: colors.muted }]}>{analytics.sessions ? `${analytics.questionsAnswered} questions answered at ${analytics.averageAccuracy}% average accuracy.` : "Complete a session to unlock personalized learning insights."}</Text>
+          {analytics.weakestCategory && <Text style={[styles.analyticsFocus, { color: colors.foreground }]}>Suggested focus: <Text style={{ color: colors.primary }}>{analytics.weakestCategory}</Text></Text>}
+          {analytics.strongestMode && <Text style={[styles.analyticsMeta, { color: colors.muted }]}>Strongest mode: {modeLabel(analytics.strongestMode)}</Text>}
         </View>
 
         {isAuthenticated && seasonProgressQuery.data && (() => {
@@ -322,6 +331,10 @@ const styles = StyleSheet.create({
   stat: { flex: 1, minHeight: 88, borderRadius: 18, borderWidth: 1, padding: 14, justifyContent: "space-between" },
   statValue: { fontSize: 25, fontWeight: "800" },
   statLabel: { fontSize: 11 },
+  analyticsCard: { borderRadius: 20, borderWidth: 1, padding: 16, gap: 8 },
+  analyticsBody: { fontSize: 13, lineHeight: 20 },
+  analyticsFocus: { fontSize: 13, fontWeight: "800", textTransform: "capitalize" },
+  analyticsMeta: { fontSize: 12 },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
   sectionTitle: { fontSize: 19, fontWeight: "800" },
   sectionCaption: { fontSize: 12 },
