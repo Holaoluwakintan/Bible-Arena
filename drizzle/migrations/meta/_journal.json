@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1790313348178,
+      "tag": "0000_lonely_taskmaster",
+      "breakpoints": true
+    }
+  ]
+}
