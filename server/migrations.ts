@@ -27,7 +27,7 @@ function recordMigration(db: DatabaseSync, hashValue: string, createdAt: number)
 const LEGACY_TABLES = [
   "users", "player_progress", "session_records", "friend_challenges", "friend_challenge_turns", "multiplayer_rooms",
   "tournament_seasons", "matchmaking_queue", "multiplayer_matches", "player_season_rewards",
-  "push_tokens", "friendships",
+  "push_tokens", "friendships", "notifications", "fellowship_groups", "fellowship_members",
 ] as const;
 
 const COPY_COLUMNS: Record<string, string> = {
@@ -43,6 +43,9 @@ const COPY_COLUMNS: Record<string, string> = {
   player_season_rewards: "userId, seasonId, rewardId, claimedAt",
   push_tokens: "id, userId, token, platform, dailyReminders, createdAt, updatedAt",
   friendships: "id, requesterId, addresseeId, status, createdAt, updatedAt",
+  notifications: "id, userId, type, title, body, dataJson, readAt, createdAt",
+  fellowship_groups: "id, inviteCode, name, ownerUserId, privacy, createdAt",
+  fellowship_members: "groupId, userId, role, joinedAt",
 };
 
 function upgradeLegacyRuntimeSchema(db: DatabaseSync, baseline: string): void {

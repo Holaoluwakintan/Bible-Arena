@@ -22,6 +22,13 @@
       "when": 1790414399555,
       "tag": "0002_wealthy_blink",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1790414770534,
+      "tag": "0003_tricky_warstar",
+      "breakpoints": true
     }
   ]
 }

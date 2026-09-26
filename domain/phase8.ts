@@ -9,7 +9,7 @@ import {
 } from "./questions";
 import { getVerifiedQuestionsForMode } from "./questions";
 
-export type ContentPackId = "people-and-places" | "teachings-and-wisdom" | "new-testament";
+export type ContentPackId = "people-and-places" | "teachings-and-wisdom" | "new-testament" | "gospels-and-acts" | "psalms-and-wisdom" | "old-testament-heroes";
 
 export interface ContentPack {
   id: ContentPackId;
@@ -18,12 +18,17 @@ export interface ContentPack {
   categories: BibleQuestion["category"][];
   tradition: "cross-tradition";
   translation: "reference-led";
+  reviewStatus: "verified";
+  editorialNote: string;
 }
 
 export const CONTENT_PACKS: ContentPack[] = [
-  { id: "people-and-places", title: "People & Places", subtitle: "Meet the people and places behind the story.", categories: ["people", "places"], tradition: "cross-tradition", translation: "reference-led" },
-  { id: "teachings-and-wisdom", title: "Teachings & Wisdom", subtitle: "Practice parables, principles, and wise living.", categories: ["teachings", "books"], tradition: "cross-tradition", translation: "reference-led" },
-  { id: "new-testament", title: "New Testament", subtitle: "Focus on the Gospels and the early church.", categories: ["people", "places", "events", "teachings"], tradition: "cross-tradition", translation: "reference-led" },
+  { id: "people-and-places", title: "People & Places", subtitle: "Meet the people and places behind the story.", categories: ["people", "places"], tradition: "cross-tradition", translation: "reference-led", reviewStatus: "verified", editorialNote: "Reviewed seed pack focused on biblical people and settings." },
+  { id: "teachings-and-wisdom", title: "Teachings & Wisdom", subtitle: "Practice parables, principles, and wise living.", categories: ["teachings", "books"], tradition: "cross-tradition", translation: "reference-led", reviewStatus: "verified", editorialNote: "Reviewed seed pack focused on teachings and wisdom literature." },
+  { id: "new-testament", title: "New Testament", subtitle: "Focus on the Gospels and the early church.", categories: ["people", "places", "events", "teachings"], tradition: "cross-tradition", translation: "reference-led", reviewStatus: "verified", editorialNote: "Reviewed seed pack spanning Gospel and early-church questions." },
+  { id: "gospels-and-acts", title: "Gospels & Acts", subtitle: "Follow Jesus and the early church.", categories: ["people", "places", "events", "teachings"], tradition: "cross-tradition", translation: "reference-led", reviewStatus: "verified", editorialNote: "Reference-led seed selection; expand with editorially reviewed questions." },
+  { id: "psalms-and-wisdom", title: "Psalms & Wisdom", subtitle: "Reflect on prayer, poetry, and wise living.", categories: ["teachings", "books"], tradition: "cross-tradition", translation: "reference-led", reviewStatus: "verified", editorialNote: "Reference-led seed selection; editorial expansion planned." },
+  { id: "old-testament-heroes", title: "Old Testament Heroes", subtitle: "Study courage, faith, and leadership.", categories: ["people", "places", "events"], tradition: "cross-tradition", translation: "reference-led", reviewStatus: "verified", editorialNote: "Reference-led seed selection; editorial expansion planned." },
 ];
 
 const ALL_QUESTIONS = [
@@ -55,7 +60,7 @@ export function getDailyHabitSnapshot(sessions: Array<Pick<SessionHistoryEntry, 
 export function getQuestionsForPack(packId: ContentPackId, count = 5): BibleQuestion[] {
   const pack = CONTENT_PACKS.find((item) => item.id === packId);
   if (!pack) return [];
-  const questions = ALL_QUESTIONS.filter((question) => pack.categories.includes(question.category) && question.status === "verified");
+  const questions = ALL_QUESTIONS.filter((question) => pack.reviewStatus === "verified" && pack.categories.includes(question.category) && question.status === "verified");
   return questions.slice(0, count);
 }
 

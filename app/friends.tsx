@@ -78,6 +78,10 @@ export default function FriendsScreen() {
               ? "Connect with fellow disciples, duel in challenges, and climb the leaderboard together."
               : "Sign in to add friends, send challenge invites, and track fellowship rankings."}
           </Text>
+          <View style={styles.quickLinks}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Open fellowship groups" onPress={() => router.push("/groups")} style={[styles.quickLink, { borderColor: colors.border }]}><Text style={[styles.quickLinkText, { color: colors.primary }]}>Fellowship groups</Text></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="Open notifications" onPress={() => router.push("/notifications")} style={[styles.quickLink, { borderColor: colors.border }]}><Text style={[styles.quickLinkText, { color: colors.primary }]}>Notifications</Text></Pressable>
+          </View>
         </View>
 
         {/* Tab Navigation */}
@@ -283,6 +287,7 @@ export default function FriendsScreen() {
 }
 
 const styles = StyleSheet.create({
+  quickLinks: { flexDirection: "row", gap: 8, marginTop: 12 }, quickLink: { borderWidth: 1, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 11 }, quickLinkText: { fontSize: 12, fontWeight: "800" },
   content: { paddingTop: 18, paddingBottom: 38, gap: 17 },
   back: { fontSize: 13, fontWeight: "800" },
   eyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1.7 },

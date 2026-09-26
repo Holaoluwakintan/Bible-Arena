@@ -33,7 +33,7 @@ export default function BibleQuizScreen() {
   const { recordSession, state, isAuthenticated } = useProgression();
   const reportMutation = trpc.reports.question.useMutation({ onSuccess: () => Alert.alert("Report received", "Thanks. The content team will review this question.") });
   const progression = state.progression;
-  const packId = pack === "people-and-places" || pack === "teachings-and-wisdom" || pack === "new-testament" ? pack as ContentPackId : null;
+  const packId = pack === "people-and-places" || pack === "teachings-and-wisdom" || pack === "new-testament" || pack === "gospels-and-acts" || pack === "psalms-and-wisdom" || pack === "old-testament-heroes" ? pack as ContentPackId : null;
   const questions = useMemo(() => packId ? getQuestionsForPack(packId, 5) : getAdaptiveQuestionsForMode(gameMode, gameMode === "bible_quiz" ? 10 : 5, state.sessions), [gameMode, packId, state.sessions]);
   const [session, setSession] = useState<GameSession>(() => createGameSession(questions, { mode: gameMode }));
   const [questionStartedAt, setQuestionStartedAt] = useState(() => Date.now());

@@ -194,6 +194,10 @@ export const appRouter = router({
       .mutation(({ ctx, input }) => db.claimSeasonReward(ctx.user.id, input.seasonId, input.rewardId)),
   }),
   notifications: router({
+    list: protectedProcedure.query(({ ctx }) => db.listNotifications(ctx.user.id)),
+    markRead: protectedProcedure
+      .input(z.object({ ids: z.array(z.string().min(1).max(128)).max(100).optional() }))
+      .mutation(({ ctx, input }) => db.markNotificationsRead(ctx.user.id, input.ids)),
     registerToken: protectedProcedure
       .input(z.object({ token: z.string().min(1), platform: z.string().optional() }))
       .mutation(({ ctx, input }) => db.registerPushToken(input.token, ctx.user.id, input.platform)),
@@ -243,6 +247,21 @@ export const appRouter = router({
       if (db.getUserRole(ctx.user.id) !== "admin") throw new Error("Admin access required.");
       return db.listOpenModerationFlags();
     }),
+    resolve: protectedProcedure
+      .input(z.object({ flagId: z.string().min(1).max(128), status: z.enum(["reviewed", "actioned", "dismissed"]), reason: z.string().max(2_000).optional() }))
+      .mutation(({ ctx, input }) => db.resolveModerationFlag({ ...input, adminUserId: ctx.user.id })),
+  }),
+  groups: router({
+    list: protectedProcedure.query(({ ctx }) => db.listFellowshipGroups(ctx.user.id)),
+    create: protectedProcedure
+      .input(z.object({ name: z.string().min(2).max(60), privacy: z.enum(["private", "invite_only"]).optional() }))
+      .mutation(({ ctx, input }) => db.createFellowshipGroup({ ...input, ownerUserId: ctx.user.id })),
+    join: protectedProcedure
+      .input(z.object({ inviteCode: z.string().regex(/^\d{6}$/) }))
+      .mutation(({ ctx, input }) => db.joinFellowshipGroup(input.inviteCode, ctx.user.id)),
+    leave: protectedProcedure
+      .input(z.object({ groupId: z.string().min(1).max(128) }))
+      .mutation(({ ctx, input }) => db.leaveFellowshipGroup(input.groupId, ctx.user.id)),
   }),
 });
 

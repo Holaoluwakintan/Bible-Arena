@@ -225,6 +225,41 @@ export const privacyRequests = sqliteTable("privacy_requests", {
   userIndex: index("privacy_requests_user_idx").on(table.userId, table.requestedAt),
 }));
 
+export const notifications = sqliteTable("notifications", {
+  id: text("id").primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  dataJson: text("dataJson").notNull().default("{}"),
+  readAt: int("readAt"),
+  createdAt: int("createdAt").notNull(),
+}, (table) => ({
+  userReadIndex: index("notifications_user_read_idx").on(table.userId, table.readAt, table.createdAt),
+}));
+
+export const fellowshipGroups = sqliteTable("fellowship_groups", {
+  id: text("id").primaryKey(),
+  inviteCode: text("inviteCode").notNull(),
+  name: text("name").notNull(),
+  ownerUserId: int("ownerUserId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  privacy: text("privacy", { enum: ["private", "invite_only"] }).notNull().default("invite_only"),
+  createdAt: int("createdAt").notNull(),
+}, (table) => ({
+  inviteUnique: uniqueIndex("fellowship_groups_invite_unique").on(table.inviteCode),
+  ownerIndex: index("fellowship_groups_owner_idx").on(table.ownerUserId),
+}));
+
+export const fellowshipMembers = sqliteTable("fellowship_members", {
+  groupId: text("groupId").notNull().references(() => fellowshipGroups.id, { onDelete: "cascade" }),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: text("role", { enum: ["owner", "leader", "member"] }).notNull().default("member"),
+  joinedAt: int("joinedAt").notNull(),
+}, (table) => ({
+  memberPk: primaryKey({ columns: [table.groupId, table.userId] }),
+  userIndex: index("fellowship_members_user_idx").on(table.userId, table.joinedAt),
+}));
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type PlayerProgress = typeof playerProgress.$inferSelect;
@@ -238,3 +273,6 @@ export type MultiplayerMatch = typeof multiplayerMatches.$inferSelect;
 export type QuestionReport = typeof questionReports.$inferSelect;
 export type ModerationFlag = typeof moderationFlags.$inferSelect;
 export type PrivacyRequest = typeof privacyRequests.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
+export type FellowshipGroup = typeof fellowshipGroups.$inferSelect;
+export type FellowshipMember = typeof fellowshipMembers.$inferSelect;

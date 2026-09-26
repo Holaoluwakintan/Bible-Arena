@@ -238,6 +238,7 @@ export async function joinCloudChallenge(shareCode: string, opponentUserId: numb
     opponentUserId,
     challenge.id
   );
+  createNotification({ userId: challenge.creatorUserId, type: "challenge_joined", title: "Your challenge was joined", body: "Your friend is ready to take their turn.", data: { challengeId: challenge.id } });
 
   return {
     ...challenge,
@@ -1038,6 +1039,8 @@ export function sendFriendRequest(requesterId: number, addresseeId: number): { s
   db.prepare(
     `INSERT INTO friendships (requesterId, addresseeId, status, createdAt, updatedAt) VALUES (?, ?, 'pending', ?, ?)`
   ).run(requesterId, addresseeId, now, now);
+  const requester = db.prepare("SELECT COALESCE(name, openId) AS name FROM users WHERE id = ?").get(requesterId) as { name?: string } | undefined;
+  createNotification({ userId: addresseeId, type: "friend_request", title: "New fellowship request", body: `${requester?.name ?? "A player"} wants to connect with you.` });
   return { success: true };
 }
 
@@ -1054,6 +1057,8 @@ export function respondFriendRequest(
   if (!row) return { success: false, error: "Request not found" };
   if (accept) {
     db.prepare(`UPDATE friendships SET status = 'accepted', updatedAt = ? WHERE id = ?`).run(now, requestId);
+    const requester = db.prepare("SELECT requesterId FROM friendships WHERE id = ?").get(requestId) as { requesterId?: number } | undefined;
+    if (requester?.requesterId) createNotification({ userId: requester.requesterId, type: "friend_accepted", title: "Fellowship request accepted", body: "Your new friend is ready to learn together." });
   } else {
     db.prepare(`DELETE FROM friendships WHERE id = ?`).run(requestId);
   }
@@ -1203,4 +1208,88 @@ export function deleteUserAccount(userId: number): void {
 export function getUserRole(userId: number): string | null {
   const row = getDb().prepare("SELECT role FROM users WHERE id = ?").get(userId) as { role?: string } | undefined;
   return row?.role ?? null;
+}
+
+
+// ──────────────────────────────────────────────────────────────────
+// Notifications inbox and fellowship groups
+// ──────────────────────────────────────────────────────────────────
+
+export function createNotification(input: { userId: number; type: string; title: string; body: string; data?: Record<string, unknown> }) {
+  const id = randomUUID();
+  getDb().prepare(`INSERT INTO notifications (id, userId, type, title, body, dataJson, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    .run(id, input.userId, input.type, input.title, input.body, JSON.stringify(input.data ?? {}), toUnix());
+  return { id, unread: true as const };
+}
+
+export function listNotifications(userId: number, limit = 50) {
+  const rows = getDb().prepare(`SELECT * FROM notifications WHERE userId = ? ORDER BY createdAt DESC LIMIT ?`).all(userId, Math.min(Math.max(limit, 1), 100)) as any[];
+  return rows.map((row) => ({ ...row, data: JSON.parse(row.dataJson || "{}"), unread: row.readAt === null }));
+}
+
+export function markNotificationsRead(userId: number, ids?: string[]) {
+  const db = getDb();
+  const now = toUnix();
+  if (!ids?.length) db.prepare("UPDATE notifications SET readAt = COALESCE(readAt, ?) WHERE userId = ?").run(now, userId);
+  else {
+    const placeholders = ids.map(() => "?").join(",");
+    db.prepare(`UPDATE notifications SET readAt = COALESCE(readAt, ?) WHERE userId = ? AND id IN (${placeholders})`).run(now, userId, ...ids);
+  }
+  return { success: true as const };
+}
+
+export function resolveModerationFlag(input: { flagId: string; adminUserId: number; status: "reviewed" | "actioned" | "dismissed"; reason?: string }) {
+  if (getUserRole(input.adminUserId) !== "admin") throw new Error("Admin access required.");
+  const db = getDb();
+  const row = db.prepare("SELECT id, evidenceJson FROM moderation_flags WHERE id = ? AND status = 'open'").get(input.flagId) as any;
+  if (!row) throw new Error("Open moderation flag not found.");
+  const evidence = { ...(JSON.parse(row.evidenceJson || "{}")), moderationDecision: input.reason?.trim() || null, reviewedBy: input.adminUserId };
+  db.prepare("UPDATE moderation_flags SET status = ?, evidenceJson = ?, reviewedAt = ? WHERE id = ?").run(input.status, JSON.stringify(evidence), toUnix(), input.flagId);
+  return { id: input.flagId, status: input.status };
+}
+
+export function createFellowshipGroup(input: { ownerUserId: number; name: string; privacy?: "private" | "invite_only" }) {
+  const name = input.name.trim();
+  if (name.length < 2 || name.length > 60) throw new Error("Group name must be between 2 and 60 characters.");
+  const db = getDb();
+  const id = randomUUID();
+  let inviteCode = "";
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidate = String(Math.floor(100000 + Math.random() * 900000));
+    if (!db.prepare("SELECT 1 FROM fellowship_groups WHERE inviteCode = ?").get(candidate)) { inviteCode = candidate; break; }
+  }
+  if (!inviteCode) throw new Error("Could not create a unique invite code.");
+  const now = toUnix();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare("INSERT INTO fellowship_groups (id, inviteCode, name, ownerUserId, privacy, createdAt) VALUES (?, ?, ?, ?, ?, ?)").run(id, inviteCode, name, input.ownerUserId, input.privacy ?? "invite_only", now);
+    db.prepare("INSERT INTO fellowship_members (groupId, userId, role, joinedAt) VALUES (?, ?, 'owner', ?)").run(id, input.ownerUserId, now);
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+  return { id, inviteCode, name, privacy: input.privacy ?? "invite_only", role: "owner" as const };
+}
+
+export function joinFellowshipGroup(inviteCode: string, userId: number) {
+  const db = getDb();
+  const group = db.prepare("SELECT * FROM fellowship_groups WHERE inviteCode = ?").get(inviteCode.trim()) as any;
+  if (!group) throw new Error("Fellowship group not found.");
+  const existing = db.prepare("SELECT role FROM fellowship_members WHERE groupId = ? AND userId = ?").get(group.id, userId) as any;
+  if (!existing) db.prepare("INSERT INTO fellowship_members (groupId, userId, role, joinedAt) VALUES (?, ?, 'member', ?)").run(group.id, userId, toUnix());
+  return { id: group.id, name: group.name, inviteCode: group.inviteCode, role: existing?.role ?? "member" };
+}
+
+export function listFellowshipGroups(userId: number) {
+  return getDb().prepare(`SELECT g.id, g.name, g.inviteCode, g.privacy, m.role, m.joinedAt,
+      (SELECT COUNT(*) FROM fellowship_members fm WHERE fm.groupId = g.id) AS memberCount
+    FROM fellowship_groups g JOIN fellowship_members m ON m.groupId = g.id
+    WHERE m.userId = ? ORDER BY m.joinedAt DESC`).all(userId) as any[];
+}
+
+export function leaveFellowshipGroup(groupId: string, userId: number) {
+  const db = getDb();
+  const member = db.prepare("SELECT role FROM fellowship_members WHERE groupId = ? AND userId = ?").get(groupId, userId) as any;
+  if (!member) throw new Error("You are not a member of this group.");
+  if (member.role === "owner") throw new Error("The group owner must transfer ownership before leaving.");
+  db.prepare("DELETE FROM fellowship_members WHERE groupId = ? AND userId = ?").run(groupId, userId);
+  return { success: true as const };
 }

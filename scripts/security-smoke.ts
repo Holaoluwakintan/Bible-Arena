@@ -82,6 +82,14 @@ try {
   await db.upsertUser({ openId: "second-security-player", name: "Second Player", loginMethod: "guest", lastSignedIn: new Date() });
   const second = await db.getUserByOpenId("second-security-player");
   assert(second, "second test user should exist");
+  const group = db.createFellowshipGroup({ ownerUserId: loginBody.user!.id, name: "Security Fellowship" });
+  const joined = db.joinFellowshipGroup(group.inviteCode, second.id);
+  assert(joined.id === group.id, "second player should join fellowship group by invite code");
+  assert(db.listFellowshipGroups(second.id).some((item: { id: string }) => item.id === group.id), "joined fellowship should appear in member list");
+  const notification = db.createNotification({ userId: second.id, type: "test", title: "Smoke test", body: "Notification inbox is working." });
+  assert(db.listNotifications(second.id).some((item: { id: string }) => item.id === notification.id), "notification should appear in inbox");
+  db.markNotificationsRead(second.id, [notification.id]);
+  assert(db.listNotifications(second.id).find((item: { id: string }) => item.id === notification.id)?.unread === false, "notification should be markable as read");
   try {
     recordAuthoritativeSession({ userId: second.id, id: "security-session", mode: "bible_quiz", answers: [{ questionId: question.id, answerId: "wrong" }] });
     throw new Error("cross-user replay was accepted");
