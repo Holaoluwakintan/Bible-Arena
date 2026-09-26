@@ -4,6 +4,7 @@ export const NOTIFICATION_PREF_KEY = "bible-arena:notification-preferences:v1";
 export interface NotificationPreferences {
   dailyStreakReminder: boolean;
   soundEnabled: boolean;
+  reducedMotion: boolean;
   reminderHour: number; // 0-23, default 20 (8 PM)
   reminderMinute: number; // 0-59, default 0
   pushToken: string | null;
@@ -12,6 +13,7 @@ export interface NotificationPreferences {
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   dailyStreakReminder: true,
   soundEnabled: true,
+  reducedMotion: false,
   reminderHour: 20,
   reminderMinute: 0,
   pushToken: null,

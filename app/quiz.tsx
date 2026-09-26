@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -20,6 +20,7 @@ import {
 } from "@/domain/game-engine";
 import type { GameMode } from "@/domain/questions";
 import { getAdaptiveDifficulty, getAdaptiveQuestionsForMode, getQuestionsForPack, type ContentPackId } from "@/domain/phase8";
+import { getPerfectRoundCelebration } from "@/domain/phase7";
 
 const RESPONSE_WINDOW_MS = 20_000;
 
@@ -108,6 +109,22 @@ export default function BibleQuizScreen() {
               <View style={styles.resultStat}><Text style={[styles.resultStatValue, { color: colors.primary }]}>+{result.xpEarned}</Text><Text style={[styles.resultStatLabel, { color: colors.muted }]}>XP earned</Text></View>
             </View>
           </View>
+
+          {result.accuracy === 100 && (() => {
+            const celebration = getPerfectRoundCelebration(result.score, progression.currentStreak, result.review?.[0]?.reference);
+            return (
+              <View accessibilityRole="summary" style={[styles.celebrationCard, { backgroundColor: "#173A35", borderColor: colors.success }]}>
+                <Text style={[styles.celebrationEyebrow, { color: colors.success }]}>SCRIPTURE CELEBRATION</Text>
+                <Text style={[styles.celebrationTitle, { color: colors.foreground }]}>{celebration.title}</Text>
+                <Text style={[styles.celebrationSubtitle, { color: "#D5F0E3" }]}>{celebration.subtitle}</Text>
+                <Text style={[styles.celebrationVerse, { color: colors.foreground }]}>{celebration.verse}</Text>
+                <Text style={[styles.reference, { color: colors.primary }]}>{celebration.reference}</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel="Share perfect round Scripture card" onPress={() => void Share.share({ title: "Bible Arena perfect round", message: celebration.shareText })} style={({ pressed }) => [styles.celebrationShare, { borderColor: colors.success }, pressed && styles.pressed]}>
+                  <Text style={[styles.shareButtonText, { color: colors.success }]}>Share Scripture card</Text>
+                </Pressable>
+              </View>
+            );
+          })()}
 
           <View style={styles.reviewHeader}>
             <Text style={[styles.reviewTitle, { color: colors.foreground }]}>Answer review</Text>
@@ -294,6 +311,12 @@ const styles = StyleSheet.create({
   resultStat: { alignItems: "center", gap: 4 },
   resultStatValue: { fontSize: 16, fontWeight: "800" },
   resultStatLabel: { fontSize: 11 },
+  celebrationCard: { borderRadius: 20, borderWidth: 1, padding: 18, gap: 8 },
+  celebrationEyebrow: { fontSize: 10, fontWeight: "800", letterSpacing: 1.4 },
+  celebrationTitle: { fontSize: 24, fontWeight: "800" },
+  celebrationSubtitle: { fontSize: 13, lineHeight: 19 },
+  celebrationVerse: { fontSize: 15, lineHeight: 23, fontStyle: "italic", marginTop: 4 },
+  celebrationShare: { minHeight: 44, borderRadius: 12, borderWidth: 1, alignItems: "center", justifyContent: "center", marginTop: 6 },
   shareButton: { minHeight: 52, borderRadius: 16, borderWidth: 1.5, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   shareButtonText: { fontSize: 14, fontWeight: "800" },
   reviewHeader: { gap: 4, marginTop: 4 },

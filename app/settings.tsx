@@ -21,6 +21,7 @@ function toggleFeedback() {
 export default function SettingsScreen() {
   const colors = useColors();
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const exportQuery = trpc.privacy.export.useQuery(undefined, { enabled: false });
@@ -30,6 +31,7 @@ export default function SettingsScreen() {
     void getNotificationPreferences().then((p) => {
       setNotificationsEnabled(p.dailyStreakReminder);
       setSoundEnabled(p.soundEnabled);
+      setReducedMotion(p.reducedMotion);
       setSettingsLoaded(true);
     });
   }, []);
@@ -50,6 +52,12 @@ export default function SettingsScreen() {
     setSoundEnabled(enabled);
     await saveNotificationPreferences({ soundEnabled: enabled });
     if (notificationsEnabled) await scheduleDailyStreakReminder(20, 0);
+  };
+
+  const handleToggleReducedMotion = async (enabled: boolean) => {
+    toggleFeedback();
+    setReducedMotion(enabled);
+    await saveNotificationPreferences({ reducedMotion: enabled });
   };
 
   const exportData = async () => {
@@ -87,6 +95,24 @@ export default function SettingsScreen() {
                 value={soundEnabled}
                 disabled={!settingsLoaded}
                 onValueChange={handleToggleSound}
+                trackColor={{ false: colors.border, true: colors.primary }}
+                thumbColor={colors.foreground}
+              />
+            </View>
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <View style={styles.row}>
+              <View style={[styles.rowIcon, { backgroundColor: "#243650" }]}>
+                <IconSymbol name="figure.walk" size={19} color={colors.primary} />
+              </View>
+              <View style={styles.rowCopy}>
+                <Text style={[styles.rowTitle, { color: colors.foreground }]}>Reduce motion</Text>
+                <Text style={[styles.rowSubtitle, { color: colors.muted }]}>Use calm, static celebration cards</Text>
+              </View>
+              <Switch
+                accessibilityLabel="Toggle reduced motion"
+                value={reducedMotion}
+                disabled={!settingsLoaded}
+                onValueChange={handleToggleReducedMotion}
                 trackColor={{ false: colors.border, true: colors.primary }}
                 thumbColor={colors.foreground}
               />

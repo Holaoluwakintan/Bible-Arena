@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { startOAuthLogin } from "@/constants/oauth";
 import { trpc } from "@/lib/trpc";
 import { buildLearningAnalytics } from "@/domain/phase8";
+import { getStreakIdentity } from "@/domain/phase7";
 
 function tapFeedback() {
   if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -41,6 +42,7 @@ export default function ProfileScreen() {
   const nextLevelXp = getXpToNextLevel(progression.totalXp);
   const latestSession = state.sessions[0];
   const analytics = buildLearningAnalytics(state.sessions);
+  const streakIdentity = getStreakIdentity(progression.currentStreak, true);
 
   return (
     <ScreenContainer className="px-5" containerClassName="bg-background">
@@ -170,6 +172,13 @@ export default function ProfileScreen() {
           <Text style={[styles.analyticsBody, { color: colors.muted }]}>{analytics.sessions ? `${analytics.questionsAnswered} questions answered at ${analytics.averageAccuracy}% average accuracy.` : "Complete a session to unlock personalized learning insights."}</Text>
           {analytics.weakestCategory && <Text style={[styles.analyticsFocus, { color: colors.foreground }]}>Suggested focus: <Text style={{ color: colors.primary }}>{analytics.weakestCategory}</Text></Text>}
           {analytics.strongestMode && <Text style={[styles.analyticsMeta, { color: colors.muted }]}>Strongest mode: {modeLabel(analytics.strongestMode)}</Text>}
+        </View>
+
+        <View style={[styles.analyticsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.sectionHeader}><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Your Scripture rhythm</Text><Text style={[styles.sectionCaption, { color: colors.primary }]}>{streakIdentity.title}</Text></View>
+          <Text style={[styles.analyticsBody, { color: colors.muted }]}>{streakIdentity.message}</Text>
+          <Text style={[styles.analyticsMeta, { color: colors.muted }]}>{streakIdentity.nextMilestone ? `${Math.max(0, streakIdentity.nextMilestone - progression.currentStreak)} more day${streakIdentity.nextMilestone - progression.currentStreak === 1 ? "" : "s"} to the next milestone.` : "You have reached the highest milestone. Keep returning with grace."}</Text>
+          <Text style={[styles.analyticsMeta, { color: colors.primary }]}>{streakIdentity.graceMessage}</Text>
         </View>
 
         {isAuthenticated && seasonProgressQuery.data && (() => {

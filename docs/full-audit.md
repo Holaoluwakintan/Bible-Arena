@@ -73,3 +73,9 @@ The nine lint warnings are pre-existing warnings in friends/onboarding/quiz/room
 4. Configure external log/metric alerting and set the real production web origin, sitemap hostname, and deployment checks.
 5. Add a live OAuth-provider integration test in the deployment environment.
 6. Expand the governed content catalog with reviewed translation/tradition packs.
+
+## Phase Seven review and update (2026-09-26)
+
+Phase Seven's safe premium slice is now implemented: verified Scripture celebration cards appear after perfect rounds, include a Scripture reference, and can be shared without unnecessary personal data. Profile now provides milestone-based streak identity at 3, 7, 30, and 100 days with encouraging grace language for missed days. Settings persists a reduced-motion preference for calm, static celebration presentation. Oral audio clues and scheduled tournaments remain explicitly deferred: they require human-reviewed audio assets and a durable bracket/session model rather than superficial UI.
+
+Validation: 16 test files and 57 tests pass; the release gate passes with six pre-existing lint warnings and no errors.
