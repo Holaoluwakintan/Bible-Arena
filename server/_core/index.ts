@@ -12,6 +12,7 @@ import { attachRealtime } from "../ws";
 import { ENV } from "./env";
 import { rateLimit } from "./rate-limit";
 import { logger } from "./logger";
+import { getOperationalMetrics, recordDatabaseHealth, recordHttpRequest } from "./metrics";
 import { checkDatabaseHealth } from "../db";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -49,6 +50,7 @@ export function createApp() {
       status: res.statusCode,
       durationMs: Date.now() - startedAt,
     }));
+    res.on("finish", () => recordHttpRequest(res.statusCode, Date.now() - startedAt));
     next();
   });
   app.use((req, res, next) => {
@@ -81,20 +83,32 @@ export function createApp() {
   app.get("/api/health", (_req, res) => {
     try {
       checkDatabaseHealth();
+      recordDatabaseHealth(true);
       res.setHeader("Cache-Control", "no-store");
       res.json({ ok: true, database: "ok", timestamp: Date.now() });
     } catch {
+      recordDatabaseHealth(false);
       res.status(503).json({ ok: false, database: "unavailable", timestamp: Date.now() });
     }
   });
   app.get("/api/ready", (_req, res) => {
     try {
       checkDatabaseHealth();
+      recordDatabaseHealth(true);
       res.setHeader("Cache-Control", "no-store");
       res.json({ ready: true });
     } catch {
+      recordDatabaseHealth(false);
       res.status(503).json({ ready: false });
     }
+  });
+  app.get("/api/ops/metrics", (req, res) => {
+    if (!ENV.opsMetricsToken || req.headers.authorization !== `Bearer ${ENV.opsMetricsToken}`) {
+      res.sendStatus(404);
+      return;
+    }
+    res.setHeader("Cache-Control", "no-store");
+    res.json(getOperationalMetrics());
   });
   app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext }));
   return app;

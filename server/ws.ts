@@ -4,12 +4,14 @@ import { getMultiplayerRoom } from "./db";
 import { sdk } from "./_core/sdk";
 import { ENV } from "./_core/env";
 import { logger } from "./_core/logger";
+import { recordRealtime } from "./_core/metrics";
 import { subscribeToRoom, unsubscribeFromRooms } from "./realtime";
 import { parseRoomSubscribeMessage } from "../domain/realtime-protocol";
 
 const roomSockets = new WeakMap<WebSocket, number>();
 const socketIps = new WeakMap<WebSocket, string>();
 const connectionsByIp = new Map<string, number>();
+const releasedSockets = new WeakSet<WebSocket>();
 const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
 
 type ManagedSocket = WebSocket & { isAlive?: boolean };
@@ -19,6 +21,8 @@ function send(socket: WebSocket, message: unknown) {
 }
 
 function releaseSocket(socket: WebSocket) {
+  if (releasedSockets.has(socket)) return;
+  releasedSockets.add(socket);
   const ip = socketIps.get(socket);
   if (ip) {
     const remaining = (connectionsByIp.get(ip) ?? 1) - 1;
@@ -26,6 +30,7 @@ function releaseSocket(socket: WebSocket) {
     else connectionsByIp.delete(ip);
   }
   unsubscribeFromRooms(socket);
+  recordRealtime("disconnected");
 }
 
 async function authenticateUpgrade(request: IncomingMessage) {
@@ -53,12 +58,14 @@ wss.on("connection", (socket, request) => {
       subscribeToRoom(room.id, socket);
       send(socket, { type: "room", room });
     } catch (error) {
+      recordRealtime("message_error");
       send(socket, { type: "error", message: error instanceof Error ? error.message : "Subscription failed." });
     }
   });
   socket.on("close", () => releaseSocket(socket));
   socket.on("error", () => releaseSocket(socket));
   logger.info("realtime_connected", { userId, ip });
+  recordRealtime("connected");
   send(socket, { type: "ready" });
 });
 
@@ -84,6 +91,7 @@ export function attachRealtime(server: Server) {
     if (count >= ENV.maxWsConnectionsPerIp) {
       socket.write("HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\n\r\n");
       socket.destroy();
+      recordRealtime("rejected");
       logger.warn("realtime_connection_rejected", { ip, reason: "per_ip_limit" });
       return;
     }
@@ -98,6 +106,7 @@ export function attachRealtime(server: Server) {
     } catch {
       socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
       socket.destroy();
+      recordRealtime("rejected");
       logger.warn("realtime_connection_rejected", { ip, reason: "authentication" });
     }
   });

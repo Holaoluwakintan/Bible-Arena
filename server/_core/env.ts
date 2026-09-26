@@ -35,6 +35,7 @@ export const ENV = {
     .filter(Boolean),
   oauthStateSecret: optionalEnv("OAUTH_STATE_SECRET", cookieSecret || ""),
   backupDir: optionalEnv("BACKUP_DIR", "./backups"),
+  opsMetricsToken: optionalEnv("OPS_METRICS_TOKEN"),
   realtimeBackplane: optionalEnv("REALTIME_BACKPLANE", "local"),
   maxWsConnectionsPerIp: Math.max(1, Number.parseInt(optionalEnv("MAX_WS_CONNECTIONS_PER_IP", "20"), 10) || 20),
 } as const;

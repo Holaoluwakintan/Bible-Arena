@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { logger } from "./_core/logger";
 
 const MIGRATIONS_DIR = join(process.cwd(), "drizzle", "migrations");
 function migrationFiles(): string[] {
@@ -88,6 +89,7 @@ export function applyMigrations(db: DatabaseSync): void {
     const baselineFile = files[0];
     if (!baselineFile) throw new Error("No canonical Drizzle baseline migration found.");
     const baseline = readFileSync(baselineFile, "utf8");
+    const startedAt = Date.now();
     db.exec("BEGIN IMMEDIATE");
     try {
       upgradeLegacyRuntimeSchema(db, baseline);
@@ -95,8 +97,10 @@ export function applyMigrations(db: DatabaseSync): void {
       recordMigration(db, baselineHash, now);
       applied.add(baselineHash);
       db.exec("COMMIT");
+      logger.info("database_migration_applied", { migration: baselineFile, durationMs: Date.now() - startedAt });
     } catch (error) {
       db.exec("ROLLBACK");
+      logger.error("database_migration_failed", { migration: baselineFile, durationMs: Date.now() - startedAt });
       throw error;
     }
   }
@@ -105,13 +109,16 @@ export function applyMigrations(db: DatabaseSync): void {
     const contents = readFileSync(file, "utf8");
     const migrationHash = hash(contents);
     if (applied.has(migrationHash)) continue;
+    const startedAt = Date.now();
     db.exec("BEGIN IMMEDIATE");
     try {
       db.exec(contents.replace(/--> statement-breakpoint/g, ""));
       recordMigration(db, migrationHash, now);
       db.exec("COMMIT");
+      logger.info("database_migration_applied", { migration: file, durationMs: Date.now() - startedAt });
     } catch (error) {
       db.exec("ROLLBACK");
+      logger.error("database_migration_failed", { migration: file, durationMs: Date.now() - startedAt });
       throw new Error(`Failed to apply migration ${file}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }

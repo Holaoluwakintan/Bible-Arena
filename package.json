@@ -19,8 +19,9 @@
     "qr": "node scripts/generate_qr.mjs",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:backup": "tsx scripts/backup.ts",
+    "db:restore-smoke": "tsx scripts/restore-smoke.ts",
     "test:security": "tsx scripts/security-smoke.ts",
-    "release:check": "npm run check && npm run lint && npm test -- --run && npm run test:migrations && npm run build && npm run test:security",
+    "release:check": "npm run check && npm run lint && npm test -- --run && npm run test:migrations && npm run db:restore-smoke && npm run build && npm run test:security",
     "test:migrations": "tsx scripts/migration-smoke.ts"
   },
   "dependencies": {
