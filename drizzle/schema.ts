@@ -57,13 +57,27 @@ export const friendChallenges = sqliteTable("friend_challenges", {
   creatorUserId: int("creatorUserId").notNull().references(() => users.id, { onDelete: "cascade" }),
   opponentUserId: int("opponentUserId").references(() => users.id, { onDelete: "set null" }),
   mode: text("mode").notNull(),
-  status: text("status", { enum: ["open", "completed", "expired"] }).notNull().default("open"),
+  status: text("status", { enum: ["open", "in_progress", "completed", "expired"] }).notNull().default("open"),
   createdAt: int("createdAt", { mode: "timestamp" }).notNull(),
   expiresAt: int("expiresAt", { mode: "timestamp" }).notNull(),
 }, (table) => ({
   shareCodeUnique: uniqueIndex("friend_challenges_shareCode_unique").on(table.shareCode),
   creatorIndex: index("friend_challenges_creator_idx").on(table.creatorUserId),
   opponentIndex: index("friend_challenges_opponent_idx").on(table.opponentUserId),
+}));
+
+export const friendChallengeTurns = sqliteTable("friend_challenge_turns", {
+  id: text("id").primaryKey(),
+  challengeId: text("challengeId").notNull().references(() => friendChallenges.id, { onDelete: "cascade" }),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  sessionId: text("sessionId").notNull().references(() => sessionRecords.id, { onDelete: "cascade" }),
+  score: int("score").notNull(),
+  accuracy: int("accuracy").notNull(),
+  completedAt: int("completedAt", { mode: "timestamp" }).notNull(),
+}, (table) => ({
+  challengeUserUnique: uniqueIndex("friend_challenge_turns_challenge_user_unique").on(table.challengeId, table.userId),
+  sessionUnique: uniqueIndex("friend_challenge_turns_session_unique").on(table.sessionId),
+  challengeIndex: index("friend_challenge_turns_challenge_idx").on(table.challengeId, table.completedAt),
 }));
 
 export const multiplayerRooms = sqliteTable("multiplayer_rooms", {
@@ -216,6 +230,7 @@ export type InsertUser = typeof users.$inferInsert;
 export type PlayerProgress = typeof playerProgress.$inferSelect;
 export type SessionRecord = typeof sessionRecords.$inferSelect;
 export type FriendChallenge = typeof friendChallenges.$inferSelect;
+export type FriendChallengeTurn = typeof friendChallengeTurns.$inferSelect;
 export type MultiplayerRoom = typeof multiplayerRooms.$inferSelect;
 export type TournamentSeason = typeof tournamentSeasons.$inferSelect;
 export type MatchmakingQueueEntry = typeof matchmakingQueue.$inferSelect;

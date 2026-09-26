@@ -123,9 +123,6 @@ export default function PlayScreen() {
                 <Text style={[styles.modeTitle, { color: colors.foreground }]}>{mode.title}</Text>
                 <Text style={[styles.modeSubtitle, { color: colors.muted }]}>{mode.subtitle}</Text>
               </View>
-              <View style={[styles.comingPill, { borderColor: colors.border }]}>
-                <Text style={[styles.comingText, { color: colors.muted }]}>Soon</Text>
-              </View>
               <IconSymbol name="chevron.right" size={18} color={colors.muted} />
             </Pressable>
           ))}
@@ -171,8 +168,6 @@ const styles = StyleSheet.create({
   modeCopy: { flex: 1 },
   modeTitle: { fontSize: 15, fontWeight: "800" },
   modeSubtitle: { fontSize: 12, marginTop: 4 },
-  comingPill: { borderRadius: 9, borderWidth: 1, paddingVertical: 5, paddingHorizontal: 8 },
-  comingText: { fontSize: 10, fontWeight: "700" },
   homeLink: { alignSelf: "center", padding: 8 },
   homeLinkText: { fontSize: 13, fontWeight: "800" },
   pressed: { opacity: 0.78, transform: [{ scale: 0.985 }] },

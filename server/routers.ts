@@ -79,6 +79,24 @@ export const appRouter = router({
     join: protectedProcedure
       .input(z.object({ shareCode: z.string().regex(/^\d{6}$/) }))
       .mutation(({ ctx, input }) => db.joinCloudChallenge(input.shareCode, ctx.user.id)),
+    recordTurn: protectedProcedure
+      .input(z.object({
+        challengeId: z.string().min(1).max(128),
+        sessionId: z.string().min(1).max(128),
+        mode: gameMode,
+        answers: authoritativeSessionInput.shape.answers,
+      }))
+      .mutation(({ ctx, input }) => {
+        const result = recordAuthoritativeSession({ userId: ctx.user.id, id: input.sessionId, mode: input.mode, answers: input.answers });
+        return db.recordFriendChallengeTurn({
+          challengeId: input.challengeId,
+          userId: ctx.user.id,
+          sessionId: input.sessionId,
+          score: Number(result.score),
+          accuracy: Number(result.accuracy),
+          completedAt: new Date(Number(result.completedAt) * 1000),
+        });
+      }),
   }),
   leaderboards: router({
     list: protectedProcedure

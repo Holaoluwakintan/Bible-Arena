@@ -25,7 +25,7 @@ function recordMigration(db: DatabaseSync, hashValue: string, createdAt: number)
 }
 
 const LEGACY_TABLES = [
-  "users", "player_progress", "session_records", "friend_challenges", "multiplayer_rooms",
+  "users", "player_progress", "session_records", "friend_challenges", "friend_challenge_turns", "multiplayer_rooms",
   "tournament_seasons", "matchmaking_queue", "multiplayer_matches", "player_season_rewards",
   "push_tokens", "friendships",
 ] as const;
@@ -35,6 +35,7 @@ const COPY_COLUMNS: Record<string, string> = {
   player_progress: "id, userId, totalXp, currentStreak, bestStreak, lastEligibleDate, achievementsJson, updatedAt",
   session_records: "id, userId, mode, score, accuracy, correctAnswers, totalQuestions, xpEarned, completedAt",
   friend_challenges: "id, shareCode, creatorUserId, opponentUserId, mode, status, createdAt, expiresAt",
+  friend_challenge_turns: "id, challengeId, userId, sessionId, score, accuracy, completedAt",
   multiplayer_rooms: "id, roomCode, hostUserId, guestUserId, mode, status, currentQuestionIndex, hostReady, guestReady, hostAnsweredIndex, guestAnsweredIndex, hostScore, guestScore, winnerUserId, roundToken, roundDeadline, roomVersion, createdAt, updatedAt",
   tournament_seasons: "id, name, startsAt, endsAt, status, createdAt",
   matchmaking_queue: "id, userId, seasonId, division, rating, status, matchedRoomId, createdAt, expiresAt",
@@ -50,14 +51,16 @@ function upgradeLegacyRuntimeSchema(db: DatabaseSync, baseline: string): void {
     if (hasTable(db, table)) db.exec(`DROP TABLE "${table}"`);
   }
   for (const table of LEGACY_TABLES) {
-    db.exec(`CREATE TABLE "__legacy_data_${table}" AS SELECT * FROM "${table}"`);
+    if (hasTable(db, table)) db.exec(`CREATE TABLE "__legacy_data_${table}" AS SELECT * FROM "${table}"`);
   }
-  for (const table of [...LEGACY_TABLES].reverse()) db.exec(`DROP TABLE "${table}"`);
+  for (const table of [...LEGACY_TABLES].reverse()) if (hasTable(db, table)) db.exec(`DROP TABLE "${table}"`);
   db.exec(baseline.replace(/--> statement-breakpoint/g, ""));
   for (const table of LEGACY_TABLES) {
     const columns = COPY_COLUMNS[table];
-    db.exec(`INSERT INTO "${table}" (${columns}) SELECT ${columns} FROM "__legacy_data_${table}"`);
-    db.exec(`DROP TABLE "__legacy_data_${table}"`);
+    if (hasTable(db, table) && hasTable(db, `__legacy_data_${table}`)) {
+      db.exec(`INSERT INTO "${table}" (${columns}) SELECT ${columns} FROM "__legacy_data_${table}"`);
+      db.exec(`DROP TABLE "__legacy_data_${table}"`);
+    }
   }
   db.exec("PRAGMA foreign_keys = ON");
 }

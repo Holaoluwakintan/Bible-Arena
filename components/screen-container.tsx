@@ -23,7 +23,7 @@ export function ScreenContainer({
       style={[styles.safeArea, { backgroundColor: colors.background }]}
     >
       <View style={[styles.container, { backgroundColor: colors.background }, style]} {...props}>
-        {children}
+        <View style={styles.webFrame}>{children}</View>
       </View>
     </SafeAreaView>
   );
@@ -35,5 +35,11 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+  },
+  webFrame: {
+    flex: 1,
+    width: "100%",
+    maxWidth: 720,
+    alignSelf: "center",
   },
 });

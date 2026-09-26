@@ -1,5 +1,12 @@
 # Bible Arena Production Runbook
 
+## Release readiness
+
+- The repository uses npm (`packageManager: npm@10.9.2`) with `package-lock.json`; run `npm ci` from a clean checkout before an EAS build.
+- Set production `COOKIE_SECRET`, `EXPO_PUBLIC_APP_ID`, `ALLOWED_ORIGINS`, OAuth values, and `EXPO_PUBLIC_WEB_ORIGIN` in the deployment secret/configuration store.
+- Verify `npm run release:check` and a clean EAS Android/iOS build before release.
+- SQLite connections enable WAL, a 5-second busy timeout, and foreign keys. Include the SQLite `-wal`/`-shm` behavior in backup and restore drills.
+
 ## Health and logs
 
 Use `GET /api/health` for liveness plus database connectivity and `GET /api/ready` for readiness. Both responses are non-cacheable and return HTTP 503 when SQLite cannot be opened. Application request and lifecycle events are emitted as JSON with timestamps, service name, status, path, and duration so a platform log collector can index them.

@@ -15,6 +15,13 @@
       "when": 1790359986512,
       "tag": "0001_glamorous_jackpot",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790414399555,
+      "tag": "0002_wealthy_blink",
+      "breakpoints": true
     }
   ]
 }

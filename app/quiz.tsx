@@ -41,6 +41,7 @@ export default function BibleQuizScreen() {
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [textAnswer, setTextAnswer] = useState("");
   const [feedback, setFeedback] = useState<AnswerFeedback | null>(null);
+  const [pendingResult, setPendingResult] = useState<GameResult | null>(null);
   const [result, setResult] = useState<GameResult | null>(null);
 
   useEffect(() => {
@@ -56,7 +57,7 @@ export default function BibleQuizScreen() {
     const outcome = submitAnswer(session, normalizedAnswer, responseMs);
     setSession(outcome.session);
     setFeedback(outcome.feedback);
-    if (outcome.session.status === "complete") setResult(calculateResult(outcome.session));
+    if (outcome.session.status === "complete") setPendingResult(calculateResult(outcome.session));
   };
 
   useEffect(() => {
@@ -74,6 +75,12 @@ export default function BibleQuizScreen() {
   }, [question?.id, questionStartedAt, feedback, result]);
 
   const continueToNext = () => {
+    if (pendingResult) {
+      setResult(pendingResult);
+      setPendingResult(null);
+      setFeedback(null);
+      return;
+    }
     setFeedback(null);
     setSelectedAnswer(null);
     setTextAnswer("");
@@ -226,7 +233,7 @@ export default function BibleQuizScreen() {
               <Text style={[styles.reportLink, { color: colors.muted }]}>{reportMutation.isPending ? "Sending report…" : "Report a problem with this question"}</Text>
             </Pressable>}
             <Pressable accessibilityRole="button" accessibilityLabel="Continue to next question" onPress={continueToNext} style={({ pressed }) => [styles.continueButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}>
-              <Text style={[styles.primaryButtonText, { color: colors.background }]}>{session.status === "complete" ? "See results" : "Next question"}</Text>
+              <Text style={[styles.primaryButtonText, { color: colors.background }]}>{pendingResult ? "View session results" : "Next question"}</Text>
               <IconSymbol name="chevron.right" size={18} color={colors.background} />
             </Pressable>
           </View>

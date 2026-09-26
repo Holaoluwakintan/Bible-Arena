@@ -13,7 +13,7 @@ try {
   const fresh = new DatabaseSync(freshPath);
   applyMigrations(fresh);
   applyMigrations(fresh);
-  assert(Number((fresh.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get() as any).count) === 2, "fresh migrations should be recorded once each");
+  assert(Number((fresh.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get() as any).count) === 3, "fresh migrations should be recorded once each");
   assert(Number((fresh.prepare("PRAGMA foreign_keys").get() as any).foreign_keys) === 1, "foreign keys should be enabled");
   fresh.close();
 
@@ -28,7 +28,7 @@ try {
   applyMigrations(upgraded);
   const user = upgraded.prepare("SELECT openId,name FROM users WHERE openId = ?").get("migration-legacy") as any;
   assert(user?.openId === "migration-legacy", "legacy user data should survive upgrade");
-  assert(Number((upgraded.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get() as any).count) === 2, "upgrade should record each canonical migration once");
+  assert(Number((upgraded.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get() as any).count) === 3, "upgrade should record each canonical migration once");
   upgraded.close();
   console.log("Migration smoke passed: fresh, idempotent, and legacy upgrade paths.");
 } finally {

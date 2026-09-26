@@ -27,6 +27,7 @@ let _sqlite: DatabaseSync | null = null;
 export function getDb(): DatabaseSync {
   if (!_sqlite) {
     _sqlite = new DatabaseSync(ENV.sqlitePath);
+    _sqlite.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
     applyMigrations(_sqlite);
   }
   return _sqlite;
@@ -232,7 +233,8 @@ export async function joinCloudChallenge(shareCode: string, opponentUserId: numb
   if (challenge.status !== "open") throw new Error("Challenge is no longer open.");
   if (challenge.expiresAt <= toUnix()) throw new Error("Challenge has expired.");
 
-  db.prepare("UPDATE friend_challenges SET opponentUserId = ?, status = 'completed' WHERE id = ?").run(
+  if (challenge.creatorUserId === opponentUserId) throw new Error("You cannot join your own challenge.");
+  db.prepare("UPDATE friend_challenges SET opponentUserId = ?, status = 'in_progress' WHERE id = ? AND status = 'open'").run(
     opponentUserId,
     challenge.id
   );
@@ -242,8 +244,42 @@ export async function joinCloudChallenge(shareCode: string, opponentUserId: numb
     createdAt: fromUnix(challenge.createdAt)!,
     expiresAt: fromUnix(challenge.expiresAt)!,
     opponentUserId,
-    status: "completed" as const,
+    status: "in_progress" as const,
   };
+}
+
+export async function recordFriendChallengeTurn(input: {
+  challengeId: string;
+  userId: number;
+  sessionId: string;
+  score: number;
+  accuracy: number;
+  completedAt: Date;
+}) {
+  const db = getDb();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const challenge = db.prepare("SELECT * FROM friend_challenges WHERE id = ?").get(input.challengeId) as any;
+    if (!challenge || (challenge.creatorUserId !== input.userId && challenge.opponentUserId !== input.userId)) {
+      throw new Error("Challenge not found or player is not a participant.");
+    }
+    if (challenge.status === "expired") throw new Error("Challenge has expired.");
+    const existing = db.prepare("SELECT * FROM friend_challenge_turns WHERE challengeId = ? AND userId = ?").get(input.challengeId, input.userId) as any;
+    if (existing) {
+      db.exec("COMMIT");
+      return { challengeId: input.challengeId, status: challenge.status, turn: existing };
+    }
+    db.prepare(`INSERT INTO friend_challenge_turns (id, challengeId, userId, sessionId, score, accuracy, completedAt) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .run(randomUUID(), input.challengeId, input.userId, input.sessionId, input.score, input.accuracy, toUnix(input.completedAt));
+    const turnCount = Number((db.prepare("SELECT COUNT(*) AS count FROM friend_challenge_turns WHERE challengeId = ?").get(input.challengeId) as any).count);
+    const nextStatus = turnCount >= 2 ? "completed" : "in_progress";
+    db.prepare("UPDATE friend_challenges SET status = ? WHERE id = ?").run(nextStatus, input.challengeId);
+    db.exec("COMMIT");
+    return { challengeId: input.challengeId, status: nextStatus, turnCount };
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 }
 
 export async function getLeaderboardRows(scope: "weekly" | "all_time", now: Date) {

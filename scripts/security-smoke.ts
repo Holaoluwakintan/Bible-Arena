@@ -19,8 +19,11 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`Security smoke failure: ${message}`);
 }
 
-const app = createApp();
-const server = app.listen(0);
+  const app = createApp();
+  const sqlite = db.getDb();
+  assert(String((sqlite.prepare("PRAGMA journal_mode").get() as any).journal_mode).toLowerCase() === "wal", "SQLite WAL mode must be enabled");
+  assert(Number((sqlite.prepare("PRAGMA busy_timeout").get() as any).timeout) >= 5000, "SQLite busy timeout must be at least five seconds");
+  const server = app.listen(0);
 try {
   await new Promise<void>((resolve) => server.once("listening", resolve));
   const address = server.address();
