@@ -114,6 +114,26 @@ export function createApp() {
     res.setHeader("Cache-Control", "no-store");
     res.json(getOperationalMetrics());
   });
+
+  // Android app (Trusted Web Activity): Digital Asset Links so the app opens full screen with no URL bar.
+  const androidPackage = process.env.ANDROID_PACKAGE_NAME || "com.holaoluwakintan.biblearena";
+  const androidCertSha256 = (process.env.ANDROID_CERT_SHA256 || "C7:DB:5D:12:4B:86:E5:4F:F7:42:F0:0F:7E:EE:DC:A6:2E:FF:9F:81:2A:A8:05:8E:95:39:EC:63:39:A3:B6:29")
+    .split(",").map((s) => s.trim()).filter(Boolean);
+  app.get("/.well-known/assetlinks.json", (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.json([
+      {
+        relation: ["delegate_permission/common.handle_all_urls"],
+        target: { namespace: "android_app", package_name: androidPackage, sha256_cert_fingerprints: androidCertSha256 },
+      },
+    ]);
+  });
+  // Android APK download: hosted on a CDN so app updates never need a server redeploy.
+  const apkUrl = process.env.ANDROID_APK_URL || "https://bible-arena-app.vercel.app/bible-arena.apk";
+  app.get(["/download", "/download/bible-arena.apk", "/app", "/android"], (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache");
+    res.redirect(302, apkUrl);
+  });
   app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext }));
   // Serve the exported Expo web app (npx expo export --platform web -> dist-web) from the same origin.
   const webDir = path.resolve(process.env.WEB_DIST_DIR || "dist-web");

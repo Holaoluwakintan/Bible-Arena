@@ -11,6 +11,7 @@ import { dailyDoneToday, getAllMastery, msUntilTomorrow, normalizeArena, suggest
 import { useAuth } from "@/hooks/use-auth";
 import { useProgression } from "@/lib/progression-provider";
 import { feedback } from "@/lib/feedback";
+import { GetAndroidAppCard } from "@/components/get-android-app";
 
 function greeting(): string {
   const hour = new Date().getHours();
@@ -175,6 +176,8 @@ export default function HomeScreen() {
             </View>
           </FadeIn>
         ) : null}
+
+        <GetAndroidAppCard />
 
         <FadeIn delay={340}>
           <Card style={styles.verse}>

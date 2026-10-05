@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { feedback } from "@/lib/feedback";
 import { useProgression } from "@/lib/progression-provider";
 import { trpc } from "@/lib/trpc";
+import { GetAndroidAppRow } from "@/components/get-android-app";
 
 const TIER_COLOR: Record<string, string> = { bronze: "#D19A66", silver: "#C8D1DC", gold: C.gold };
 
@@ -216,6 +217,7 @@ export default function ProfileScreen() {
               <Txt variant="bodyStrong" style={{ flex: 1 }}>More settings</Txt>
               <IconSymbol name="chevron.right" size={20} color={C.faint} />
             </Pressable>
+            <GetAndroidAppRow style={[styles.prefRow, styles.divider]} />
           </Card>
         </FadeIn>
 
