@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Bible Arena</string>
+    <string name="asset_statements" translatable="false">[{ \"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": { \"namespace\": \"web\", \"site\": \"https://bible-arena.onrender.com\" } }]</string>
+</resources>
