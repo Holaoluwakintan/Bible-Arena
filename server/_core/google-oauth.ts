@@ -46,7 +46,10 @@ function isAllowedNativeReturn(value: string): boolean {
     const url = new URL(value);
     const scheme = url.protocol.replace(/:$/, "").toLowerCase();
     const extra = (process.env.NATIVE_RETURN_SCHEMES || "").split(",").map((s: string) => s.trim().toLowerCase()).filter(Boolean);
-    return scheme.startsWith("manus") || scheme === "exp" || scheme === "biblearena" || extra.includes(scheme);
+    // The Expo app.config.ts scheme for com.app.biblearenamobile is manusbiblearenamobile.
+    // Never allow arbitrary manus* or exp:// apps to receive a session token.
+    return (scheme === "manusbiblearenamobile" || extra.includes(scheme))
+      && (url.hostname === "callback" || url.pathname === "/callback");
   } catch {
     return false;
   }
