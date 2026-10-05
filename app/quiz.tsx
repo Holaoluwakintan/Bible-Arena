@@ -358,7 +358,7 @@ function QuizScreen({ params }: { params: { kind?: string; mode?: string; catego
                 const st = optionState(option.id);
                 const positive = option.id === "true" || option.id === "bible";
                 return (
-                  <Pressable key={option.id} accessibilityRole="button" accessibilityLabel={option.label} disabled={answered} onPress={() => submit(option.id)}
+                  <Pressable key={option.id} testID="answer-option" accessibilityRole="button" accessibilityLabel={option.label} disabled={answered} onPress={() => submit(option.id)}
                     style={({ pressed }) => [styles.tfBtn, st === "correct" && styles.optCorrect, st === "wrong" && styles.optWrong, st === "dim" && styles.optDim, pressed && styles.pressed]}>
                     <IconSymbol name={positive ? "checkmark" : "xmark"} size={28} color={st === "correct" ? C.success : st === "wrong" ? C.error : positive ? C.success : C.error} />
                     <Txt variant="h3">{option.label}</Txt>
@@ -372,7 +372,7 @@ function QuizScreen({ params }: { params: { kind?: string; mode?: string; catego
               const correctPos = question.correctAnswer.split(">").indexOf(option.id);
               const ok = answered && last?.correct;
               return (
-                <Pressable key={option.id} accessibilityRole="button" accessibilityLabel={option.label} disabled={answered}
+                <Pressable key={option.id} testID="order-option" accessibilityRole="button" accessibilityLabel={option.label} disabled={answered}
                   onPress={() => { feedback.tap(); setOrderPicks((picks) => picks.includes(option.id) ? picks.filter((p) => p !== option.id) : [...picks, option.id]); }}
                   style={({ pressed }) => [styles.option, pickIndex >= 0 && !answered && styles.optPicked, answered && (pickIndex === correctPos ? styles.optCorrect : styles.optWrong), pressed && styles.pressed]}>
                   <View style={[styles.letter, pickIndex >= 0 && { backgroundColor: C.gold, borderColor: C.gold }, answered && { backgroundColor: pickIndex === correctPos ? C.success : C.error, borderColor: "transparent" }]}>
@@ -387,7 +387,7 @@ function QuizScreen({ params }: { params: { kind?: string; mode?: string; catego
             displayOptions.map((option, i) => {
               const st = optionState(option.id);
               return (
-                <Pressable key={option.id} accessibilityRole="button" accessibilityLabel={option.label} disabled={answered} onPress={() => submit(option.id)}
+                <Pressable key={option.id} testID="answer-option" accessibilityRole="button" accessibilityLabel={option.label} disabled={answered} onPress={() => submit(option.id)}
                   style={({ pressed }) => [styles.option, st === "correct" && styles.optCorrect, st === "wrong" && styles.optWrong, st === "dim" && styles.optDim, pressed && styles.pressed]}>
                   <View style={[styles.letter, st === "correct" && { backgroundColor: C.success, borderColor: C.success }, st === "wrong" && { backgroundColor: C.error, borderColor: C.error }]}>
                     {st === "correct" ? <IconSymbol name="checkmark" size={16} color={C.ink} /> : st === "wrong" ? <IconSymbol name="xmark" size={16} color={C.ink} /> : <Txt variant="smallStrong" color={C.muted}>{LETTERS[i]}</Txt>}
