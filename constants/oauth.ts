@@ -38,6 +38,10 @@ export function getApiBaseUrl(): string {
   }
   if (ReactNative.Platform.OS === "web" && typeof window !== "undefined" && window.location) {
     const { protocol, hostname, port } = window.location;
+    // Production web build is served by the API server itself: same origin.
+    if (port !== "8081" && !hostname.startsWith("8081-") && hostname !== "localhost" && hostname !== "127.0.0.1") {
+      return window.location.origin;
+    }
     // If running on web in dev, API is typically on 3000
     if (port === "8081") {
       return `${protocol}//${hostname}:3000`;
@@ -64,18 +68,10 @@ export const getRedirectUri = () => {
 };
 
 export const getLoginUrl = async () => {
-  const redirectUri = getRedirectUri();
-  const stateResponse = await fetch(`${getApiBaseUrl()}/api/oauth/state?redirectUri=${encodeURIComponent(redirectUri)}`);
-  if (!stateResponse.ok) throw new Error("Unable to start secure OAuth login");
-  const { state } = (await stateResponse.json()) as { state: string };
-
-  const url = new URL(`${OAUTH_PORTAL_URL || "https://auth.example.com"}/app-auth`);
-  url.searchParams.set("appId", APP_ID);
-  url.searchParams.set("redirectUri", redirectUri);
-  url.searchParams.set("state", state);
-  url.searchParams.set("type", "signIn");
-
-  return url.toString();
+  const base = `${getApiBaseUrl()}/api/oauth/google/start`;
+  if (ReactNative.Platform.OS === "web") return base;
+  const returnTo = Linking.createURL("/callback", { scheme: env.deepLinkScheme });
+  return `${base}?platform=native&returnTo=${encodeURIComponent(returnTo)}`;
 };
 
 export async function startOAuthLogin(): Promise<string | null> {
@@ -85,12 +81,6 @@ export async function startOAuthLogin(): Promise<string | null> {
     if (typeof window !== "undefined") {
       window.location.href = loginUrl;
     }
-    return null;
-  }
-
-  const supported = await Linking.canOpenURL(loginUrl);
-  if (!supported) {
-    console.warn("[OAuth] Cannot open login URL");
     return null;
   }
 

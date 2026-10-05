@@ -92,7 +92,7 @@ export default function ProfileScreen() {
 
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Sign in with OAuth"
+              accessibilityLabel="Sign in with Google"
               onPress={() => void startOAuthLogin()}
               style={({ pressed }) => [
                 styles.accountCard,
@@ -104,7 +104,7 @@ export default function ProfileScreen() {
                 <IconSymbol name="person.fill" size={20} color={colors.primary} />
               </View>
               <View style={styles.accountCopy}>
-                <Text style={[styles.accountTitle, { color: colors.foreground }]}>Sign in with OAuth</Text>
+                <Text style={[styles.accountTitle, { color: colors.foreground }]}>Sign in with Google</Text>
                 <Text style={[styles.accountBody, { color: colors.muted }]}>
                   Connect Google/GitHub when configured in production.
                 </Text>

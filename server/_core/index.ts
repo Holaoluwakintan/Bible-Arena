@@ -4,6 +4,9 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
+import { registerGoogleOAuth } from "./google-oauth";
+import path from "node:path";
+import fs from "node:fs";
 import { registerGuestAuth } from "./guest-auth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
@@ -79,6 +82,7 @@ export function createApp() {
 
   registerStorageProxy(app);
   registerGuestAuth(app);
+  registerGoogleOAuth(app);
   registerOAuthRoutes(app);
   app.get("/api/health", (_req, res) => {
     try {
@@ -111,6 +115,15 @@ export function createApp() {
     res.json(getOperationalMetrics());
   });
   app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext }));
+  // Serve the exported Expo web app (npx expo export --platform web -> dist-web) from the same origin.
+  const webDir = path.resolve(process.env.WEB_DIST_DIR || "dist-web");
+  if (fs.existsSync(path.join(webDir, "index.html"))) {
+    app.use(express.static(webDir, { index: "index.html", extensions: ["html"], maxAge: "1h" }));
+    app.get(/^\/(?!api\/|ws\/).*/, (_req, res) => {
+      res.setHeader("Cache-Control", "no-cache");
+      res.sendFile(path.join(webDir, "index.html"));
+    });
+  }
   return app;
 }
 
