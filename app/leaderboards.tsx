@@ -34,7 +34,7 @@ export default function RanksScreen() {
     if (board === "multiplayer") return (mp.data ?? []).slice(0, 25).map((r) => ({ playerId: String(r.playerId), displayName: r.displayName, rank: r.rank, value: r.xp, unit: "XP", meta: `${r.division} · ${r.wins}W ${r.losses}L ${r.draws}D` }));
     if (board === "friends") return (friends.data ?? []).map((r) => ({ playerId: String(r.playerId), displayName: r.displayName, rank: r.rank, value: r.totalXp, unit: "XP", meta: `${r.currentStreak}-day streak` }));
     const src = isAuthenticated && remote.data ? remote.data : local;
-    return src.slice(0, 50).map((r) => ({ playerId: String(r.playerId), displayName: r.displayName, rank: r.rank, value: r.score, unit: "pts", meta: `${r.sessions} rounds · ${r.averageAccuracy}% accuracy` }));
+    return src.slice(0, 50).map((r) => ({ playerId: String(r.playerId), displayName: r.displayName, rank: r.rank, value: r.score, unit: "pts", meta: `${r.sessions} round${r.sessions === 1 ? "" : "s"} · ${r.averageAccuracy}% accuracy` }));
   }, [board, mp.data, friends.data, remote.data, local, isAuthenticated]);
 
   const loading = isAuthenticated && ((board === "sessions" && remote.isLoading) || (board === "multiplayer" && mp.isLoading) || (board === "friends" && friends.isLoading));

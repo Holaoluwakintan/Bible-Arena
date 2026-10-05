@@ -8,7 +8,7 @@ import { Button, Card, FadeIn, IconBadge, Pill, ProgressBar, Ring, Txt, useCount
 import { C, R, S } from "@/constants/design";
 import {
   QUESTION_TYPE_LABEL, buildRound, comboMultiplier, correctAnswerLabel, dailyDoneToday, getCategory, isAnswerCorrect,
-  normalizeArena, referenceLabel, scoreAnswer, shuffle, suggestNextCategory, todayKey, windowMsFor, type ArenaStats, type RoundKind,
+  normalizeArena, referenceLabel, ROUND_POOL, scoreAnswer, shuffle, suggestNextCategory, todayKey, windowMsFor, type ArenaStats, type RoundKind,
 } from "@/domain/arena";
 import type { GameResult } from "@/domain/game-engine";
 import { getLevelProgress, type UnlockedAchievement } from "@/domain/progression";
@@ -46,7 +46,10 @@ const KIND_META: Record<Kind, { title: string; icon: string; color: string; rule
   puzzle: { title: "Word Puzzle", icon: "puzzlepiece.fill", color: "#60A5FA", rules: ["Unscramble the Bible word", "Type your answer and check it", "30 seconds each"] },
 };
 
-function buildQuestions(kind: Kind, category: QuestionCategory | undefined, arena: ArenaStats): BibleQuestion[] {
+function buildQuestions(kind: Kind, category: QuestionCategory | undefined, arena: ArenaStats, single?: string): BibleQuestion[] {
+  // Deep link to practise one question (used by shares and QA): /quiz?q=<question id>
+  const one = single ? ROUND_POOL.find((q) => q.id === single) : undefined;
+  if (one) return [one];
   if (kind === "myth") return shuffle(VERIFIED_BIBLE_OR_MYTH_QUESTIONS).slice(0, 10);
   if (kind === "puzzle") return shuffle(VERIFIED_WORD_PUZZLE_QUESTIONS).slice(0, 8);
   return buildRound({ kind, category, stats: arena });
@@ -66,13 +69,13 @@ async function shareText(message: string) {
 
 /** Tabs keep screens mounted, so remount the round whenever params change or the screen loses focus. */
 export default function QuizRoute() {
-  const params = useLocalSearchParams<{ kind?: string; mode?: string; category?: string; r?: string }>();
+  const params = useLocalSearchParams<{ kind?: string; mode?: string; category?: string; r?: string; q?: string }>();
   const [generation, setGeneration] = useState(0);
   useFocusEffect(useCallback(() => () => setGeneration((g) => g + 1), []));
-  return <QuizScreen key={`${params.kind ?? params.mode ?? "q"}-${params.category ?? ""}-${params.r ?? ""}-${generation}`} params={params} />;
+  return <QuizScreen key={`${params.kind ?? params.mode ?? "q"}-${params.category ?? ""}-${params.q ?? ""}-${params.r ?? ""}-${generation}`} params={params} />;
 }
 
-function QuizScreen({ params }: { params: { kind?: string; mode?: string; category?: string } }) {
+function QuizScreen({ params }: { params: { kind?: string; mode?: string; category?: string; q?: string } }) {
   const { state, recordSession } = useProgression();
   const arenaAtStart = useRef(normalizeArena(state.arena)).current;
   const kind = resolveKind(params);
@@ -81,7 +84,7 @@ function QuizScreen({ params }: { params: { kind?: string; mode?: string; catego
   const meta = KIND_META[kind];
   const dailyLocked = kind === "daily" && dailyDoneToday(arenaAtStart);
 
-  const [questions] = useState<BibleQuestion[]>(() => buildQuestions(kind, category, arenaAtStart));
+  const [questions] = useState<BibleQuestion[]>(() => buildQuestions(kind, category, arenaAtStart, params.q));
   const [phase, setPhase] = useState<Phase>("intro");
   const [index, setIndex] = useState(0);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
