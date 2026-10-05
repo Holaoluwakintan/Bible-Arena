@@ -59,6 +59,9 @@ const MAPPING: IconMapping = {
   "hand.raised.fill": "pan-tool",
   "flag.fill": "flag",
   "list.bullet": "list",
+  "figure.walk": "directions-walk",
+  "bell.fill": "notifications",
+  "square.and.arrow.down": "file-download",
 };
 
 export function IconSymbol({
