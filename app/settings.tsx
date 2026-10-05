@@ -6,6 +6,7 @@ import * as Haptics from "expo-haptics";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
+import { TopBar } from "@/components/ui/kit";
 import { trpc } from "@/lib/trpc";
 import {
   getNotificationPreferences,
@@ -75,6 +76,7 @@ export default function SettingsScreen() {
   return (
     <ScreenContainer className="px-5" containerClassName="bg-background">
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <TopBar onBack={() => (router.canGoBack() ? router.back() : router.replace("/profile"))} />
         <Text style={[styles.eyebrow, { color: colors.primary }]}>SETTINGS</Text>
         <Text style={[styles.title, { color: colors.foreground }]}>Make it yours.</Text>
         <Text style={[styles.subtitle, { color: colors.muted }]}>Your preferences are saved on this device and apply to future reminders.</Text>

@@ -39,8 +39,8 @@ export default function RanksScreen() {
 
   const loading = isAuthenticated && ((board === "sessions" && remote.isLoading) || (board === "multiplayer" && mp.isLoading) || (board === "friends" && friends.isLoading));
   const myId = user?.id != null ? String(user.id) : null;
-  const podium = rows.slice(0, 3);
-  const rest = rows.slice(3);
+  const podium = rows.length >= 3 ? rows.slice(0, 3) : [];
+  const rest = rows.length >= 3 ? rows.slice(3) : rows;
 
   const duel = async () => {
     try { const challenge = await createChallenge("bible_quiz"); router.push({ pathname: "/challenges", params: { code: challenge.shareCode } }); }
@@ -95,7 +95,7 @@ export default function RanksScreen() {
           </Card>
         ) : (
           <>
-            <FadeIn delay={60}>
+            {podium.length ? <FadeIn delay={60}>
               <View style={styles.podium}>
                 {[1, 0, 2].map((pos) => {
                   const row = podium[pos];
@@ -113,7 +113,7 @@ export default function RanksScreen() {
                   );
                 })}
               </View>
-            </FadeIn>
+            </FadeIn> : null}
             <View style={{ gap: S.sm }}>
               {rest.map((row) => {
                 const me = row.playerId === myId;

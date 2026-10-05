@@ -320,7 +320,7 @@ function QuizScreen({ params }: { params: { kind?: string; mode?: string; catego
       <ScrollView contentContainerStyle={styles.playContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={styles.metaRow}>
           {qCat ? <Pill label={qCat.title} icon={qCat.icon} color={qCat.color} bg={qCat.tint} /> : null}
-          <Pill label={question.difficulty} color={question.difficulty === "hard" ? C.error : question.difficulty === "medium" ? C.gold : C.success} />
+          <Pill label={question.difficulty.charAt(0).toUpperCase() + question.difficulty.slice(1)} color={question.difficulty === "hard" ? C.error : question.difficulty === "medium" ? C.gold : C.success} />
           <View style={{ flex: 1 }} />
           {streak >= 3 ? (
             <Animated.View style={{ transform: [{ scale: pop }] }}>
@@ -579,8 +579,8 @@ const styles = StyleSheet.create({
   heartsRow: { flex: 1, flexDirection: "row", alignItems: "center", gap: 4 },
   scoreBox: { minWidth: 56, alignItems: "flex-end" },
   pointsFloat: { position: "absolute", right: 0, top: -4 },
-  timerTrack: { height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.07)", marginTop: S.md, overflow: "hidden" },
-  timerFill: { height: 4, borderRadius: 2 },
+  timerTrack: { height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.05)", marginTop: S.md, overflow: "hidden" },
+  timerFill: { height: 3, borderRadius: 2, opacity: 0.75 },
   playContent: { paddingTop: S.lg, paddingBottom: S.xxl },
   metaRow: { flexDirection: "row", alignItems: "center", gap: S.sm, marginBottom: S.lg },
   option: { flexDirection: "row", alignItems: "center", gap: S.md, minHeight: 60, paddingHorizontal: S.lg, paddingVertical: 12, borderRadius: R.lg, backgroundColor: C.surface, borderWidth: 1.5, borderColor: C.border },
