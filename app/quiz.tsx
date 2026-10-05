@@ -1,331 +1,608 @@
-import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Animated, Easing, Platform, Pressable, ScrollView, Share, StyleSheet, TextInput, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { useColors } from "@/hooks/use-colors";
-import { useProgression } from "@/lib/progression-provider";
-import { calculateLevel } from "@/domain/progression";
-import { shareGameResult } from "@/lib/share";
-import { trpc } from "@/lib/trpc";
+import { Button, Card, FadeIn, IconBadge, Pill, ProgressBar, Ring, Txt, useCountUp } from "@/components/ui/kit";
+import { C, R, S } from "@/constants/design";
 import {
-  calculateResult,
-  createGameSession,
-  getCurrentQuestion,
-  submitAnswer,
-  type AnswerFeedback,
-  type GameResult,
-  type GameSession,
-} from "@/domain/game-engine";
-import type { GameMode } from "@/domain/questions";
-import { getAdaptiveDifficulty, getAdaptiveQuestionsForMode, getQuestionsForPack, type ContentPackId } from "@/domain/phase8";
-import { getPerfectRoundCelebration } from "@/domain/phase7";
+  QUESTION_TYPE_LABEL, buildRound, comboMultiplier, correctAnswerLabel, dailyDoneToday, getCategory, isAnswerCorrect,
+  normalizeArena, referenceLabel, scoreAnswer, shuffle, suggestNextCategory, todayKey, windowMsFor, type ArenaStats, type RoundKind,
+} from "@/domain/arena";
+import type { GameResult } from "@/domain/game-engine";
+import { getLevelProgress, type UnlockedAchievement } from "@/domain/progression";
+import { VERIFIED_BIBLE_OR_MYTH_QUESTIONS, VERIFIED_WORD_PUZZLE_QUESTIONS, type BibleQuestion, type GameMode, type QuestionCategory } from "@/domain/questions";
+import { feedback } from "@/lib/feedback";
+import { useProgression } from "@/lib/progression-provider";
 
-const RESPONSE_WINDOW_MS = 20_000;
+type Kind = RoundKind | "myth" | "puzzle";
+type Phase = "intro" | "play" | "feedback" | "done";
 
-export default function BibleQuizScreen() {
-  const colors = useColors();
-  const { mode, pack } = useLocalSearchParams<{ mode?: string; pack?: string }>();
-  const gameMode: GameMode = mode === "bible_or_myth" || mode === "word_puzzle" || mode === "daily_challenge" ? mode : "bible_quiz";
-  const isBibleOrMyth = gameMode === "bible_or_myth";
-  const isWordPuzzle = gameMode === "word_puzzle";
-  const isDailyChallenge = gameMode === "daily_challenge";
-  const { recordSession, state, isAuthenticated } = useProgression();
-  const reportMutation = trpc.reports.question.useMutation({ onSuccess: () => Alert.alert("Report received", "Thanks. The content team will review this question.") });
-  const progression = state.progression;
-  const packId = pack === "people-and-places" || pack === "teachings-and-wisdom" || pack === "new-testament" || pack === "gospels-and-acts" || pack === "psalms-and-wisdom" || pack === "old-testament-heroes" ? pack as ContentPackId : null;
-  const questions = useMemo(() => packId ? getQuestionsForPack(packId, 5) : getAdaptiveQuestionsForMode(gameMode, gameMode === "bible_quiz" ? 10 : 5, state.sessions), [gameMode, packId, state.sessions]);
-  const [session, setSession] = useState<GameSession>(() => createGameSession(questions, { mode: gameMode }));
-  const [questionStartedAt, setQuestionStartedAt] = useState(() => Date.now());
-  const [remainingMs, setRemainingMs] = useState(RESPONSE_WINDOW_MS);
-  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
-  const [textAnswer, setTextAnswer] = useState("");
-  const [feedback, setFeedback] = useState<AnswerFeedback | null>(null);
-  const [pendingResult, setPendingResult] = useState<GameResult | null>(null);
-  const [result, setResult] = useState<GameResult | null>(null);
+interface Attempt { question: BibleQuestion; answerId: string | null; correct: boolean; timedOut: boolean; ms: number; points: number; mult: number }
 
-  useEffect(() => {
-    if (result) void recordSession(result);
-  }, [result, recordSession]);
+const LETTERS = ["A", "B", "C", "D"];
+const useNative = Platform.OS !== "web";
 
-  const question = getCurrentQuestion(session);
+function resolveKind(params: { kind?: string; mode?: string; category?: string }): Kind {
+  const k = params.kind;
+  if (k === "quick" || k === "category" || k === "survival" || k === "daily" || k === "myth" || k === "puzzle") return k === "category" && !getCategory(params.category) ? "quick" : k;
+  if (params.mode === "daily_challenge") return "daily";
+  if (params.mode === "bible_or_myth") return "myth";
+  if (params.mode === "word_puzzle") return "puzzle";
+  return params.category && getCategory(params.category) ? "category" : "quick";
+}
 
-  const handleSubmit = (answerId: string | null) => {
-    if (!question || feedback || result) return;
-    const responseMs = Math.min(RESPONSE_WINDOW_MS, Math.max(0, Date.now() - questionStartedAt));
-    const normalizedAnswer = isWordPuzzle ? answerId?.trim().toLowerCase() ?? null : answerId;
-    const outcome = submitAnswer(session, normalizedAnswer, responseMs);
-    setSession(outcome.session);
-    setFeedback(outcome.feedback);
-    if (outcome.session.status === "complete") setPendingResult(calculateResult(outcome.session));
-  };
+function modeFor(kind: Kind): GameMode {
+  return kind === "daily" ? "daily_challenge" : kind === "myth" ? "bible_or_myth" : kind === "puzzle" ? "word_puzzle" : "bible_quiz";
+}
 
-  useEffect(() => {
-    if (!question || feedback || result) return;
-    const timer = setInterval(() => {
-      const elapsed = Date.now() - questionStartedAt;
-      const nextRemaining = Math.max(0, RESPONSE_WINDOW_MS - elapsed);
-      setRemainingMs(nextRemaining);
-      if (nextRemaining <= 0) {
-        clearInterval(timer);
-        handleSubmit(null);
-      }
-    }, 250);
-    return () => clearInterval(timer);
-  }, [question?.id, questionStartedAt, feedback, result]);
+const KIND_META: Record<Kind, { title: string; icon: string; color: string; rules: string[] }> = {
+  quick: { title: "Quick Round", icon: "bolt.fill", color: C.gold, rules: ["10 questions from every category", "Answer fast for a speed bonus", "3 in a row = ×2 combo, 6 in a row = ×3"] },
+  category: { title: "Category Round", icon: "book.fill", color: C.gold, rules: ["10 questions, easy to hard", "New questions come first, so you keep growing", "Every right answer raises your mastery"] },
+  survival: { title: "Survival", icon: "heart.fill", color: C.heart, rules: ["You have 3 hearts", "A wrong answer or timeout costs one", "Questions get harder the further you go"] },
+  daily: { title: "Daily Challenge", icon: "calendar", color: C.gold, rules: ["7 questions, the same for everyone today", "One attempt: make it count", "+100 bonus XP when you finish"] },
+  myth: { title: "Bible or Myth", icon: "sparkles", color: C.success, rules: ["Is the statement in the Bible, or a popular myth?", "Each answer shows the verse", "Combos still count"] },
+  puzzle: { title: "Word Puzzle", icon: "puzzlepiece.fill", color: "#60A5FA", rules: ["Unscramble the Bible word", "Type your answer and check it", "30 seconds each"] },
+};
 
-  const continueToNext = () => {
-    if (pendingResult) {
-      setResult(pendingResult);
-      setPendingResult(null);
-      setFeedback(null);
+function buildQuestions(kind: Kind, category: QuestionCategory | undefined, arena: ArenaStats): BibleQuestion[] {
+  if (kind === "myth") return shuffle(VERIFIED_BIBLE_OR_MYTH_QUESTIONS).slice(0, 10);
+  if (kind === "puzzle") return shuffle(VERIFIED_WORD_PUZZLE_QUESTIONS).slice(0, 8);
+  return buildRound({ kind, category, stats: arena });
+}
+
+async function shareText(message: string) {
+  try {
+    if (Platform.OS === "web" && typeof navigator !== "undefined") {
+      const nav = navigator as Navigator & { share?: (d: { text: string; title?: string }) => Promise<void> };
+      if (nav.share) { await nav.share({ text: message, title: "Bible Arena" }); return; }
+      await navigator.clipboard?.writeText(message);
       return;
     }
-    setFeedback(null);
-    setSelectedAnswer(null);
-    setTextAnswer("");
-    setQuestionStartedAt(Date.now());
-    setRemainingMs(RESPONSE_WINDOW_MS);
+    await Share.share({ message, title: "Bible Arena" });
+  } catch { /* dismissed */ }
+}
+
+/** Tabs keep screens mounted, so remount the round whenever params change or the screen loses focus. */
+export default function QuizRoute() {
+  const params = useLocalSearchParams<{ kind?: string; mode?: string; category?: string; r?: string }>();
+  const [generation, setGeneration] = useState(0);
+  useFocusEffect(useCallback(() => () => setGeneration((g) => g + 1), []));
+  return <QuizScreen key={`${params.kind ?? params.mode ?? "q"}-${params.category ?? ""}-${params.r ?? ""}-${generation}`} params={params} />;
+}
+
+function QuizScreen({ params }: { params: { kind?: string; mode?: string; category?: string } }) {
+  const { state, recordSession } = useProgression();
+  const arenaAtStart = useRef(normalizeArena(state.arena)).current;
+  const kind = resolveKind(params);
+  const category = kind === "category" ? (params.category as QuestionCategory) : undefined;
+  const cat = getCategory(category);
+  const meta = KIND_META[kind];
+  const dailyLocked = kind === "daily" && dailyDoneToday(arenaAtStart);
+
+  const [questions] = useState<BibleQuestion[]>(() => buildQuestions(kind, category, arenaAtStart));
+  const [phase, setPhase] = useState<Phase>("intro");
+  const [index, setIndex] = useState(0);
+  const [attempts, setAttempts] = useState<Attempt[]>([]);
+  const [streak, setStreak] = useState(0);
+  const [bestCombo, setBestCombo] = useState(0);
+  const [score, setScore] = useState(0);
+  const [hearts, setHearts] = useState(3);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [orderPicks, setOrderPicks] = useState<string[]>([]);
+  const [text, setText] = useState("");
+  const [remaining, setRemaining] = useState(0);
+  const [unlocked, setUnlocked] = useState<UnlockedAchievement[]>([]);
+  const [result, setResult] = useState<{ game: GameResult; bonus: number; levelBefore: number; xpBefore: number } | null>(null);
+
+  const question = questions[index];
+  const windowMs = question ? windowMsFor(question) : 20_000;
+  const startedAt = useRef(Date.now());
+  const timerAnim = useRef(new Animated.Value(1)).current;
+  const shake = useRef(new Animated.Value(0)).current;
+  const pop = useRef(new Animated.Value(1)).current;
+  const pointsAnim = useRef(new Animated.Value(0)).current;
+  const [lastPoints, setLastPoints] = useState(0);
+  const sessionId = useRef(`arena-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`).current;
+
+  const displayOptions = useMemo(() => {
+    if (!question) return [];
+    if (question.type === "multiple_choice" || question.type === "fill_verse" || question.type === "who_said") return shuffle(question.options);
+    return question.options;
+  }, [question]);
+
+  /* ---------- timer ---------- */
+  useEffect(() => {
+    if (phase !== "play" || !question) return;
+    startedAt.current = Date.now();
+    setRemaining(windowMs);
+    timerAnim.setValue(1);
+    Animated.timing(timerAnim, { toValue: 0, duration: windowMs, easing: Easing.linear, useNativeDriver: false }).start();
+    const interval = setInterval(() => {
+      const left = Math.max(0, windowMs - (Date.now() - startedAt.current));
+      setRemaining(left);
+      if (left <= 5_000 && left > 0) feedback.tick();
+    }, 1000);
+    const timeout = setTimeout(() => submit(null, true), windowMs);
+    return () => { clearInterval(interval); clearTimeout(timeout); timerAnim.stopAnimation(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, index]);
+
+  /* ---------- answering ---------- */
+  const submit = useCallback((answer: string | null, timedOut = false) => {
+    if (phase !== "play" || !question) return;
+    timerAnim.stopAnimation();
+    const ms = Math.min(windowMs, Date.now() - startedAt.current);
+    const normalized = question.type === "unscramble" && answer !== null ? answer.trim().toLowerCase().replace(/\s+/g, " ") : answer;
+    const correct = !timedOut && isAnswerCorrect(question, normalized);
+    const nextStreak = correct ? streak + 1 : 0;
+    const mult = correct ? comboMultiplier(nextStreak) : 1;
+    const points = scoreAnswer(question, correct, ms, nextStreak);
+    setSelected(answer);
+    setStreak(nextStreak);
+    setBestCombo((b) => Math.max(b, nextStreak));
+    setScore((s0) => s0 + points);
+    setAttempts((list) => [...list, { question, answerId: normalized, correct, timedOut, ms, points, mult }]);
+    if (!correct && kind === "survival") setHearts((h) => h - 1);
+    setPhase("feedback");
+    if (correct) {
+      feedback.correct(mult);
+      setLastPoints(points);
+      pop.setValue(0.92);
+      Animated.spring(pop, { toValue: 1, friction: 4, tension: 160, useNativeDriver: useNative }).start();
+      pointsAnim.setValue(0);
+      Animated.timing(pointsAnim, { toValue: 1, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: useNative }).start();
+    } else {
+      feedback.wrong();
+      shake.setValue(0);
+      Animated.sequence([
+        Animated.timing(shake, { toValue: 1, duration: 60, useNativeDriver: useNative }),
+        Animated.timing(shake, { toValue: -1, duration: 60, useNativeDriver: useNative }),
+        Animated.timing(shake, { toValue: 0.6, duration: 60, useNativeDriver: useNative }),
+        Animated.timing(shake, { toValue: 0, duration: 60, useNativeDriver: useNative }),
+      ]).start();
+    }
+  }, [phase, question, windowMs, streak, kind, timerAnim, pop, pointsAnim, shake]);
+
+  /* ---------- finishing ---------- */
+  const finish = useCallback(async (all: Attempt[]) => {
+    const correctCount = all.filter((a) => a.correct).length;
+    const total = all.length;
+    const comboBonus = all.reduce((t, a) => t + (a.correct ? (a.mult - 1) * 20 : 0), 0);
+    const perfect = total >= 5 && correctCount === total && kind !== "survival";
+    const bonus = comboBonus + (perfect ? 100 : 0);
+    const mode = modeFor(kind);
+    const xpBefore = state.progression.totalXp;
+    const game: GameResult = {
+      sessionId, mode, score: all.reduce((t, a) => t + a.points, 0), totalQuestions: total, correctAnswers: correctCount,
+      accuracy: total ? Math.round((correctCount / total) * 100) : 0,
+      xpEarned: 50 + correctCount * 100 + bonus + (mode === "daily_challenge" ? 100 : 0),
+      completedAt: Date.now(),
+      answers: all.map((a) => ({ questionId: a.question.id, answerId: a.answerId })),
+    };
+    setResult({ game, bonus, levelBefore: getLevelProgress(xpBefore).level, xpBefore });
+    setPhase("done");
+    const best = all.reduce((acc, a) => { const run = a.correct ? acc.run + 1 : 0; return { run, best: Math.max(acc.best, run) }; }, { run: 0, best: 0 }).best;
+    const newBadges = await recordSession(game, {
+      bonusXp: bonus,
+      kind: kind === "myth" || kind === "puzzle" ? undefined : kind,
+      category,
+      bestCombo: best,
+      arena: (arena) => {
+        const correctMap = { ...arena.correct };
+        const seen = { ...arena.seen };
+        let orderSolved = arena.orderSolved;
+        for (const a of all) {
+          seen[a.question.id] = (seen[a.question.id] ?? 0) + 1;
+          if (a.correct) { correctMap[a.question.id] = (correctMap[a.question.id] ?? 0) + 1; if (a.question.type === "order_events") orderSolved += 1; }
+        }
+        const day = todayKey();
+        return {
+          ...arena, correct: correctMap, seen, orderSolved,
+          bestCombo: Math.max(arena.bestCombo, best),
+          perfectRounds: arena.perfectRounds + (perfect ? 1 : 0),
+          survivalBest: kind === "survival" ? Math.max(arena.survivalBest, correctCount) : arena.survivalBest,
+          ...(kind === "daily" ? { daily: { date: day, correct: correctCount, total, score: game.score }, dailyHistory: [...arena.dailyHistory.filter((d) => d !== day), day].slice(-60) } : {}),
+        };
+      },
+    });
+    setUnlocked(newBadges);
+    if (getLevelProgress(xpBefore + 1).level < getLevelProgress(xpBefore + game.xpEarned).level) feedback.levelUp();
+  }, [kind, category, recordSession, sessionId, state.progression.totalXp]);
+
+  const next = useCallback(() => {
+    const all = attempts;
+    const outOfHearts = kind === "survival" && hearts <= 0;
+    if (outOfHearts || index >= questions.length - 1) { void finish(all); return; }
+    setIndex((i) => i + 1);
+    setSelected(null);
+    setOrderPicks([]);
+    setText("");
+    setPhase("play");
+  }, [attempts, kind, hearts, index, questions.length, finish]);
+
+  const exit = () => { if (router.canGoBack()) router.back(); else router.replace("/"); };
+  const replay = () => {
+    const p: Record<string, string> = { kind: kind === "daily" ? "quick" : kind, ...(category ? { category } : {}), r: String(Date.now()) };
+    router.replace({ pathname: "/quiz", params: p });
   };
 
-  if (result) {
+  /* ================= RENDER ================= */
+
+  if (phase === "intro") {
     return (
-      <ScreenContainer className="px-5" containerClassName="bg-background">
-        <ScrollView contentContainerStyle={styles.resultContent} showsVerticalScrollIndicator={false}>
-          <View style={[styles.resultIcon, { backgroundColor: colors.primary }]}>
-            <IconSymbol name="trophy.fill" size={34} color={colors.background} />
+      <ScreenContainer>
+        <View style={styles.introWrap}>
+          <View style={styles.topRow}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={exit} style={styles.closeBtn}><IconSymbol name="xmark" size={22} color={C.text} /></Pressable>
           </View>
-          <Text style={[styles.resultEyebrow, { color: colors.primary }]}>SESSION COMPLETE</Text>
-          <Text style={[styles.resultTitle, { color: colors.foreground }]}>A strong finish.</Text>
-          <Text style={[styles.resultSubtitle, { color: colors.muted }]}>Every answer is a step toward deeper knowledge.</Text>
-
-          <View style={[styles.scoreCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.scoreLabel, { color: colors.muted }]}>FINAL SCORE</Text>
-            <Text style={[styles.scoreValue, { color: colors.foreground }]}>{result.score}</Text>
-            <View style={styles.resultStats}>
-              <View style={styles.resultStat}><Text style={[styles.resultStatValue, { color: colors.foreground }]}>{result.accuracy}%</Text><Text style={[styles.resultStatLabel, { color: colors.muted }]}>Accuracy</Text></View>
-              <View style={styles.resultStat}><Text style={[styles.resultStatValue, { color: colors.foreground }]}>{result.correctAnswers}/{result.totalQuestions}</Text><Text style={[styles.resultStatLabel, { color: colors.muted }]}>Correct</Text></View>
-              <View style={styles.resultStat}><Text style={[styles.resultStatValue, { color: colors.primary }]}>+{result.xpEarned}</Text><Text style={[styles.resultStatLabel, { color: colors.muted }]}>XP earned</Text></View>
+          <FadeIn style={{ flex: 1, justifyContent: "center" }}>
+            <View style={{ alignItems: "center" }}>
+              <IconBadge icon={cat?.icon ?? meta.icon} color={cat?.color ?? meta.color} tint={cat?.tint ?? "rgba(245,185,66,0.14)"} size={84} radius={28} />
+              <Txt variant="overline" color={cat?.color ?? meta.color} style={{ marginTop: S.xl }}>{cat ? "Category round" : "Get ready"}</Txt>
+              <Txt variant="display" style={{ textAlign: "center", marginTop: 6 }}>{cat?.title ?? meta.title}</Txt>
+              <Txt variant="body" color={C.muted} style={{ textAlign: "center", marginTop: 6 }}>{dailyLocked ? "You’ve already played today’s challenge." : kind === "survival" ? "Up to 60 questions" : `${questions.length} questions`}</Txt>
             </View>
-          </View>
-
-          {result.accuracy === 100 && (() => {
-            const celebration = getPerfectRoundCelebration(result.score, progression.currentStreak, result.review?.[0]?.reference);
-            return (
-              <View accessibilityRole="summary" style={[styles.celebrationCard, { backgroundColor: "#173A35", borderColor: colors.success }]}>
-                <Text style={[styles.celebrationEyebrow, { color: colors.success }]}>SCRIPTURE CELEBRATION</Text>
-                <Text style={[styles.celebrationTitle, { color: colors.foreground }]}>{celebration.title}</Text>
-                <Text style={[styles.celebrationSubtitle, { color: "#D5F0E3" }]}>{celebration.subtitle}</Text>
-                <Text style={[styles.celebrationVerse, { color: colors.foreground }]}>{celebration.verse}</Text>
-                <Text style={[styles.reference, { color: colors.primary }]}>{celebration.reference}</Text>
-                <Pressable accessibilityRole="button" accessibilityLabel="Share perfect round Scripture card" onPress={() => void Share.share({ title: "Bible Arena perfect round", message: celebration.shareText })} style={({ pressed }) => [styles.celebrationShare, { borderColor: colors.success }, pressed && styles.pressed]}>
-                  <Text style={[styles.shareButtonText, { color: colors.success }]}>Share Scripture card</Text>
-                </Pressable>
-              </View>
-            );
-          })()}
-
-          <View style={styles.reviewHeader}>
-            <Text style={[styles.reviewTitle, { color: colors.foreground }]}>Answer review</Text>
-            <Text style={[styles.reviewSubtitle, { color: colors.muted }]}>Learn why each answer is right and where it appears in Scripture.</Text>
-          </View>
-          {(result.review ?? []).map((review, index) => (
-            <View key={review.questionId} style={[styles.reviewCard, { backgroundColor: colors.surface, borderColor: review.isCorrect ? colors.success : colors.border }]}>
-              <View style={styles.reviewTopRow}>
-                <Text style={[styles.reviewNumber, { color: colors.primary }]}>Question {index + 1}</Text>
-                <Text style={[styles.reviewOutcome, { color: review.isCorrect ? colors.success : colors.error }]}>{review.isCorrect ? `Correct · +${review.points}` : review.timedOut ? "Time expired" : "Review needed"}</Text>
-              </View>
-              <Text style={[styles.reviewAnswer, { color: colors.foreground }]}>Your answer: {review.answerLabel}</Text>
-              {!review.isCorrect && <Text style={[styles.reviewAnswer, { color: colors.success }]}>Correct answer: {review.correctAnswerLabel}</Text>}
-              <Text style={[styles.reviewExplanation, { color: colors.muted }]}>{review.explanation}</Text>
-              <Text style={[styles.reference, { color: colors.primary }]}>{review.reference}</Text>
+            {!dailyLocked ? (
+              <Card style={{ marginTop: S.xxl, gap: S.md }}>
+                {meta.rules.map((rule) => (
+                  <View key={rule} style={styles.ruleRow}>
+                    <IconSymbol name="checkmark.circle.fill" size={18} color={cat?.color ?? meta.color} />
+                    <Txt variant="small" color={C.textDim} style={{ flex: 1 }}>{rule}</Txt>
+                  </View>
+                ))}
+              </Card>
+            ) : null}
+          </FadeIn>
+          {dailyLocked ? (
+            <View style={{ gap: S.md }}>
+              <Button label="Play a Quick Round instead" onPress={() => router.replace({ pathname: "/quiz", params: { kind: "quick", r: String(Date.now()) } })} />
+              <Button label="Back home" variant="secondary" onPress={() => router.replace("/")} />
             </View>
-          ))}
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Share your score"
-            onPress={() => {
-              void shareGameResult({
-                modeName: isBibleOrMyth ? "Bible or Myth" : isWordPuzzle ? "Word Puzzle" : isDailyChallenge ? "Daily Challenge" : "Bible Quiz",
-                score: result.score,
-                accuracy: result.accuracy,
-                streak: progression.currentStreak,
-                level: calculateLevel(progression.totalXp),
-                learningNote: result.review?.length ? `${result.review.filter((item) => !item.isCorrect).length} answer${result.review.filter((item) => !item.isCorrect).length === 1 ? "" : "s"} reviewed with Scripture explanations.` : "Keep building your Scripture rhythm.",
-              });
-            }}
-            style={({ pressed }) => [styles.shareButton, { backgroundColor: colors.surface, borderColor: colors.primary }, pressed && styles.pressed]}
-          >
-            <IconSymbol name="sparkles" size={18} color={colors.primary} />
-            <Text style={[styles.shareButtonText, { color: colors.primary }]}>Share Result</Text>
-          </Pressable>
-
-          <Pressable accessibilityRole="button" accessibilityLabel="Return to play" onPress={() => router.replace("/play")} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}>
-            <Text style={[styles.primaryButtonText, { color: colors.background }]}>Play again</Text>
-            <IconSymbol name="chevron.right" size={18} color={colors.background} />
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Return to home" onPress={() => router.replace("/")} style={({ pressed }) => [styles.secondaryButton, { borderColor: colors.border }, pressed && styles.pressed]}>
-            <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>Back to home</Text>
-          </Pressable>
-        </ScrollView>
+          ) : (
+            <Button label="Start" iconRight="arrow.right" onPress={() => { feedback.tap(); setPhase("play"); }} color={cat?.color} />
+          )}
+        </View>
       </ScreenContainer>
     );
   }
 
+  if (phase === "done" && result) {
+    return <Results kind={kind} category={category} attempts={attempts} result={result} bestCombo={bestCombo} unlocked={unlocked} totalXp={state.progression.totalXp} arena={normalizeArena(state.arena)} prevSurvivalBest={arenaAtStart.survivalBest} onReplay={replay} onExit={() => router.replace("/")} />;
+  }
+
   if (!question) return null;
 
-  const questionNumber = session.currentIndex + 1;
-  const progress = questionNumber / session.questions.length;
-  const seconds = Math.ceil(remainingMs / 1000);
+  const answered = phase === "feedback";
+  const last = attempts[attempts.length - 1];
+  const mult = comboMultiplier(streak);
+  const progressPct = kind === "survival" ? 0 : ((index + (answered ? 1 : 0)) / questions.length) * 100;
+  const seconds = Math.ceil(remaining / 1000);
+  const qCat = getCategory(question.category);
+  const isTF = question.type === "true_false";
+  const isOrder = question.type === "order_events";
+  const isPuzzle = question.type === "unscramble";
+
+  const optionState = (id: string): "idle" | "correct" | "wrong" | "dim" => {
+    if (!answered) return "idle";
+    if (id === question.correctAnswer) return "correct";
+    if (id === selected) return "wrong";
+    return "dim";
+  };
 
   return (
-    <ScreenContainer className="px-5" containerClassName="bg-background">
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.topRow}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Exit quiz" onPress={() => router.back()} style={({ pressed }) => [styles.exitButton, { borderColor: colors.border }, pressed && styles.pressed]}>
-            <Text style={[styles.exitText, { color: colors.muted }]}>Exit</Text>
-          </Pressable>
-            <Text style={[styles.modeLabel, { color: colors.primary }]}>{packId ? packId.replaceAll("-", " ").toUpperCase() : isBibleOrMyth ? "BIBLE OR MYTH" : isWordPuzzle ? "WORD PUZZLE" : isDailyChallenge ? "DAILY CHALLENGE" : `BIBLE QUIZ · ${getAdaptiveDifficulty(state.sessions).toUpperCase()}`}</Text>
-          <Text style={[styles.questionCount, { color: colors.muted }]}>{questionNumber}/{session.questions.length}</Text>
-        </View>
-
-        <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
-          <View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${progress * 100}%` }]} />
-        </View>
-
-        <View style={styles.timerRow}>
-          <Text style={[styles.category, { color: colors.muted }]}>{question.category.toUpperCase()} · {question.difficulty.toUpperCase()}</Text>
-          <View style={[styles.timerPill, { borderColor: seconds <= 5 ? colors.error : colors.border }]}>
-            <View style={[styles.timerDot, { backgroundColor: seconds <= 5 ? colors.error : colors.primary }]} />
-            <Text style={[styles.timerText, { color: seconds <= 5 ? colors.error : colors.foreground }]}>{seconds}s</Text>
+    <ScreenContainer>
+      <View style={styles.playTop}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Quit round" onPress={exit} style={styles.closeBtn}><IconSymbol name="xmark" size={22} color={C.text} /></Pressable>
+        {kind === "survival" ? (
+          <View style={styles.heartsRow}>
+            {[0, 1, 2].map((i) => <IconSymbol key={i} name={i < hearts ? "heart.fill" : "heart"} size={22} color={i < hearts ? C.heart : C.faint} />)}
+            <Txt variant="smallStrong" color={C.muted} style={{ marginLeft: 6 }}>#{index + 1}</Txt>
           </View>
-        </View>
-
-        <View style={styles.questionBlock}>
-          <Text style={[styles.questionTitle, { color: colors.foreground }]}>{question.prompt}</Text>
-          <Text style={[styles.questionHint, { color: colors.muted }]}>{isWordPuzzle ? "Type the word you think the letters spell." : isBibleOrMyth ? "Classify the statement." : "Choose the best answer."}</Text>
-        </View>
-
-        {isWordPuzzle ? (
-          <TextInput
-            accessibilityLabel="Word puzzle answer"
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="Type your answer"
-            placeholderTextColor={colors.muted}
-            value={textAnswer}
-            onChangeText={setTextAnswer}
-            style={[styles.textAnswer, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.foreground }]}
-          />
         ) : (
-          <View style={styles.options}>
-            {question.options.map((option, index) => {
-              const isSelected = selectedAnswer === option.id;
+          <View style={{ flex: 1 }}><ProgressBar value={progressPct} height={10} color={cat?.color ?? C.gold} animated /></View>
+        )}
+        <View style={styles.scoreBox}>
+          <Txt variant="bodyStrong" color={C.gold}>{score.toLocaleString()}</Txt>
+          {answered && last?.correct ? (
+            <Animated.View pointerEvents="none" style={[styles.pointsFloat, { opacity: pointsAnim.interpolate({ inputRange: [0, 0.7, 1], outputRange: [1, 1, 0] }), transform: [{ translateY: pointsAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -26] }) }] }]}>
+              <Txt variant="smallStrong" color={C.success}>+{lastPoints}</Txt>
+            </Animated.View>
+          ) : null}
+        </View>
+      </View>
+
+      <View style={styles.timerTrack}>
+        <Animated.View style={[styles.timerFill, { backgroundColor: seconds <= 5 && !answered ? C.error : C.gold, width: timerAnim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.playContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <View style={styles.metaRow}>
+          {qCat ? <Pill label={qCat.title} icon={qCat.icon} color={qCat.color} bg={qCat.tint} /> : null}
+          <Pill label={question.difficulty} color={question.difficulty === "hard" ? C.error : question.difficulty === "medium" ? C.gold : C.success} />
+          <View style={{ flex: 1 }} />
+          {streak >= 3 ? (
+            <Animated.View style={{ transform: [{ scale: pop }] }}>
+              <Pill label={`×${mult} combo`} icon="flame.fill" color={C.ink} bg={C.flame} />
+            </Animated.View>
+          ) : !answered ? <Txt variant="smallStrong" color={seconds <= 5 ? C.error : C.muted}>{seconds}s</Txt> : null}
+        </View>
+
+        <FadeIn key={question.id} from={8}>
+          <Txt variant="overline" color={C.muted}>{QUESTION_TYPE_LABEL[question.type] ?? "Question"}{kind !== "survival" ? ` · ${index + 1} of ${questions.length}` : ""}</Txt>
+          <Txt variant={question.prompt.length > 110 ? "h3" : "h2"} style={{ marginTop: S.sm }}>{question.prompt}</Txt>
+          {isOrder && !answered ? <Txt variant="small" color={C.muted} style={{ marginTop: 6 }}>Tap them in order, earliest first. Tap again to undo.</Txt> : null}
+        </FadeIn>
+
+        <Animated.View style={{ gap: S.md, marginTop: S.xl, transform: [{ translateX: shake.interpolate({ inputRange: [-1, 1], outputRange: [-10, 10] }) }] }}>
+          {isPuzzle ? (
+            <View style={{ gap: S.md }}>
+              <TextInput
+                value={text}
+                onChangeText={setText}
+                editable={!answered}
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder="Type your answer"
+                placeholderTextColor={C.faint}
+                onSubmitEditing={() => text.trim() && submit(text)}
+                style={[styles.input, answered && { borderColor: last?.correct ? C.success : C.error }]}
+                accessibilityLabel="Your answer"
+              />
+              {answered && !last?.correct ? <Txt variant="bodyStrong" color={C.success}>Answer: {question.correctAnswer.toUpperCase()}</Txt> : null}
+            </View>
+          ) : isTF ? (
+            <View style={styles.tfRow}>
+              {displayOptions.map((option) => {
+                const st = optionState(option.id);
+                const positive = option.id === "true" || option.id === "bible";
+                return (
+                  <Pressable key={option.id} accessibilityRole="button" accessibilityLabel={option.label} disabled={answered} onPress={() => submit(option.id)}
+                    style={({ pressed }) => [styles.tfBtn, st === "correct" && styles.optCorrect, st === "wrong" && styles.optWrong, st === "dim" && styles.optDim, pressed && styles.pressed]}>
+                    <IconSymbol name={positive ? "checkmark" : "xmark"} size={28} color={st === "correct" ? C.success : st === "wrong" ? C.error : positive ? C.success : C.error} />
+                    <Txt variant="h3">{option.label}</Txt>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : isOrder ? (
+            displayOptions.map((option) => {
+              const pickIndex = orderPicks.indexOf(option.id);
+              const correctPos = question.correctAnswer.split(">").indexOf(option.id);
+              const ok = answered && last?.correct;
               return (
-                <Pressable
-                  key={option.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Answer ${option.label}`}
-                  onPress={() => setSelectedAnswer(option.id)}
-                  style={({ pressed }) => [styles.option, { backgroundColor: isSelected ? colors.primary : colors.surface, borderColor: isSelected ? colors.primary : colors.border }, pressed && styles.pressed]}
-                >
-                  <View style={[styles.optionLetter, { backgroundColor: colors.background, borderColor: isSelected ? colors.background : colors.border }]}>
-                    <Text style={[styles.optionLetterText, { color: isSelected ? colors.primary : colors.muted }]}>{String.fromCharCode(65 + index)}</Text>
+                <Pressable key={option.id} accessibilityRole="button" accessibilityLabel={option.label} disabled={answered}
+                  onPress={() => { feedback.tap(); setOrderPicks((picks) => picks.includes(option.id) ? picks.filter((p) => p !== option.id) : [...picks, option.id]); }}
+                  style={({ pressed }) => [styles.option, pickIndex >= 0 && !answered && styles.optPicked, answered && (pickIndex === correctPos ? styles.optCorrect : styles.optWrong), pressed && styles.pressed]}>
+                  <View style={[styles.letter, pickIndex >= 0 && { backgroundColor: C.gold, borderColor: C.gold }, answered && { backgroundColor: pickIndex === correctPos ? C.success : C.error, borderColor: "transparent" }]}>
+                    <Txt variant="smallStrong" color={pickIndex >= 0 || answered ? C.ink : C.muted}>{answered ? correctPos + 1 : pickIndex >= 0 ? pickIndex + 1 : "·"}</Txt>
                   </View>
-                  <Text style={[styles.optionText, { color: isSelected ? colors.background : colors.foreground }]}>{option.label}</Text>
+                  <Txt variant="bodyStrong" style={{ flex: 1 }}>{option.label}</Txt>
+                  {answered && !ok ? <Txt variant="caption" color={C.muted}>you: {pickIndex + 1}</Txt> : null}
                 </Pressable>
               );
-            })}
-          </View>
-        )}
+            })
+          ) : (
+            displayOptions.map((option, i) => {
+              const st = optionState(option.id);
+              return (
+                <Pressable key={option.id} accessibilityRole="button" accessibilityLabel={option.label} disabled={answered} onPress={() => submit(option.id)}
+                  style={({ pressed }) => [styles.option, st === "correct" && styles.optCorrect, st === "wrong" && styles.optWrong, st === "dim" && styles.optDim, pressed && styles.pressed]}>
+                  <View style={[styles.letter, st === "correct" && { backgroundColor: C.success, borderColor: C.success }, st === "wrong" && { backgroundColor: C.error, borderColor: C.error }]}>
+                    {st === "correct" ? <IconSymbol name="checkmark" size={16} color={C.ink} /> : st === "wrong" ? <IconSymbol name="xmark" size={16} color={C.ink} /> : <Txt variant="smallStrong" color={C.muted}>{LETTERS[i]}</Txt>}
+                  </View>
+                  <Txt variant="bodyStrong" style={{ flex: 1 }}>{option.label}</Txt>
+                </Pressable>
+              );
+            })
+          )}
+        </Animated.View>
 
-        {feedback ? (
-          <View style={[styles.feedbackCard, { backgroundColor: feedback.isCorrect ? "#173A35" : colors.surface, borderColor: feedback.isCorrect ? colors.success : colors.border }]}>
-            <Text style={[styles.feedbackTitle, { color: feedback.isCorrect ? colors.success : colors.foreground }]}>{feedback.isCorrect ? `Correct · +${feedback.points}` : feedback.timedOut ? "Time's up" : "Not quite"}</Text>
-            <Text style={[styles.feedbackBody, { color: feedback.isCorrect ? "#D5F0E3" : colors.muted }]}>{feedback.explanation}</Text>
-            <Text style={[styles.reference, { color: colors.primary }]}>{feedback.reference}</Text>
-            {isAuthenticated && <Pressable accessibilityRole="button" accessibilityLabel="Report this question" disabled={reportMutation.isPending} onPress={() => reportMutation.mutate({ questionId: question.id, reason: "other", details: "Reported from in-game feedback." })}>
-              <Text style={[styles.reportLink, { color: colors.muted }]}>{reportMutation.isPending ? "Sending report…" : "Report a problem with this question"}</Text>
-            </Pressable>}
-            <Pressable accessibilityRole="button" accessibilityLabel="Continue to next question" onPress={continueToNext} style={({ pressed }) => [styles.continueButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}>
-              <Text style={[styles.primaryButtonText, { color: colors.background }]}>{pendingResult ? "View session results" : "Next question"}</Text>
-              <IconSymbol name="chevron.right" size={18} color={colors.background} />
-            </Pressable>
+        {answered && last ? (
+          <FadeIn from={16}>
+            <View style={[styles.explain, { borderColor: last.correct ? "rgba(52,211,153,0.35)" : "rgba(248,113,113,0.35)", backgroundColor: last.correct ? "rgba(52,211,153,0.08)" : "rgba(248,113,113,0.08)" }]}>
+              <View style={styles.explainHead}>
+                <IconSymbol name={last.correct ? "checkmark.circle.fill" : last.timedOut ? "clock" : "xmark.circle.fill"} size={22} color={last.correct ? C.success : C.error} />
+                <Txt variant="h3" color={last.correct ? C.success : C.error} style={{ flex: 1 }}>
+                  {last.correct ? (last.mult >= 3 ? "Unstoppable!" : last.mult === 2 ? "On fire!" : "Correct!") : last.timedOut ? "Time’s up" : "Not quite"}
+                </Txt>
+                {last.correct ? <Txt variant="bodyStrong" color={C.success}>+{last.points}{last.mult > 1 ? ` (×${last.mult})` : ""}</Txt> : kind === "survival" ? <Txt variant="smallStrong" color={C.heart}>−1 heart</Txt> : null}
+              </View>
+              {!last.correct && !isPuzzle ? <Txt variant="smallStrong" color={C.text} style={{ marginTop: S.sm }}>Answer: {correctAnswerLabel(question)}</Txt> : null}
+              <Txt variant="body" color={C.textDim} style={{ marginTop: S.sm }}>{question.explanation}</Txt>
+              <View style={styles.refRow}>
+                <IconSymbol name="book.fill" size={14} color={C.gold} />
+                <Txt variant="smallStrong" color={C.gold}>{referenceLabel(question)}</Txt>
+              </View>
+            </View>
+          </FadeIn>
+        ) : null}
+      </ScrollView>
+
+      <View style={styles.bottomBar}>
+        {answered ? (
+          <Button label={kind === "survival" && hearts <= 0 ? "See results" : index >= questions.length - 1 ? "See results" : "Continue"} iconRight="arrow.right" onPress={next} color={last?.correct ? C.success : undefined} />
+        ) : isOrder ? (
+          <View style={{ flexDirection: "row", gap: S.md }}>
+            <Button label="Reset" variant="secondary" onPress={() => setOrderPicks([])} style={{ flex: 1 }} disabled={!orderPicks.length} />
+            <Button label="Check order" onPress={() => submit(orderPicks.join(">"))} style={{ flex: 2 }} disabled={orderPicks.length !== question.options.length} />
           </View>
+        ) : isPuzzle ? (
+          <Button label="Check" onPress={() => submit(text)} disabled={!text.trim()} />
         ) : (
-          <Pressable accessibilityRole="button" accessibilityLabel="Submit answer" disabled={isWordPuzzle ? !textAnswer.trim() : !selectedAnswer} onPress={() => handleSubmit(isWordPuzzle ? textAnswer : selectedAnswer)} style={({ pressed }) => [styles.submitButton, { backgroundColor: (isWordPuzzle ? textAnswer.trim() : selectedAnswer) ? colors.primary : colors.border }, pressed && (isWordPuzzle ? textAnswer.trim() : selectedAnswer) && styles.pressed]}>
-            <Text style={[styles.primaryButtonText, { color: selectedAnswer ? colors.background : colors.muted }]}>Submit answer</Text>
-          </Pressable>
+          <Txt variant="caption" color={C.faint} style={{ textAlign: "center" }}>{streak >= 1 ? `${streak} in a row${streak < 3 ? ` · ${3 - streak} more for ×2` : streak < 6 ? ` · ${6 - streak} more for ×3` : " · max combo"}` : "Answer quickly for a speed bonus"}</Txt>
         )}
+      </View>
+    </ScreenContainer>
+  );
+}
+
+/* ================= RESULTS ================= */
+
+function Results({ kind, category, attempts, result, bestCombo, unlocked, totalXp, arena, prevSurvivalBest, onReplay, onExit }: {
+  kind: Kind; category?: QuestionCategory; attempts: Attempt[]; result: { game: GameResult; bonus: number; levelBefore: number; xpBefore: number };
+  bestCombo: number; unlocked: UnlockedAchievement[]; totalXp: number; arena: ArenaStats; prevSurvivalBest: number; onReplay: () => void; onExit: () => void;
+}) {
+  const { game, bonus, levelBefore } = result;
+  const shownScore = useCountUp(game.score, 1100);
+  const level = getLevelProgress(totalXp);
+  const leveledUp = level.level > levelBefore;
+  const perfect = game.correctAnswers === game.totalQuestions && game.totalQuestions >= 5;
+  const nextCat = suggestNextCategory(arena, category);
+  const [showReview, setShowReview] = useState(false);
+  const title = kind === "survival" ? (game.correctAnswers > prevSurvivalBest ? "New personal best!" : "You survived!") : perfect ? "Perfect round!" : game.accuracy >= 80 ? "Excellent!" : game.accuracy >= 50 ? "Good work!" : "Keep going!";
+  const subtitle = kind === "survival" ? `${game.correctAnswers} correct before the hearts ran out` : perfect ? "Every answer right. That’s mastery." : game.accuracy >= 50 ? "You’re growing in the Word." : "Every miss is a verse learned.";
+  const xpRows = [
+    { label: "Correct answers", value: game.correctAnswers * 100 },
+    { label: "Round complete", value: 50 },
+    ...(bonus - (perfect && kind !== "survival" ? 100 : 0) > 0 ? [{ label: "Combo bonus", value: bonus - (perfect && kind !== "survival" ? 100 : 0) }] : []),
+    ...(perfect && kind !== "survival" ? [{ label: "Perfect round", value: 100 }] : []),
+    ...(kind === "daily" ? [{ label: "Daily Challenge", value: 100 }] : []),
+  ];
+  const share = () => shareText(`I scored ${game.score.toLocaleString()} in Bible Arena (${game.correctAnswers}/${game.totalQuestions} correct${bestCombo >= 3 ? `, ${bestCombo} in a row` : ""}). Can you beat me? https://bible-arena.onrender.com`);
+
+  return (
+    <ScreenContainer>
+      <ScrollView contentContainerStyle={styles.resultContent} showsVerticalScrollIndicator={false}>
+        <FadeIn>
+          <View style={{ alignItems: "center", paddingTop: S.xl }}>
+            <IconBadge icon={perfect ? "crown.fill" : kind === "survival" ? "heart.fill" : "trophy.fill"} color={kind === "survival" ? C.heart : C.gold} tint={kind === "survival" ? "rgba(255,93,115,0.14)" : C.goldSoft} size={76} radius={38} />
+            <Txt variant="display" style={{ marginTop: S.lg, textAlign: "center" }}>{title}</Txt>
+            <Txt variant="body" color={C.muted} style={{ textAlign: "center", marginTop: 4 }}>{subtitle}</Txt>
+          </View>
+        </FadeIn>
+
+        <FadeIn delay={80}>
+          <Card glow={{ from: "#17233D", to: "#101827", accent: C.gold }}>
+            <View style={styles.scoreRow}>
+              <View style={{ flex: 1 }}>
+                <Txt variant="overline" color={C.muted}>Score</Txt>
+                <Txt variant="number" color={C.gold}>{shownScore.toLocaleString()}</Txt>
+              </View>
+              <Ring value={game.accuracy} size={86} stroke={8} color={game.accuracy >= 80 ? C.success : C.gold}>
+                <Txt variant="h3" style={{ lineHeight: 22 }}>{game.accuracy}%</Txt>
+                <Txt variant="caption" color={C.muted} style={{ fontSize: 10 }}>accuracy</Txt>
+              </Ring>
+            </View>
+            <View style={styles.statsRow}>
+              <View style={styles.stat}><Txt variant="h3">{game.correctAnswers}/{game.totalQuestions}</Txt><Txt variant="caption" color={C.muted}>correct</Txt></View>
+              <View style={styles.stat}><Txt variant="h3" color={C.flame}>{bestCombo}</Txt><Txt variant="caption" color={C.muted}>best streak</Txt></View>
+              <View style={styles.stat}><Txt variant="h3" color={C.gold}>+{game.xpEarned}</Txt><Txt variant="caption" color={C.muted}>XP</Txt></View>
+            </View>
+          </Card>
+        </FadeIn>
+
+        {leveledUp ? (
+          <FadeIn delay={140}>
+            <Card accent={C.goldLine} glow={{ from: "#3A2A0E", to: "#1A1710", accent: C.gold }} style={{ alignItems: "center" }}>
+              <Txt variant="overline" color={C.gold}>Level up</Txt>
+              <Txt variant="h2" style={{ marginTop: 4 }}>Level {level.level} · {level.name}</Txt>
+            </Card>
+          </FadeIn>
+        ) : null}
+
+        <FadeIn delay={180}>
+          <Card style={{ gap: S.md }}>
+            <Txt variant="overline" color={C.muted}>XP earned</Txt>
+            {xpRows.map((row) => (
+              <View key={row.label} style={styles.xpRow}>
+                <Txt variant="small" color={C.textDim}>{row.label}</Txt>
+                <Txt variant="smallStrong" color={C.gold}>+{row.value}</Txt>
+              </View>
+            ))}
+            <View style={{ marginTop: S.sm, gap: 6 }}>
+              <View style={styles.xpRow}>
+                <Txt variant="smallStrong">Level {level.level} · {level.name}</Txt>
+                <Txt variant="caption" color={C.muted}>{level.next === null ? "Max" : `${level.toNext.toLocaleString()} XP to go`}</Txt>
+              </View>
+              <ProgressBar value={level.pct} />
+            </View>
+          </Card>
+        </FadeIn>
+
+        {unlocked.length ? (
+          <FadeIn delay={220}>
+            <Card accent="rgba(167,139,250,0.4)" style={{ gap: S.md }}>
+              <Txt variant="overline" color={C.violet}>New badge{unlocked.length > 1 ? "s" : ""}</Txt>
+              {unlocked.map((badge) => (
+                <View key={badge.key} style={styles.badgeRow}>
+                  <IconBadge icon={badge.icon} color={C.gold} tint={C.goldSoft} size={44} radius={22} />
+                  <View style={{ flex: 1 }}>
+                    <Txt variant="bodyStrong">{badge.name}</Txt>
+                    <Txt variant="caption" color={C.muted} style={{ fontWeight: "500" }}>{badge.description}</Txt>
+                  </View>
+                </View>
+              ))}
+            </Card>
+          </FadeIn>
+        ) : null}
+
+        <FadeIn delay={260}>
+          <View style={{ gap: S.md }}>
+            <Button label="One more round" icon="arrow.clockwise" onPress={onReplay} />
+            {kind !== "myth" && kind !== "puzzle" ? (
+              <Button label={`Next up: ${nextCat.title}`} variant="secondary" icon={nextCat.icon} onPress={() => router.replace({ pathname: "/quiz", params: { kind: "category", category: nextCat.id, r: String(Date.now()) } })} />
+            ) : null}
+            <View style={{ flexDirection: "row", gap: S.md }}>
+              <Button label="Share" variant="secondary" icon="square.and.arrow.up" size="md" onPress={share} style={{ flex: 1 }} />
+              <Button label="Home" variant="secondary" icon="house.fill" size="md" onPress={onExit} style={{ flex: 1 }} />
+            </View>
+          </View>
+        </FadeIn>
+
+        <Pressable accessibilityRole="button" onPress={() => setShowReview((v) => !v)} style={styles.reviewToggle}>
+          <Txt variant="smallStrong" color={C.gold}>{showReview ? "Hide answers" : "Review your answers"}</Txt>
+          <IconSymbol name={showReview ? "chevron.up" : "chevron.down"} size={20} color={C.gold} />
+        </Pressable>
+        {showReview ? attempts.map((a, i) => (
+          <View key={`${a.question.id}-${i}`} style={styles.reviewItem}>
+            <IconSymbol name={a.correct ? "checkmark.circle.fill" : "xmark.circle.fill"} size={20} color={a.correct ? C.success : C.error} />
+            <View style={{ flex: 1, gap: 4 }}>
+              <Txt variant="smallStrong">{a.question.prompt}</Txt>
+              <Txt variant="caption" color={C.success}>{correctAnswerLabel(a.question)}</Txt>
+              <Txt variant="caption" color={C.muted} style={{ fontWeight: "500" }}>{a.question.explanation} ({referenceLabel(a.question)})</Txt>
+            </View>
+          </View>
+        )) : null}
       </ScrollView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { paddingTop: 14, paddingBottom: 38, gap: 20 },
-  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  exitButton: { borderWidth: 1, borderRadius: 11, paddingVertical: 8, paddingHorizontal: 11 },
-  exitText: { fontSize: 12, fontWeight: "700" },
-  modeLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 1.6 },
-  questionCount: { fontSize: 13, fontWeight: "700" },
-  progressTrack: { height: 6, borderRadius: 3, overflow: "hidden" },
-  progressFill: { height: "100%", borderRadius: 3 },
-  timerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  category: { fontSize: 10, fontWeight: "800", letterSpacing: 1.2 },
-  timerPill: { borderWidth: 1, borderRadius: 11, paddingVertical: 7, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 6 },
-  timerDot: { width: 7, height: 7, borderRadius: 4 },
-  timerText: { fontSize: 12, fontWeight: "800" },
-  questionBlock: { marginTop: 12 },
-  questionTitle: { fontSize: 28, fontWeight: "800", lineHeight: 36, letterSpacing: -0.6 },
-  questionHint: { fontSize: 14, marginTop: 8 },
-  options: { gap: 10 },
-  textAnswer: { minHeight: 58, borderRadius: 17, borderWidth: 1, paddingHorizontal: 16, fontSize: 17, fontWeight: "700" },
-  option: { minHeight: 66, borderRadius: 17, borderWidth: 1, padding: 12, flexDirection: "row", alignItems: "center", gap: 12 },
-  optionLetter: { width: 34, height: 34, borderRadius: 11, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  optionLetterText: { fontSize: 13, fontWeight: "800" },
-  optionText: { flex: 1, fontSize: 15, fontWeight: "700" },
-  submitButton: { minHeight: 54, borderRadius: 16, alignItems: "center", justifyContent: "center", marginTop: 4 },
-  primaryButton: { minHeight: 54, borderRadius: 16, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  primaryButtonText: { fontSize: 13, fontWeight: "800" },
-  secondaryButton: { minHeight: 54, borderRadius: 16, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  secondaryButtonText: { fontSize: 13, fontWeight: "800" },
-  continueButton: { minHeight: 48, borderRadius: 14, paddingHorizontal: 15, marginTop: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  feedbackCard: { borderRadius: 20, borderWidth: 1, padding: 17, gap: 7 },
-  feedbackTitle: { fontSize: 17, fontWeight: "800" },
-  feedbackBody: { fontSize: 13, lineHeight: 19 },
-  reference: { fontSize: 12, fontWeight: "800", marginTop: 2 },
-  reportLink: { fontSize: 12, fontWeight: "700", textDecorationLine: "underline", marginTop: 10, paddingVertical: 8 },
-  pressed: { opacity: 0.78, transform: [{ scale: 0.985 }] },
-  resultContent: { paddingTop: 34, paddingBottom: 38, gap: 18 },
-  resultIcon: { width: 68, height: 68, borderRadius: 24, alignItems: "center", justifyContent: "center", alignSelf: "center" },
-  resultEyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1.7, textAlign: "center", marginTop: 8 },
-  resultTitle: { fontSize: 32, fontWeight: "800", letterSpacing: -0.8, textAlign: "center" },
-  resultSubtitle: { textAlign: "center", fontSize: 14, lineHeight: 21, marginTop: -6 },
-  scoreCard: { borderRadius: 24, borderWidth: 1, padding: 20, alignItems: "center", marginTop: 8 },
-  scoreLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
-  scoreValue: { fontSize: 54, lineHeight: 62, fontWeight: "800", marginTop: 4 },
-  resultStats: { flexDirection: "row", width: "100%", justifyContent: "space-around", marginTop: 14 },
-  resultStat: { alignItems: "center", gap: 4 },
-  resultStatValue: { fontSize: 16, fontWeight: "800" },
-  resultStatLabel: { fontSize: 11 },
-  celebrationCard: { borderRadius: 20, borderWidth: 1, padding: 18, gap: 8 },
-  celebrationEyebrow: { fontSize: 10, fontWeight: "800", letterSpacing: 1.4 },
-  celebrationTitle: { fontSize: 24, fontWeight: "800" },
-  celebrationSubtitle: { fontSize: 13, lineHeight: 19 },
-  celebrationVerse: { fontSize: 15, lineHeight: 23, fontStyle: "italic", marginTop: 4 },
-  celebrationShare: { minHeight: 44, borderRadius: 12, borderWidth: 1, alignItems: "center", justifyContent: "center", marginTop: 6 },
-  shareButton: { minHeight: 52, borderRadius: 16, borderWidth: 1.5, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  shareButtonText: { fontSize: 14, fontWeight: "800" },
-  reviewHeader: { gap: 4, marginTop: 4 },
-  reviewTitle: { fontSize: 20, fontWeight: "800" },
-  reviewSubtitle: { fontSize: 13, lineHeight: 19 },
-  reviewCard: { borderRadius: 18, borderWidth: 1, padding: 15, gap: 7 },
-  reviewTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
-  reviewNumber: { fontSize: 11, fontWeight: "800", letterSpacing: 1 },
-  reviewOutcome: { fontSize: 11, fontWeight: "800" },
-  reviewAnswer: { fontSize: 13, fontWeight: "700", lineHeight: 19 },
-  reviewExplanation: { fontSize: 13, lineHeight: 19, marginTop: 2 },
+  introWrap: { flex: 1, paddingBottom: S.xxl },
+  topRow: { flexDirection: "row", paddingTop: S.md },
+  closeBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: C.surface, borderWidth: 1, borderColor: C.hairline },
+  ruleRow: { flexDirection: "row", alignItems: "center", gap: S.md },
+  playTop: { flexDirection: "row", alignItems: "center", gap: S.md, paddingTop: S.md },
+  heartsRow: { flex: 1, flexDirection: "row", alignItems: "center", gap: 4 },
+  scoreBox: { minWidth: 56, alignItems: "flex-end" },
+  pointsFloat: { position: "absolute", right: 0, top: -4 },
+  timerTrack: { height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.07)", marginTop: S.md, overflow: "hidden" },
+  timerFill: { height: 4, borderRadius: 2 },
+  playContent: { paddingTop: S.lg, paddingBottom: S.xxl },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: S.sm, marginBottom: S.lg },
+  option: { flexDirection: "row", alignItems: "center", gap: S.md, minHeight: 60, paddingHorizontal: S.lg, paddingVertical: 12, borderRadius: R.lg, backgroundColor: C.surface, borderWidth: 1.5, borderColor: C.border },
+  optCorrect: { borderColor: C.success, backgroundColor: "rgba(52,211,153,0.12)" },
+  optWrong: { borderColor: C.error, backgroundColor: "rgba(248,113,113,0.12)" },
+  optDim: { opacity: 0.5 },
+  optPicked: { borderColor: C.gold, backgroundColor: "rgba(245,185,66,0.08)" },
+  pressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
+  letter: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.border, backgroundColor: C.bg2 },
+  tfRow: { flexDirection: "row", gap: S.md },
+  tfBtn: { flex: 1, height: 120, borderRadius: R.xl, alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: C.surface, borderWidth: 1.5, borderColor: C.border },
+  input: { height: 58, borderRadius: R.lg, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.surface, color: C.text, paddingHorizontal: S.lg, fontSize: 20, fontWeight: "700", letterSpacing: 2 },
+  explain: { marginTop: S.xl, padding: S.lg, borderRadius: R.lg, borderWidth: 1 },
+  explainHead: { flexDirection: "row", alignItems: "center", gap: S.sm },
+  refRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: S.md },
+  bottomBar: { paddingTop: S.md, paddingBottom: S.lg, borderTopWidth: 1, borderTopColor: C.hairline, minHeight: 56, justifyContent: "center" },
+  resultContent: { paddingBottom: 48, gap: S.xl },
+  scoreRow: { flexDirection: "row", alignItems: "center" },
+  statsRow: { flexDirection: "row", marginTop: S.xl, paddingTop: S.lg, borderTopWidth: 1, borderTopColor: C.hairline },
+  stat: { flex: 1, alignItems: "center", gap: 2 },
+  xpRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  badgeRow: { flexDirection: "row", alignItems: "center", gap: S.md },
+  reviewToggle: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, paddingVertical: S.sm },
+  reviewItem: { flexDirection: "row", gap: S.md, padding: S.lg, backgroundColor: C.surface, borderRadius: R.lg, borderWidth: 1, borderColor: C.hairline },
 });

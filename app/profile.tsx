@@ -1,372 +1,264 @@
-import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { useColors } from "@/hooks/use-colors";
-import { getLevelForXp, getLevelName, getXpToNextLevel } from "@/domain/progression";
-import { useProgression } from "@/lib/progression-provider";
-import { useAuth } from "@/hooks/use-auth";
+import { Button, Card, FadeIn, IconBadge, Pill, ProgressBar, SectionHeader, Stars, Txt } from "@/components/ui/kit";
+import { C, R, S } from "@/constants/design";
 import { startOAuthLogin } from "@/constants/oauth";
+import { getAllMastery, getCategory, normalizeArena } from "@/domain/arena";
+import { ACHIEVEMENT_CATALOG, getLevelProgress } from "@/domain/progression";
+import { useAuth } from "@/hooks/use-auth";
+import { feedback } from "@/lib/feedback";
+import { useProgression } from "@/lib/progression-provider";
 import { trpc } from "@/lib/trpc";
-import { buildLearningAnalytics } from "@/domain/phase8";
-import { getStreakIdentity } from "@/domain/phase7";
 
-function tapFeedback() {
-  if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-}
+const TIER_COLOR: Record<string, string> = { bronze: "#D19A66", silver: "#C8D1DC", gold: C.gold };
 
-function modeLabel(mode: string): string {
+function modeLabel(mode: string, kind?: string, category?: string): string {
+  if (kind === "survival") return "Survival";
+  if (kind === "daily" || mode === "daily_challenge") return "Daily Challenge";
+  if (kind === "category" && category) return getCategory(category)?.title ?? "Category round";
   if (mode === "bible_or_myth") return "Bible or Myth";
   if (mode === "word_puzzle") return "Word Puzzle";
-  if (mode === "daily_challenge") return "Daily Challenge";
-  return "Bible Quiz";
+  return "Quick Round";
 }
 
 export default function ProfileScreen() {
-  const colors = useColors();
-  const { state, isLoading, isAuthenticated, syncStatus } = useProgression();
+  const { state, isAuthenticated, syncStatus, setDisplayName, updateArena } = useProgression();
   const { user, logout, loginAsGuest } = useAuth();
-  const matchHistory = trpc.matches.list.useQuery(undefined, { enabled: isAuthenticated, staleTime: 30_000 });
-  const seasonProgressQuery = trpc.season.myProgress.useQuery(undefined, { enabled: isAuthenticated });
-  const claimRewardMutation = trpc.season.claimReward.useMutation({
-    onSuccess: () => {
-      tapFeedback();
-      void seasonProgressQuery.refetch();
-    },
-  });
-  const progression = state.progression;
-  const level = getLevelForXp(progression.totalXp);
-  const levelName = getLevelName(level);
-  const nextLevelXp = getXpToNextLevel(progression.totalXp);
-  const latestSession = state.sessions[0];
-  const analytics = buildLearningAnalytics(state.sessions);
-  const streakIdentity = getStreakIdentity(progression.currentStreak, true);
+  const seasonQuery = trpc.season.myProgress.useQuery(undefined, { enabled: isAuthenticated });
+  const claimReward = trpc.season.claimReward.useMutation({ onSuccess: () => { feedback.correct(); void seasonQuery.refetch(); } });
+  const [editing, setEditing] = useState(false);
+  const [nameDraft, setNameDraft] = useState(state.displayName ?? "");
+
+  const arena = normalizeArena(state.arena);
+  const level = getLevelProgress(state.progression.totalXp);
+  const mastery = useMemo(() => getAllMastery(arena), [arena]);
+  const unlockedKeys = new Set(state.achievements.map((a) => a.key));
+  const isGuestAccount = user?.loginMethod === "guest";
+  const displayName = state.displayName || (user?.name && !isGuestAccount ? user.name : "") || "Bible Arena player";
+  const initial = displayName.trim().charAt(0).toUpperCase() || "B";
+
+  const stats = [
+    { label: "Total XP", value: state.progression.totalXp.toLocaleString(), icon: "bolt.fill", color: C.gold },
+    { label: "Day streak", value: String(state.progression.currentStreak), icon: "flame.fill", color: C.flame },
+    { label: "Best streak", value: String(state.progression.bestStreak), icon: "flame.fill", color: C.flame },
+    { label: "Rounds", value: String(Math.max(arena.roundsPlayed, state.sessions.length)), icon: "play.fill", color: "#60A5FA" },
+    { label: "Best combo", value: String(arena.bestCombo), icon: "bolt.fill", color: C.violet },
+    { label: "Survival best", value: String(arena.survivalBest), icon: "heart.fill", color: C.heart },
+  ];
 
   return (
-    <ScreenContainer className="px-5" containerClassName="bg-background">
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.eyebrow, { color: colors.primary }]}>YOUR PROFILE</Text>
-        <View style={styles.profileHeader}>
-          <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-            <Text style={[styles.avatarText, { color: colors.background }]}>G</Text>
+    <ScreenContainer>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <FadeIn>
+          <View style={styles.headerRow}>
+            <Txt variant="overline" color={C.gold}>Profile</Txt>
+            <Pressable accessibilityRole="button" accessibilityLabel="Settings" onPress={() => { feedback.tap(); router.push("/settings"); }} style={styles.iconBtn}>
+              <IconSymbol name="gearshape.fill" size={20} color={C.text} />
+            </Pressable>
           </View>
           <View style={styles.identity}>
-            <Text style={[styles.name, { color: colors.foreground }]}>{user?.name ?? "Guest Player"}</Text>
-            <Text style={[styles.identityMeta, { color: colors.muted }]}>{isAuthenticated ? `${user?.email ?? "Account connected"} · ${syncStatus}` : "Local profile · sync across devices"}</Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={isAuthenticated ? "Log out" : "Edit profile"}
-            onPress={() => { tapFeedback(); if (isAuthenticated) void logout(); }}
-            style={({ pressed }) => [styles.editButton, { borderColor: colors.border }, pressed && styles.pressed]}
-          >
-            <Text style={[styles.editText, { color: colors.primary }]}>{isAuthenticated ? "Log out" : "Edit"}</Text>
-          </Pressable>
-        </View>
-
-        {!isAuthenticated && (
-          <View style={{ gap: 10, marginBottom: 16 }}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Enable Cloud Sync as Demo Guest"
-              onPress={() => void loginAsGuest()}
-              style={({ pressed }) => [
-                styles.accountCard,
-                { backgroundColor: colors.surface, borderColor: colors.primary, borderWidth: 1.5 },
-                pressed && styles.pressed,
-              ]}
-            >
-              <View style={[styles.accountIcon, { backgroundColor: colors.primary }]}>
-                <IconSymbol name="sparkles" size={20} color={colors.background} />
-              </View>
-              <View style={styles.accountCopy}>
-                <Text style={[styles.accountTitle, { color: colors.foreground }]}>Enable Cloud Sync (Demo)</Text>
-                <Text style={[styles.accountBody, { color: colors.muted }]}>
-                  Instantly connects to local database to sync XP, multiplayer rooms, and leaderboards.
-                </Text>
-              </View>
-              <IconSymbol name="chevron.right" size={18} color={colors.primary} />
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Sign in with Google"
-              onPress={() => void startOAuthLogin()}
-              style={({ pressed }) => [
-                styles.accountCard,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-                pressed && styles.pressed,
-              ]}
-            >
-              <View style={[styles.accountIcon, { backgroundColor: "#243650" }]}>
-                <IconSymbol name="person.fill" size={20} color={colors.primary} />
-              </View>
-              <View style={styles.accountCopy}>
-                <Text style={[styles.accountTitle, { color: colors.foreground }]}>Sign in with Google</Text>
-                <Text style={[styles.accountBody, { color: colors.muted }]}>
-                  Connect Google/GitHub when configured in production.
-                </Text>
-              </View>
-              <IconSymbol name="chevron.right" size={18} color={colors.primary} />
-            </Pressable>
-          </View>
-        )}
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Open Friends and Fellowship"
-          onPress={() => { tapFeedback(); router.push("/friends"); }}
-          style={({ pressed }) => [
-            styles.accountCard,
-            { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 16 },
-            pressed && styles.pressed,
-          ]}
-        >
-          <View style={[styles.accountIcon, { backgroundColor: colors.primary }]}>
-            <IconSymbol name="person.crop.circle.fill" size={20} color={colors.background} />
-          </View>
-          <View style={styles.accountCopy}>
-            <Text style={[styles.accountTitle, { color: colors.foreground }]}>Friends & Fellowship</Text>
-            <Text style={[styles.accountBody, { color: colors.muted }]}>
-              Add fellow disciples, send friend challenge duels, and view circle standings.
-            </Text>
-          </View>
-          <IconSymbol name="chevron.right" size={18} color={colors.primary} />
-        </Pressable>
-
-        <View style={[styles.levelCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
-          <View style={styles.levelTop}>
-            <View>
-              <Text style={[styles.levelLabel, { color: colors.muted }]}>LEVEL {level}</Text>
-              <Text style={[styles.levelTitle, { color: colors.foreground }]}>{levelName}</Text>
+            <View style={styles.avatar}><Txt variant="h1" color={C.ink}>{initial}</Txt><View style={styles.levelChip}><Txt variant="caption" color={C.ink} style={{ fontWeight: "800" }}>{level.level}</Txt></View></View>
+            <View style={{ flex: 1 }}>
+              {editing ? (
+                <TextInput value={nameDraft} onChangeText={setNameDraft} autoFocus maxLength={24} placeholder="Your name" placeholderTextColor={C.faint} onSubmitEditing={() => { setDisplayName(nameDraft); setEditing(false); }} onBlur={() => { setDisplayName(nameDraft); setEditing(false); }} style={styles.nameInput} />
+              ) : (
+                <Pressable accessibilityRole="button" accessibilityLabel="Edit name" onPress={() => { setNameDraft(state.displayName ?? ""); setEditing(true); }} style={styles.nameRow}>
+                  <Txt variant="h2" numberOfLines={1} style={{ flexShrink: 1 }}>{displayName}</Txt>
+                  <IconSymbol name="chevron.right" size={18} color={C.faint} />
+                </Pressable>
+              )}
+              <Txt variant="small" color={C.muted}>{level.name} · Level {level.level}</Txt>
             </View>
-            <IconSymbol name="trophy.fill" size={30} color={colors.primary} />
           </View>
-          <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
-            <View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${Math.min(100, (progression.totalXp / Math.max(1, progression.totalXp + nextLevelXp)) * 100)}%` }]} />
+          <View style={{ marginTop: S.lg, gap: 6 }}>
+            <View style={styles.between}><Txt variant="caption" color={C.muted}>{state.progression.totalXp.toLocaleString()} XP</Txt><Txt variant="caption" color={C.muted}>{level.next === null ? "Max level" : `${level.toNext.toLocaleString()} to level ${level.level + 1}`}</Txt></View>
+            <ProgressBar value={level.pct} />
           </View>
-          <Text style={[styles.progressText, { color: colors.muted }]}>
-            {isLoading ? "Loading your progress…" : nextLevelXp > 0 ? `${nextLevelXp} XP until the next level.` : "You have reached the highest configured level."}
-          </Text>
-        </View>
+        </FadeIn>
 
-        <View style={styles.statsRow}>
-          <View style={[styles.stat, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.statValue, { color: colors.foreground }]}>{progression.totalXp}</Text>
-            <Text style={[styles.statLabel, { color: colors.muted }]}>Total XP</Text>
-          </View>
-          <View style={[styles.stat, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.statValue, { color: colors.foreground }]}>{progression.currentStreak}</Text>
-            <Text style={[styles.statLabel, { color: colors.muted }]}>Day streak</Text>
-          </View>
-          <View style={[styles.stat, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.statValue, { color: colors.foreground }]}>{state.sessions.length}</Text>
-            <Text style={[styles.statLabel, { color: colors.muted }]}>Sessions</Text>
-          </View>
-        </View>
-
-        <View style={[styles.analyticsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.sectionHeader}><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Learning insights</Text><Text style={[styles.sectionCaption, { color: colors.primary }]}>Local only</Text></View>
-          <Text style={[styles.analyticsBody, { color: colors.muted }]}>{analytics.sessions ? `${analytics.questionsAnswered} questions answered at ${analytics.averageAccuracy}% average accuracy.` : "Complete a session to unlock personalized learning insights."}</Text>
-          {analytics.weakestCategory && <Text style={[styles.analyticsFocus, { color: colors.foreground }]}>Suggested focus: <Text style={{ color: colors.primary }}>{analytics.weakestCategory}</Text></Text>}
-          {analytics.strongestMode && <Text style={[styles.analyticsMeta, { color: colors.muted }]}>Strongest mode: {modeLabel(analytics.strongestMode)}</Text>}
-        </View>
-
-        <View style={[styles.analyticsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.sectionHeader}><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Your Scripture rhythm</Text><Text style={[styles.sectionCaption, { color: colors.primary }]}>{streakIdentity.title}</Text></View>
-          <Text style={[styles.analyticsBody, { color: colors.muted }]}>{streakIdentity.message}</Text>
-          <Text style={[styles.analyticsMeta, { color: colors.muted }]}>{streakIdentity.nextMilestone ? `${Math.max(0, streakIdentity.nextMilestone - progression.currentStreak)} more day${streakIdentity.nextMilestone - progression.currentStreak === 1 ? "" : "s"} to the next milestone.` : "You have reached the highest milestone. Keep returning with grace."}</Text>
-          <Text style={[styles.analyticsMeta, { color: colors.primary }]}>{streakIdentity.graceMessage}</Text>
-        </View>
-
-        {isAuthenticated && seasonProgressQuery.data && (() => {
-          const sp = seasonProgressQuery.data;
-          const tierColor = sp.tiers.find((t) => t.tier === sp.currentTier)?.color ?? "#48BB78";
-          return (
-            <>
-              <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Season Ladder</Text>
-                <Text style={[styles.sectionCaption, { color: tierColor }]}>{sp.currentTier}</Text>
-              </View>
-              <View style={[styles.levelCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={styles.levelTop}>
-                  <View>
-                    <Text style={[styles.levelLabel, { color: colors.muted }]}>{sp.season.name.toUpperCase()} · {sp.division}</Text>
-                    <Text style={[styles.levelTitle, { color: tierColor }]}>{sp.currentTier}</Text>
+        <FadeIn delay={60}>
+          <Card style={{ gap: S.md }} glow={{ from: "#17233D", to: C.surface }}>
+            {isAuthenticated && !isGuestAccount ? (
+              <>
+                <View style={styles.accountRow}>
+                  <IconBadge icon="checkmark" color={C.success} tint={C.successSoft} size={40} />
+                  <View style={{ flex: 1 }}>
+                    <Txt variant="bodyStrong">Signed in{user?.email ? ` as ${user.email}` : ""}</Txt>
+                    <Txt variant="caption" color={C.muted} style={{ fontWeight: "500" }}>Progress {syncStatus === "synced" ? "synced to the cloud" : syncStatus === "syncing" ? "syncing…" : syncStatus === "error" ? "will sync on your next round" : "saved"} · ranked on leaderboards</Txt>
                   </View>
-                  <IconSymbol name="crown.fill" size={28} color={tierColor} />
                 </View>
-                <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
-                  <View style={[styles.progressFill, { backgroundColor: tierColor, width: `${sp.progressPercent}%` as any }]} />
+                <Button label="Sign out" variant="secondary" size="md" onPress={() => void logout()} />
+              </>
+            ) : (
+              <>
+                <View style={styles.accountRow}>
+                  <IconBadge icon="shield.fill" color={C.gold} tint={C.goldSoft} size={40} />
+                  <View style={{ flex: 1 }}>
+                    <Txt variant="bodyStrong">{isGuestAccount ? "Playing as guest" : "Save your progress"}</Txt>
+                    <Txt variant="caption" color={C.muted} style={{ fontWeight: "500" }}>Sign in to keep your streak on any device and join the leaderboards.</Txt>
+                  </View>
                 </View>
-                <Text style={[styles.progressText, { color: colors.muted }]}>
-                  {sp.nextTier ? `${sp.pointsToNext} pts to ${sp.nextTier} · ${sp.points} total` : `Max tier reached · ${sp.points} pts`}
-                </Text>
-              </View>
-              <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Season Rewards</Text>
-                <Text style={[styles.sectionCaption, { color: colors.muted }]}>{sp.claimedRewardIds.length}/{sp.catalog.length} claimed</Text>
-              </View>
-              <View style={[styles.achievementList, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                {sp.catalog.map((reward) => {
-                  const eligible = (() => {
-                    const order: Record<string, number> = { Seedling: 0, Pathfinder: 1, Scribe: 2, Elder: 3 };
-                    return (order[sp.currentTier] ?? 0) >= (order[reward.requiredTier] ?? 0);
-                  })();
-                  const claimed = sp.claimedRewardIds.includes(reward.id);
-                  return (
-                    <View key={reward.id} style={styles.achievementRow}>
-                      <View style={[styles.achievementIcon, { backgroundColor: eligible ? "#3E321F" : "#1A1A2E" }]}>
-                        <IconSymbol name={reward.icon as any} size={18} color={eligible ? colors.primary : colors.muted} />
-                      </View>
-                      <View style={styles.historyCopy}>
-                        <Text style={[styles.historyTitle, { color: eligible ? colors.foreground : colors.muted }]}>{reward.name}</Text>
-                        <Text style={[styles.historyMeta, { color: colors.muted }]}>{reward.requiredTier} · {reward.description}</Text>
-                      </View>
-                      {claimed ? (
-                        <Text style={[styles.unlockedText, { color: colors.success }]}>Claimed</Text>
-                      ) : eligible ? (
-                        <Pressable
-                          onPress={() => { tapFeedback(); claimRewardMutation.mutate({ seasonId: sp.season.id, rewardId: reward.id }); }}
-                          disabled={claimRewardMutation.isPending}
-                          style={({ pressed }) => [
-                            { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 10, backgroundColor: colors.primary },
-                            pressed && styles.pressed,
-                          ]}
-                        >
-                          <Text style={{ color: colors.background, fontSize: 10, fontWeight: "800" }}>Claim</Text>
-                        </Pressable>
-                      ) : (
-                        <Text style={[styles.unlockedText, { color: colors.muted }]}>Locked</Text>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-            </>
-          );
-        })()}
+                <Button label="Continue with Google" icon="globe" variant="light" onPress={() => void startOAuthLogin()} accessibilityLabel="Sign in with Google" />
+                {!isAuthenticated ? <Button label="Play online as guest" variant="ghost" size="md" onPress={() => void loginAsGuest()} /> : <Button label="Sign out of guest" variant="ghost" size="md" onPress={() => void logout()} />}
+              </>
+            )}
+          </Card>
+        </FadeIn>
 
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent sessions</Text>
-          <Text style={[styles.sectionCaption, { color: colors.muted }]}>{progression.bestStreak} best streak</Text>
-        </View>
-        {latestSession ? (
-          <View style={[styles.historyList, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            {state.sessions.slice(0, 5).map((session) => (
-              <View key={session.id} style={styles.historyRow}>
-                <View style={[styles.historyIcon, { backgroundColor: session.mode === "bible_or_myth" ? "#1C3C38" : session.mode === "word_puzzle" ? "#3E321F" : "#243650" }]}>
-                  <IconSymbol name={session.mode === "bible_or_myth" ? "sparkles" : session.mode === "word_puzzle" ? "puzzlepiece.fill" : "book.fill"} size={18} color={session.mode === "bible_or_myth" ? colors.success : session.mode === "word_puzzle" ? colors.warning : colors.primary} />
-                </View>
-                <View style={styles.historyCopy}>
-                  <Text style={[styles.historyTitle, { color: colors.foreground }]}>{modeLabel(session.mode)}</Text>
-                  <Text style={[styles.historyMeta, { color: colors.muted }]}>{session.correctAnswers}/{session.totalQuestions} correct · {session.accuracy}% accuracy</Text>
-                </View>
-                <View style={styles.historyScore}>
-                  <Text style={[styles.historyPoints, { color: colors.foreground }]}>{session.score}</Text>
-                  <Text style={[styles.historyXp, { color: colors.primary }]}>+{session.xpEarned} XP</Text>
-                </View>
+        <FadeIn delay={100}>
+          <View style={styles.statGrid}>
+            {stats.map((s0) => (
+              <View key={s0.label} style={styles.stat}>
+                <IconSymbol name={s0.icon} size={18} color={s0.color} />
+                <Txt variant="h3" style={{ marginTop: 6 }}>{s0.value}</Txt>
+                <Txt variant="caption" color={C.muted}>{s0.label}</Txt>
               </View>
             ))}
           </View>
-        ) : (
-          <View style={[styles.emptyCard, { borderColor: colors.border }]}>
-            <View style={[styles.emptyIcon, { backgroundColor: colors.surface }]}>
-              <IconSymbol name="sparkles" size={22} color={colors.primary} />
-            </View>
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Your story starts here</Text>
-            <Text style={[styles.emptyBody, { color: colors.muted }]}>Complete a session to unlock accuracy insights, achievements, and competitive history.</Text>
-          </View>
-        )}
+        </FadeIn>
 
-        {isAuthenticated && <>
-          <View style={styles.sectionHeader}><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Live match history</Text><Text style={[styles.sectionCaption, { color: colors.muted }]}>{matchHistory.data?.length ?? 0} matches</Text></View>
-          <View style={[styles.matchList, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            {matchHistory.data?.length ? matchHistory.data.slice(0, 5).map((match) => { const isHost = match.hostUserId === user?.id; const myScore = isHost ? match.hostScore : match.guestScore; const opponentScore = isHost ? match.guestScore : match.hostScore; const result = match.winnerUserId === null ? "Draw" : match.winnerUserId === user?.id ? "Victory" : "Defeat"; return <View key={match.id} style={styles.matchRow}><View style={[styles.matchIcon, { backgroundColor: result === "Victory" ? "#1C3C38" : result === "Defeat" ? "#3B2728" : "#3E321F" }]}><IconSymbol name="bolt.fill" size={17} color={result === "Victory" ? colors.success : result === "Defeat" ? colors.error : colors.warning} /></View><View style={styles.historyCopy}><Text style={[styles.historyTitle, { color: colors.foreground }]}>{result}</Text><Text style={[styles.historyMeta, { color: colors.muted }]}>{myScore}–{opponentScore} · {match.resultReason === "timeout" ? "Timeout" : "Completed"}</Text></View><View style={styles.historyScore}><Text style={[styles.historyPoints, { color: colors.primary }]}>+{isHost ? match.hostXp : match.guestXp}</Text><Text style={[styles.historyXp, { color: colors.muted }]}>XP</Text></View></View>; }) : <Text style={[styles.achievementEmpty, { color: colors.muted }]}>Complete a private room match to see your results here.</Text>}
-          </View>
-        </>}
+        <FadeIn delay={140}>
+          <SectionHeader title="Mastery" />
+          <Card style={{ marginTop: S.md, gap: S.lg }}>
+            {mastery.map((m) => (
+              <View key={m.category.id} style={styles.masteryRow}>
+                <IconBadge icon={m.category.icon} color={m.category.color} tint={m.category.tint} size={36} />
+                <View style={{ flex: 1, gap: 6 }}>
+                  <View style={styles.between}><Txt variant="smallStrong">{m.category.title}</Txt><Stars count={m.stars} size={12} /></View>
+                  <ProgressBar value={m.pct} color={m.category.color} height={6} />
+                </View>
+                <Txt variant="caption" color={C.muted} style={{ width: 38, textAlign: "right" }}>{m.pct}%</Txt>
+              </View>
+            ))}
+          </Card>
+        </FadeIn>
 
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Achievements</Text>
-          <Text style={[styles.sectionCaption, { color: colors.muted }]}>{state.achievements.length} unlocked</Text>
-        </View>
-        <View style={[styles.achievementList, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          {state.achievements.length > 0 ? state.achievements.map((achievement) => (
-            <View key={achievement.key} style={styles.achievementRow}>
-              <View style={[styles.achievementIcon, { backgroundColor: "#3E321F" }]}>
-                <IconSymbol name={achievement.icon} size={18} color={colors.primary} />
-              </View>
-              <View style={styles.historyCopy}>
-                <Text style={[styles.historyTitle, { color: colors.foreground }]}>{achievement.name}</Text>
-                <Text style={[styles.historyMeta, { color: colors.muted }]}>{achievement.description}</Text>
-              </View>
-              <Text style={[styles.unlockedText, { color: colors.success }]}>Unlocked</Text>
+        <FadeIn delay={180}>
+          <SectionHeader title={`Badges · ${unlockedKeys.size}/${ACHIEVEMENT_CATALOG.length}`} />
+          <View style={styles.badgeGrid}>
+            {ACHIEVEMENT_CATALOG.map((badge) => {
+              const got = unlockedKeys.has(badge.key);
+              const color = got ? TIER_COLOR[badge.tier ?? "bronze"] : C.faint;
+              return (
+                <View key={badge.key} style={[styles.badge, got && { borderColor: `${color}55` }]} accessibilityLabel={`${badge.name}: ${badge.description}${got ? ", unlocked" : ", locked"}`}>
+                  <IconBadge icon={got ? badge.icon : "lock.fill"} color={color} tint={got ? `${color}22` : C.surface2} size={40} radius={20} />
+                  <Txt variant="caption" color={got ? C.text : C.muted} numberOfLines={1} style={{ marginTop: 6, textAlign: "center" }}>{badge.name}</Txt>
+                  <Txt variant="caption" color={C.faint} numberOfLines={2} style={{ textAlign: "center", fontSize: 10, lineHeight: 13, fontWeight: "500" }}>{badge.description}</Txt>
+                </View>
+              );
+            })}
+          </View>
+        </FadeIn>
+
+        {isAuthenticated && seasonQuery.data ? (() => {
+          const sp = seasonQuery.data;
+          const tierColor = sp.tiers.find((t) => t.tier === sp.currentTier)?.color ?? C.gold;
+          const order: Record<string, number> = { Seedling: 0, Pathfinder: 1, Scribe: 2, Elder: 3 };
+          return (
+            <FadeIn delay={200}>
+              <SectionHeader title="Season ladder" />
+              <Card style={{ marginTop: S.md, gap: S.md }}>
+                <View style={styles.between}>
+                  <View><Txt variant="overline" color={C.muted}>{sp.season.name} · {sp.division}</Txt><Txt variant="h3" color={tierColor}>{sp.currentTier}</Txt></View>
+                  <IconSymbol name="crown.fill" size={28} color={tierColor} />
+                </View>
+                <ProgressBar value={sp.progressPercent} color={tierColor} />
+                <Txt variant="caption" color={C.muted}>{sp.nextTier ? `${sp.pointsToNext} pts to ${sp.nextTier} · ${sp.points} total` : `Max tier · ${sp.points} pts`}</Txt>
+                {sp.catalog.map((reward) => {
+                  const eligible = (order[sp.currentTier] ?? 0) >= (order[reward.requiredTier] ?? 0);
+                  const claimed = sp.claimedRewardIds.includes(reward.id);
+                  return (
+                    <View key={reward.id} style={styles.masteryRow}>
+                      <IconBadge icon="rosette" color={eligible ? C.gold : C.faint} tint={eligible ? C.goldSoft : C.surface2} size={34} />
+                      <View style={{ flex: 1 }}><Txt variant="smallStrong" color={eligible ? C.text : C.muted}>{reward.name}</Txt><Txt variant="caption" color={C.muted} style={{ fontWeight: "500" }}>{reward.requiredTier} · {reward.description}</Txt></View>
+                      {claimed ? <Pill label="Claimed" color={C.success} bg={C.successSoft} /> : eligible ? <Button label="Claim" size="sm" onPress={() => claimReward.mutate({ seasonId: sp.season.id, rewardId: reward.id })} disabled={claimReward.isPending} /> : null}
+                    </View>
+                  );
+                })}
+              </Card>
+            </FadeIn>
+          );
+        })() : null}
+
+        <FadeIn delay={220}>
+          <SectionHeader title="Preferences" />
+          <Card padded={false} style={{ marginTop: S.md }}>
+            <View style={styles.prefRow}>
+              <IconSymbol name={arena.soundOn ? "speaker.wave.2.fill" : "speaker.slash.fill"} size={20} color={C.textDim} />
+              <Txt variant="bodyStrong" style={{ flex: 1 }}>Sound effects</Txt>
+              <Switch value={arena.soundOn} onValueChange={(v) => updateArena({ soundOn: v })} trackColor={{ true: C.gold, false: C.border }} thumbColor={C.text} accessibilityLabel="Sound effects" />
             </View>
-          )) : (
-            <Text style={[styles.achievementEmpty, { color: colors.muted }]}>Complete a session to unlock your first badge.</Text>
-          )}
-        </View>
+            <View style={[styles.prefRow, styles.divider]}>
+              <IconSymbol name="iphone.radiowaves" size={20} color={C.textDim} />
+              <Txt variant="bodyStrong" style={{ flex: 1 }}>Vibration</Txt>
+              <Switch value={arena.hapticsOn} onValueChange={(v) => updateArena({ hapticsOn: v })} trackColor={{ true: C.gold, false: C.border }} thumbColor={C.text} accessibilityLabel="Vibration" />
+            </View>
+            <View style={[styles.prefRow, styles.divider]}>
+              <IconSymbol name="target" size={20} color={C.textDim} />
+              <Txt variant="bodyStrong" style={{ flex: 1 }}>Daily goal</Txt>
+              {[150, 300, 600].map((g) => (
+                <Pressable key={g} accessibilityRole="button" accessibilityState={{ selected: arena.dailyGoalXp === g }} onPress={() => { feedback.tap(); updateArena({ dailyGoalXp: g }); }} style={[styles.goalChip, arena.dailyGoalXp === g && styles.goalChipActive]}>
+                  <Txt variant="caption" color={arena.dailyGoalXp === g ? C.ink : C.muted}>{g}</Txt>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable accessibilityRole="button" onPress={() => { feedback.tap(); router.push("/friends"); }} style={[styles.prefRow, styles.divider]}>
+              <IconSymbol name="person.2.fill" size={20} color={C.textDim} />
+              <Txt variant="bodyStrong" style={{ flex: 1 }}>Friends</Txt>
+              <IconSymbol name="chevron.right" size={20} color={C.faint} />
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => { feedback.tap(); router.push("/settings"); }} style={[styles.prefRow, styles.divider]}>
+              <IconSymbol name="gearshape.fill" size={20} color={C.textDim} />
+              <Txt variant="bodyStrong" style={{ flex: 1 }}>More settings</Txt>
+              <IconSymbol name="chevron.right" size={20} color={C.faint} />
+            </Pressable>
+          </Card>
+        </FadeIn>
+
+        {state.sessions.length ? (
+          <FadeIn delay={240}>
+            <SectionHeader title="Recent rounds" />
+            <Card padded={false} style={{ marginTop: S.md }}>
+              {state.sessions.slice(0, 6).map((session, i) => (
+                <View key={session.id} style={[styles.prefRow, i > 0 && styles.divider]}>
+                  <IconBadge icon={session.kind === "survival" ? "heart.fill" : session.mode === "daily_challenge" ? "calendar" : "bolt.fill"} color={session.kind === "survival" ? C.heart : C.gold} tint={session.kind === "survival" ? "rgba(255,93,115,0.14)" : C.goldSoft} size={36} />
+                  <View style={{ flex: 1 }}>
+                    <Txt variant="smallStrong">{modeLabel(session.mode, session.kind, session.category)}</Txt>
+                    <Txt variant="caption" color={C.muted} style={{ fontWeight: "500" }}>{session.correctAnswers}/{session.totalQuestions} correct · {new Date(session.completedAt).toLocaleDateString()}</Txt>
+                  </View>
+                  <Txt variant="smallStrong" color={C.gold}>{session.score.toLocaleString()}</Txt>
+                </View>
+              ))}
+            </Card>
+          </FadeIn>
+        ) : null}
       </ScrollView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { paddingTop: 18, paddingBottom: 36, gap: 22 },
-  eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 2.2 },
-  profileHeader: { flexDirection: "row", alignItems: "center", marginTop: -4 },
-  avatar: { width: 64, height: 64, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 25, fontWeight: "800" },
-  identity: { flex: 1, marginLeft: 13 },
-  name: { fontSize: 22, fontWeight: "800" },
-  identityMeta: { fontSize: 13, marginTop: 4 },
-  editButton: { borderRadius: 12, borderWidth: 1, paddingVertical: 9, paddingHorizontal: 12 },
-  editText: { fontSize: 12, fontWeight: "800" },
-  accountCard: { borderRadius: 20, borderWidth: 1, padding: 14, flexDirection: "row", alignItems: "center", gap: 11 },
-  accountIcon: { width: 42, height: 42, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  accountCopy: { flex: 1 },
-  accountTitle: { fontSize: 14, fontWeight: "800" },
-  accountBody: { fontSize: 11, lineHeight: 17, marginTop: 3 },
-  levelCard: { borderRadius: 22, borderWidth: 1, padding: 18 },
-  levelTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  levelLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 1.3 },
-  levelTitle: { fontSize: 20, fontWeight: "800", marginTop: 4 },
-  progressTrack: { height: 8, borderRadius: 4, overflow: "hidden", marginTop: 20 },
-  progressFill: { height: "100%", borderRadius: 4 },
-  progressText: { fontSize: 12, lineHeight: 18, marginTop: 10 },
-  statsRow: { flexDirection: "row", gap: 10 },
-  stat: { flex: 1, minHeight: 88, borderRadius: 18, borderWidth: 1, padding: 14, justifyContent: "space-between" },
-  statValue: { fontSize: 25, fontWeight: "800" },
-  statLabel: { fontSize: 11 },
-  analyticsCard: { borderRadius: 20, borderWidth: 1, padding: 16, gap: 8 },
-  analyticsBody: { fontSize: 13, lineHeight: 20 },
-  analyticsFocus: { fontSize: 13, fontWeight: "800", textTransform: "capitalize" },
-  analyticsMeta: { fontSize: 12 },
-  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
-  sectionTitle: { fontSize: 19, fontWeight: "800" },
-  sectionCaption: { fontSize: 12 },
-  historyList: { borderRadius: 21, borderWidth: 1, paddingHorizontal: 14 },
-  historyRow: { minHeight: 76, flexDirection: "row", alignItems: "center", gap: 11, borderBottomWidth: 1, borderBottomColor: "rgba(155,169,185,0.18)" },
-  historyIcon: { width: 40, height: 40, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  historyCopy: { flex: 1 },
-  historyTitle: { fontSize: 14, fontWeight: "800" },
-  historyMeta: { fontSize: 11, marginTop: 4 },
-  historyScore: { alignItems: "flex-end" },
-  historyPoints: { fontSize: 14, fontWeight: "800" },
-  historyXp: { fontSize: 11, fontWeight: "800", marginTop: 3 },
-  achievementList: { borderRadius: 21, borderWidth: 1, paddingHorizontal: 14 },
-  matchList: { borderRadius: 21, borderWidth: 1, paddingHorizontal: 14 },
-  matchRow: { minHeight: 70, flexDirection: "row", alignItems: "center", gap: 11, borderBottomWidth: 1, borderBottomColor: "rgba(155,169,185,0.18)" },
-  matchIcon: { width: 40, height: 40, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  achievementRow: { minHeight: 70, flexDirection: "row", alignItems: "center", gap: 11, borderBottomWidth: 1, borderBottomColor: "rgba(155,169,185,0.18)" },
-  achievementIcon: { width: 40, height: 40, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  unlockedText: { fontSize: 10, fontWeight: "800" },
-  achievementEmpty: { fontSize: 12, lineHeight: 18, paddingVertical: 18 },
-  emptyCard: { borderRadius: 22, borderWidth: 1, padding: 20, alignItems: "center" },
-  emptyIcon: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  emptyTitle: { fontSize: 17, fontWeight: "800", marginTop: 14 },
-  emptyBody: { fontSize: 13, lineHeight: 20, textAlign: "center", marginTop: 6, maxWidth: 290 },
-  pressed: { opacity: 0.78, transform: [{ scale: 0.98 }] },
+  content: { paddingTop: S.lg, paddingBottom: 48, gap: S.xl },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.hairline },
+  identity: { flexDirection: "row", alignItems: "center", gap: S.lg, marginTop: S.md },
+  avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: C.gold, alignItems: "center", justifyContent: "center" },
+  levelChip: { position: "absolute", right: -2, bottom: -2, minWidth: 26, height: 26, borderRadius: 13, backgroundColor: C.text, alignItems: "center", justifyContent: "center", borderWidth: 3, borderColor: C.bg, paddingHorizontal: 4 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  nameInput: { height: 44, borderRadius: R.md, borderWidth: 1.5, borderColor: C.gold, color: C.text, paddingHorizontal: S.md, fontSize: 20, fontWeight: "700", backgroundColor: C.surface },
+  between: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  accountRow: { flexDirection: "row", alignItems: "center", gap: S.md },
+  statGrid: { flexDirection: "row", flexWrap: "wrap", gap: S.md },
+  stat: { width: "30.5%", flexGrow: 1, backgroundColor: C.surface, borderRadius: R.lg, padding: S.md, borderWidth: 1, borderColor: C.hairline },
+  masteryRow: { flexDirection: "row", alignItems: "center", gap: S.md },
+  badgeGrid: { flexDirection: "row", flexWrap: "wrap", gap: S.sm, marginTop: S.md },
+  badge: { width: "31.5%", flexGrow: 1, alignItems: "center", padding: S.md, borderRadius: R.lg, backgroundColor: C.surface, borderWidth: 1, borderColor: C.hairline },
+  prefRow: { flexDirection: "row", alignItems: "center", gap: S.md, paddingHorizontal: S.lg, paddingVertical: 14 },
+  divider: { borderTopWidth: 1, borderTopColor: C.hairline },
+  goalChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: R.pill, backgroundColor: C.surface2 },
+  goalChipActive: { backgroundColor: C.gold },
 });

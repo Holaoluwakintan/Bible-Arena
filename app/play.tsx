@@ -1,174 +1,115 @@
 import { router } from "expo-router";
-import * as Haptics from "expo-haptics";
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useMemo } from "react";
+import { ScrollView, StyleSheet, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { useColors } from "@/hooks/use-colors";
-import { CONTENT_PACKS } from "@/domain/phase8";
+import { Card, FadeIn, IconBadge, Pill, ProgressBar, SectionHeader, Stars, Txt } from "@/components/ui/kit";
+import { C, R, S } from "@/constants/design";
+import { dailyDoneToday, getAllMastery, normalizeArena } from "@/domain/arena";
+import { useProgression } from "@/lib/progression-provider";
 
-const MODES = [
-  { icon: "book.fill" as const, title: "Bible Quiz", subtitle: "10 questions · timed", accent: "primary" as const, available: true },
-  { icon: "sparkles" as const, title: "Who Am I?", subtitle: "Deduce the figure from clues", accent: "warning" as const, available: true },
-  { icon: "sparkles" as const, title: "Bible or Myth", subtitle: "Spot truth from tradition", accent: "success" as const, available: true },
-  { icon: "puzzlepiece.fill" as const, title: "Word Puzzle", subtitle: "Unscramble Scripture words", accent: "warning" as const, available: true },
-  { icon: "flame.fill" as const, title: "Daily Challenge", subtitle: "A shared daily session", accent: "primary" as const, available: true },
-  { icon: "trophy.fill" as const, title: "AI Battle", subtitle: "Choose your rival's difficulty", accent: "primary" as const, available: true },
-  { icon: "person.2.fill" as const, title: "Challenge a Friend", subtitle: "Create a share code", accent: "primary" as const, available: true },
-  { icon: "bolt.fill" as const, title: "Live Multiplayer", subtitle: "Private realtime room", accent: "success" as const, available: true },
-  { icon: "chart.bar.fill" as const, title: "Leaderboards", subtitle: "Weekly and all-time rankings", accent: "primary" as const, available: true },
-];
-
-function tapFeedback() {
-  if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-}
+const MORE_MODES = [
+  { icon: "person.fill", title: "Who Am I?", subtitle: "Guess the figure from clues", color: "#A78BFA", route: "/who-am-i" },
+  { icon: "sparkles", title: "Bible or Myth", subtitle: "Is it really in the Bible?", color: "#34D399", route: "/quiz?kind=myth" },
+  { icon: "puzzlepiece.fill", title: "Word Puzzle", subtitle: "Unscramble Scripture words", color: "#60A5FA", route: "/quiz?kind=puzzle" },
+  { icon: "shield.fill", title: "AI Battle", subtitle: "Duel a rival: Novice to Scribe", color: "#FB7185", route: "/ai-battle" },
+  { icon: "person.2.fill", title: "Challenge a Friend", subtitle: "Send a code, compare scores", color: "#FBBF24", route: "/challenges" },
+  { icon: "globe", title: "Live Room", subtitle: "Real-time 1-v-1 (sign in)", color: "#2DD4BF", route: "/room" },
+] as const;
 
 export default function PlayScreen() {
-  const colors = useColors();
-
-  const handleModePress = (mode: (typeof MODES)[number]) => {
-    tapFeedback();
-    if (mode.available) {
-      if (mode.title === "Who Am I?") {
-        router.push("/who-am-i");
-        return;
-      }
-      if (mode.title === "AI Battle") {
-        router.push("/ai-battle");
-        return;
-      }
-      if (mode.title === "Challenge a Friend") {
-        router.push("/challenges");
-        return;
-      }
-      if (mode.title === "Leaderboards") {
-        router.push("/leaderboards");
-        return;
-      }
-      if (mode.title === "Live Multiplayer") {
-        router.push("/room");
-        return;
-      }
-      const modeParam = mode.title === "Bible or Myth" ? "bible_or_myth" : mode.title === "Word Puzzle" ? "word_puzzle" : mode.title === "Daily Challenge" ? "daily_challenge" : "bible_quiz";
-      router.push(modeParam === "bible_quiz" ? "/quiz" : { pathname: "/quiz", params: { mode: modeParam } });
-      return;
-    }
-    Alert.alert("Coming next", `${mode.title} is part of the Bible Arena roadmap and will plug into the shared game engine.`);
-  };
+  const { state } = useProgression();
+  const arena = normalizeArena(state.arena);
+  const mastery = useMemo(() => getAllMastery(arena), [arena]);
+  const dailyDone = dailyDoneToday(arena);
+  const play = (params: Record<string, string>) => router.push({ pathname: "/quiz", params: { ...params, r: String(Date.now()) } });
 
   return (
-    <ScreenContainer className="px-5" containerClassName="bg-background">
+    <ScreenContainer>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View>
-          <Text style={[styles.eyebrow, { color: colors.primary }]}>THE ARENA</Text>
-          <Text style={[styles.title, { color: colors.foreground }]}>Choose your challenge.</Text>
-          <Text style={[styles.subtitle, { color: colors.muted }]}>Every mode is built to help you learn, improve, and come back stronger.</Text>
-        </View>
+        <FadeIn>
+          <Txt variant="overline" color={C.gold}>The Arena</Txt>
+          <Txt variant="h1" style={{ marginTop: 4 }}>Choose your challenge</Txt>
+          <Txt variant="body" color={C.muted} style={{ marginTop: 4 }}>Combos multiply your score. Hard questions are worth double.</Txt>
+        </FadeIn>
 
-        <View style={[styles.featured, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.featuredTop}>
-            <View style={[styles.featuredIcon, { backgroundColor: colors.primary }]}>
-              <IconSymbol name="book.fill" size={24} color={colors.background} />
+        <FadeIn delay={60}>
+          <Card glow={{ from: "#3A2A0E", to: "#161722", accent: C.gold }} accent={C.goldLine} onPress={() => play({ kind: "quick" })} accessibilityLabel="Quick round">
+            <View style={styles.featureRow}>
+              <View style={{ flex: 1, gap: 6 }}>
+                <Pill label="Most played" icon="bolt.fill" color={C.ink} bg={C.gold} />
+                <Txt variant="h2" style={{ marginTop: 6 }}>Quick Round</Txt>
+                <Txt variant="small" color={C.textDim}>10 questions from every category, easy to hard, with combo multipliers up to ×3.</Txt>
+              </View>
+              <View style={styles.bigPlay}><IconSymbol name="play.fill" size={30} color={C.ink} /></View>
             </View>
-            <View style={styles.featuredCopy}>
-              <Text style={[styles.featuredLabel, { color: colors.primary }]}>START HERE</Text>
-            <Text style={[styles.featuredTitle, { color: colors.foreground }]}>Play a quick round</Text>
-            </View>
-            <Text style={[styles.duration, { color: colors.muted }]}>~5 min</Text>
+          </Card>
+        </FadeIn>
+
+        <FadeIn delay={100}>
+          <View style={styles.row}>
+            <Card style={styles.half} onPress={() => play({ kind: "survival" })} accessibilityLabel="Survival">
+              <View style={styles.hearts}>{[0, 1, 2].map((i) => <IconSymbol key={i} name="heart.fill" size={18} color={C.heart} />)}</View>
+              <Txt variant="bodyStrong" style={{ marginTop: S.md }}>Survival</Txt>
+              <Txt variant="caption" color={C.muted}>{arena.survivalBest ? `Your best: ${arena.survivalBest} correct` : "Three hearts. How far can you go?"}</Txt>
+            </Card>
+            <Card style={styles.half} onPress={dailyDone ? undefined : () => play({ kind: "daily" })} accessibilityLabel="Daily challenge" accent={dailyDone ? undefined : C.goldLine}>
+              <IconSymbol name={dailyDone ? "checkmark.circle.fill" : "calendar"} size={22} color={dailyDone ? C.success : C.gold} />
+              <Txt variant="bodyStrong" style={{ marginTop: S.md }}>Daily</Txt>
+              <Txt variant="caption" color={C.muted}>{dailyDone ? "Done. Back tomorrow" : "7 questions · +100 XP"}</Txt>
+            </Card>
           </View>
-          <Text style={[styles.featuredBody, { color: colors.muted }]}>A focused ten-question Bible Quiz session with feedback after every answer.</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Play a quick round"
-            onPress={() => handleModePress(MODES[0])}
-            style={({ pressed }) => [styles.startButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
-          >
-            <Text style={[styles.startButtonText, { color: colors.background }]}>Play a quick round</Text>
-            <IconSymbol name="chevron.right" size={18} color={colors.background} />
-          </Pressable>
-        </View>
+        </FadeIn>
 
-        <View style={styles.sectionHeading}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Focus packs</Text>
-          <Text style={[styles.sectionCaption, { color: colors.muted }]}>Learn by theme</Text>
-        </View>
-        <View style={styles.packList}>
-          {CONTENT_PACKS.map((pack) => (
-            <Pressable key={pack.id} accessibilityRole="button" accessibilityLabel={`Open ${pack.title} focus pack`} onPress={() => router.push({ pathname: "/quiz", params: { pack: pack.id } })} style={({ pressed }) => [styles.packCard, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
-              <View style={[styles.packIcon, { backgroundColor: "#203957" }]}><IconSymbol name="book.fill" size={18} color={colors.primary} /></View>
-              <View style={styles.modeCopy}><Text style={[styles.modeTitle, { color: colors.foreground }]}>{pack.title}</Text><Text style={[styles.modeSubtitle, { color: colors.muted }]}>{pack.subtitle}</Text></View>
-              <IconSymbol name="chevron.right" size={18} color={colors.muted} />
-            </Pressable>
-          ))}
-        </View>
+        <FadeIn delay={140}>
+          <SectionHeader title="Categories" />
+          <View style={styles.grid}>
+            {mastery.map((m) => (
+              <Card key={m.category.id} style={styles.catCard} onPress={() => play({ kind: "category", category: m.category.id })} accessibilityLabel={`Play ${m.category.title}`} glow={{ from: "#141E33", to: C.surface, accent: m.category.color }}>
+                <View style={styles.catTop}>
+                  <IconBadge icon={m.category.icon} color={m.category.color} tint={m.category.tint} size={42} />
+                  <Stars count={m.stars} size={13} />
+                </View>
+                <Txt variant="bodyStrong" style={{ marginTop: S.md }}>{m.category.title}</Txt>
+                <Txt variant="caption" color={C.muted} numberOfLines={2} style={{ minHeight: 32, fontWeight: "500" }}>{m.category.tagline}</Txt>
+                <ProgressBar value={m.pct} color={m.category.color} height={6} style={{ marginTop: S.md }} />
+                <Txt variant="caption" color={C.muted} style={{ marginTop: 6 }}>{m.pct}% · {m.total} questions</Txt>
+              </Card>
+            ))}
+          </View>
+        </FadeIn>
 
-        <View style={styles.sectionHeading}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>More ways to play</Text>
-          <Text style={[styles.sectionCaption, { color: colors.muted }]}>Explore after your first round</Text>
-        </View>
-
-        <View style={styles.modeList}>
-          {MODES.slice(1).map((mode) => (
-            <Pressable
-              key={mode.title}
-              accessibilityRole="button"
-              accessibilityLabel={`Open ${mode.title}`}
-              onPress={() => handleModePress(mode)}
-              style={({ pressed }) => [styles.modeCard, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}
-            >
-              <View style={[styles.modeIcon, { backgroundColor: mode.accent === "success" ? "#1C3C38" : mode.accent === "warning" ? "#3E321F" : "#203957" }]}>
-                <IconSymbol name={mode.icon} size={22} color={mode.accent === "success" ? colors.success : mode.accent === "warning" ? colors.warning : colors.primary} />
-              </View>
-              <View style={styles.modeCopy}>
-                <Text style={[styles.modeTitle, { color: colors.foreground }]}>{mode.title}</Text>
-                <Text style={[styles.modeSubtitle, { color: colors.muted }]}>{mode.subtitle}</Text>
-              </View>
-              <IconSymbol name="chevron.right" size={18} color={colors.muted} />
-            </Pressable>
-          ))}
-        </View>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Return to home"
-          onPress={() => { tapFeedback(); router.push("/"); }}
-          style={({ pressed }) => [styles.homeLink, pressed && styles.pressed]}
-        >
-          <Text style={[styles.homeLinkText, { color: colors.primary }]}>Back to home</Text>
-        </Pressable>
+        <FadeIn delay={180}>
+          <SectionHeader title="More ways to play" />
+          <Card padded={false} style={{ marginTop: S.md }}>
+            {MORE_MODES.map((mode, index) => (
+              <Card key={mode.title} padded={false} style={[styles.modeRow, index > 0 && styles.divider]} onPress={() => router.push(mode.route as never)} accessibilityLabel={mode.title}>
+                <IconBadge icon={mode.icon} color={mode.color} tint={`${mode.color}22`} size={40} />
+                <View style={{ flex: 1 }}>
+                  <Txt variant="bodyStrong">{mode.title}</Txt>
+                  <Txt variant="caption" color={C.muted} style={{ fontWeight: "500" }}>{mode.subtitle}</Txt>
+                </View>
+                <IconSymbol name="chevron.right" size={22} color={C.faint} />
+              </Card>
+            ))}
+          </Card>
+        </FadeIn>
       </ScrollView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { paddingTop: 18, paddingBottom: 36, gap: 22 },
-  eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 2.2 },
-  title: { fontSize: 30, fontWeight: "800", letterSpacing: -0.7, marginTop: 8 },
-  subtitle: { fontSize: 15, lineHeight: 22, marginTop: 8, maxWidth: 340 },
-  featured: { borderRadius: 25, borderWidth: 1, padding: 18 },
-  featuredTop: { flexDirection: "row", alignItems: "center" },
-  featuredIcon: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  featuredCopy: { flex: 1, marginLeft: 12 },
-  featuredLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
-  featuredTitle: { fontSize: 22, fontWeight: "800", marginTop: 2 },
-  duration: { fontSize: 12 },
-  featuredBody: { fontSize: 14, lineHeight: 21, marginTop: 18 },
-  startButton: { borderRadius: 15, padding: 14, marginTop: 18, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  startButtonText: { fontSize: 13, fontWeight: "800" },
-  sectionHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
-  sectionTitle: { fontSize: 19, fontWeight: "800" },
-  sectionCaption: { fontSize: 12 },
-  modeList: { gap: 10 },
-  packList: { gap: 10 },
-  packCard: { minHeight: 70, borderRadius: 19, borderWidth: 1, padding: 13, flexDirection: "row", alignItems: "center", gap: 12 },
-  packIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  modeCard: { minHeight: 78, borderRadius: 19, borderWidth: 1, padding: 13, flexDirection: "row", alignItems: "center", gap: 12 },
-  modeIcon: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  modeCopy: { flex: 1 },
-  modeTitle: { fontSize: 15, fontWeight: "800" },
-  modeSubtitle: { fontSize: 12, marginTop: 4 },
-  homeLink: { alignSelf: "center", padding: 8 },
-  homeLinkText: { fontSize: 13, fontWeight: "800" },
-  pressed: { opacity: 0.78, transform: [{ scale: 0.985 }] },
+  content: { paddingTop: S.lg, paddingBottom: 48, gap: S.xl },
+  featureRow: { flexDirection: "row", alignItems: "center", gap: S.lg },
+  bigPlay: { width: 64, height: 64, borderRadius: 32, backgroundColor: C.gold, alignItems: "center", justifyContent: "center" },
+  row: { flexDirection: "row", gap: S.md },
+  half: { flex: 1, padding: S.lg },
+  hearts: { flexDirection: "row", gap: 3 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: S.md, marginTop: S.md },
+  catCard: { width: "47.5%", flexGrow: 1, padding: S.lg, borderRadius: R.lg },
+  catTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  modeRow: { flexDirection: "row", alignItems: "center", gap: S.md, paddingHorizontal: S.lg, paddingVertical: 14, borderRadius: 0, borderWidth: 0, backgroundColor: "transparent" },
+  divider: { borderTopWidth: 1, borderTopColor: C.hairline },
 });

@@ -1,4 +1,6 @@
-export type QuestionType = "multiple_choice" | "true_false" | "unscramble" | "who_am_i";
+export type QuestionType = "multiple_choice" | "true_false" | "unscramble" | "who_am_i" | "fill_verse" | "who_said" | "order_events";
+
+import { ARENA_QUESTION_BANK } from "./question-bank";
 export type VerificationStatus = "draft" | "review" | "verified" | "rejected";
 export type QuestionCategory = "people" | "places" | "events" | "teachings" | "books";
 export type Difficulty = "easy" | "medium" | "hard";
@@ -28,6 +30,8 @@ export interface BibleQuestion {
   reference: BibleReference;
   source: string;
   status: VerificationStatus;
+  /** Human-readable reference, e.g. "Acts 27:1–28:16". */
+  referenceText?: string;
 }
 
 export function validateQuestion(question: BibleQuestion): string[] {
@@ -36,9 +40,14 @@ export function validateQuestion(question: BibleQuestion): string[] {
 
   if (!question.id.trim()) errors.push("Question id is required.");
   if (!question.prompt.trim()) errors.push("Question prompt is required.");
-  if (question.type === "multiple_choice" && question.options.length !== 4) errors.push("Multiple-choice questions require exactly four options.");
+  const fourOption = question.type === "multiple_choice" || question.type === "fill_verse" || question.type === "who_said" || question.type === "order_events";
+  if (fourOption && question.options.length !== 4) errors.push("This question type requires exactly four options.");
+  if (question.type === "order_events") {
+    const sequence = question.correctAnswer.split(">");
+    if (sequence.length !== question.options.length || new Set(sequence).size !== sequence.length || sequence.some((id) => !optionIds.has(id))) errors.push("Order questions need a complete option sequence as the answer.");
+  }
   if (question.type === "true_false" && question.options.length !== 2) errors.push("True/false questions require exactly two options.");
-  if (question.type !== "unscramble" && !optionIds.has(question.correctAnswer)) errors.push("Correct answer must match an option id.");
+  if (question.type !== "unscramble" && question.type !== "order_events" && !optionIds.has(question.correctAnswer)) errors.push("Correct answer must match an option id.");
   if (question.type === "unscramble" && !question.correctAnswer.trim()) errors.push("Unscramble questions require a canonical text answer.");
   if (!question.explanation.trim()) errors.push("Question explanation is required.");
   if (!question.reference.book.trim() || question.reference.chapter < 1) errors.push("A valid Bible reference is required.");
@@ -173,11 +182,14 @@ export function getVerifiedQuestionsForMode(mode: GameMode, count: number, shuff
   return shuffled.slice(0, count);
 }
 
+/** Every question a Bible Quiz / Daily Challenge / Arena round may draw from (legacy seed + v2 bank). */
+export const ARENA_POOL: BibleQuestion[] = [...VERIFIED_BIBLE_QUIZ_QUESTIONS, ...ARENA_QUESTION_BANK];
+
 export function getVerifiedQuestionById(mode: GameMode, id: string): BibleQuestion | undefined {
   const pool = mode === "bible_or_myth"
-    ? VERIFIED_BIBLE_OR_MYTH_QUESTIONS
+    ? [...VERIFIED_BIBLE_OR_MYTH_QUESTIONS, ...ARENA_QUESTION_BANK.filter((question) => question.type === "true_false")]
     : mode === "word_puzzle"
       ? VERIFIED_WORD_PUZZLE_QUESTIONS
-      : VERIFIED_BIBLE_QUIZ_QUESTIONS;
+      : ARENA_POOL;
   return pool.find((question) => question.id === id && isCompetitiveQuestion(question));
 }

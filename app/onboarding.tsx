@@ -1,182 +1,124 @@
-﻿import { router } from "expo-router";
+import { router } from "expo-router";
 import { useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import * as Haptics from "expo-haptics";
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { useColors } from "@/hooks/use-colors";
-import { setOnboardingCompleted } from "@/domain/local-storage";
+import { Button, Card, FadeIn, Glow, IconBadge, Txt } from "@/components/ui/kit";
+import { C, R, S } from "@/constants/design";
+import { ARENA_CATEGORIES } from "@/domain/arena";
+import { feedback } from "@/lib/feedback";
 import { useProgression } from "@/lib/progression-provider";
 
-interface OnboardingSlide {
-  title: string;
-  subtitle: string;
-  icon: "book.fill" | "flame.fill" | "bolt.fill";
-  badge: string;
-  points: string[];
-}
-
-const SLIDES: OnboardingSlide[] = [
-  {
-    badge: "LEARN & TEST",
-    title: "Master Scripture Through Play",
-    subtitle: "Engage with God's Word through 8 dynamic game modes designed for memorization, deduction, and understanding.",
-    icon: "book.fill",
-    points: [
-      "100+ verified questions with verse references",
-      "Signature 'Who Am I?' biblical deduction",
-      "Daily Challenge for your morning devotion",
-    ],
-  },
-  {
-    badge: "HABIT & REWARD",
-    title: "Ignite Your Daily Streak",
-    subtitle: "Transform Bible study into an enduring daily habit. Earn XP, maintain your streak, and earn Seasonal prestige.",
-    icon: "flame.fill",
-    points: [
-      "Daily streak flame counter & milestones",
-      "Ascend from Seedling to Scribe and Elder",
-      "Earn exclusive seasonal profile badges",
-    ],
-  },
-  {
-    badge: "COMMUNITY & ARENA",
-    title: "Fellowship & Ranked Play",
-    subtitle: "Challenge family and friends with instant share codes, or test your skills in live multiplayer rooms.",
-    icon: "bolt.fill",
-    points: [
-      "Real-time head-to-head multiplayer rooms",
-      "Asynchronous 6-character Friend Challenges",
-      "Global Weekly and All-Time Leaderboards",
-    ],
-  },
+const GOALS = [
+  { xp: 150, label: "Casual", detail: "About 5 minutes a day" },
+  { xp: 300, label: "Regular", detail: "About 10 minutes a day" },
+  { xp: 600, label: "Serious", detail: "About 20 minutes a day" },
 ];
 
-function tapFeedback() {
-  if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-}
-
-function successFeedback() {
-  if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-}
-
 export default function OnboardingScreen() {
-  const colors = useColors();
-  const { recordSession } = useProgression();
-  const [currentSlide, setCurrentSlide] = useState(0);
+  const { state, completeOnboarding, setDisplayName, updateArena } = useProgression();
+  const [step, setStep] = useState(0);
+  const [name, setName] = useState(state.displayName ?? "");
+  const [goal, setGoal] = useState(state.arena?.dailyGoalXp ?? 300);
 
-  const handleNext = () => {
-    tapFeedback();
-    if (currentSlide < SLIDES.length - 1) {
-      setCurrentSlide((prev) => prev + 1);
-    } else {
-      handleComplete();
-    }
+  const finish = (target: "play" | "home" | "profile") => {
+    feedback.levelUp();
+    if (name.trim()) setDisplayName(name);
+    updateArena({ dailyGoalXp: goal });
+    completeOnboarding();
+    if (target === "play") router.replace({ pathname: "/quiz", params: { kind: "quick", r: String(Date.now()) } });
+    else if (target === "profile") router.replace("/profile");
+    else router.replace("/");
   };
-
-  const handleComplete = async () => {
-    successFeedback();
-    await setOnboardingCompleted(true);
-
-    // Grant 100 Starter XP bonus session
-    void recordSession({
-      sessionId: `onboarding-${Date.now()}`,
-      mode: "bible_quiz",
-      score: 100,
-      totalQuestions: 1,
-      correctAnswers: 1,
-      accuracy: 100,
-      xpEarned: 100,
-      completedAt: Date.now(),
-    });
-
-    router.replace("/play");
-  };
-
-  const slide = SLIDES[currentSlide];
 
   return (
-    <ScreenContainer className="px-6" containerClassName="bg-background">
-      <View style={styles.container}>
-        {/* Header with Skip button */}
-        <View style={styles.topBar}>
-          <Text style={[styles.stepIndicator, { color: colors.muted }]}>
-            Step {currentSlide + 1} of {SLIDES.length}
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Skip onboarding"
-            onPress={handleComplete}
-            style={({ pressed }) => [styles.skipButton, pressed && styles.pressed]}
-          >
-            <Text style={[styles.skipText, { color: colors.muted }]}>Skip</Text>
-          </Pressable>
+    <ScreenContainer>
+      <View style={styles.wrap}>
+        <View style={styles.top}>
+          <View style={styles.dots}>
+            {[0, 1, 2].map((i) => <View key={i} style={[styles.dot, i === step && styles.dotActive, i < step && { backgroundColor: C.goldDeep }]} />)}
+          </View>
+          {step < 2 ? (
+            <Pressable accessibilityRole="button" onPress={() => finish("home")} hitSlop={10}><Txt variant="smallStrong" color={C.muted}>Skip</Txt></Pressable>
+          ) : <View />}
         </View>
 
-        {/* Slide Content */}
-        <ScrollView contentContainerStyle={styles.slideContent} showsVerticalScrollIndicator={false}>
-          {/* Big Hero Icon Card */}
-          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.iconCircle, { backgroundColor: currentSlide === 1 ? colors.warning : currentSlide === 2 ? colors.success : colors.primary }]}>
-              <IconSymbol name={slide.icon} size={44} color={colors.background} />
-            </View>
-            <View style={[styles.badgePill, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <Text style={[styles.badgeText, { color: colors.primary }]}>{slide.badge}</Text>
-            </View>
-          </View>
-
-          {/* Text Info */}
-          <Text style={[styles.slideTitle, { color: colors.foreground }]}>{slide.title}</Text>
-          <Text style={[styles.slideSubtitle, { color: colors.muted }]}>{slide.subtitle}</Text>
-
-          {/* Bullet points */}
-          <View style={styles.pointsList}>
-            {slide.points.map((point) => (
-              <View key={point} style={[styles.pointItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={[styles.checkCircle, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.checkMark}>✓</Text>
-                </View>
-                <Text style={[styles.pointText, { color: colors.foreground }]}>{point}</Text>
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {step === 0 ? (
+            <FadeIn key="s0" style={{ alignItems: "center" }}>
+              <View style={styles.logoWrap}>
+                <Glow from="#3A2A0E" to="#0E1526" accent={C.gold} radius={56} />
+                <IconSymbol name="book.fill" size={58} color={C.gold} />
               </View>
-            ))}
-          </View>
+              <Txt variant="overline" color={C.gold} style={{ marginTop: S.xxl }}>Welcome to</Txt>
+              <Txt variant="display" style={{ fontSize: 40, lineHeight: 46, marginTop: 4 }}>Bible Arena</Txt>
+              <Txt variant="h3" color={C.textDim} style={{ textAlign: "center", marginTop: S.md, fontWeight: "600" }}>Know the Word.{"\n"}Challenge the World.</Txt>
+              <View style={styles.catStrip}>
+                {ARENA_CATEGORIES.map((c) => <IconBadge key={c.id} icon={c.icon} color={c.color} tint={c.tint} size={46} radius={16} />)}
+              </View>
+              <Txt variant="body" color={C.muted} style={{ textAlign: "center", marginTop: S.lg, maxWidth: 320 }}>Over 300 questions across five categories, each with its verse and a short explanation. Learn something every round.</Txt>
+            </FadeIn>
+          ) : null}
+
+          {step === 1 ? (
+            <FadeIn key="s1">
+              <Txt variant="h1">Let’s set you up</Txt>
+              <Txt variant="body" color={C.muted} style={{ marginTop: 6 }}>Takes ten seconds. You can change these later.</Txt>
+              <Txt variant="overline" color={C.muted} style={{ marginTop: S.xxl }}>Your name</Txt>
+              <TextInput value={name} onChangeText={setName} placeholder="What should we call you?" placeholderTextColor={C.faint} maxLength={24} style={styles.input} accessibilityLabel="Your name" />
+              <Txt variant="overline" color={C.muted} style={{ marginTop: S.xxl }}>Daily goal</Txt>
+              <View style={{ gap: S.md, marginTop: S.md }}>
+                {GOALS.map((g) => {
+                  const active = g.xp === goal;
+                  return (
+                    <Pressable key={g.xp} accessibilityRole="radio" accessibilityState={{ selected: active }} onPress={() => { feedback.tap(); setGoal(g.xp); }} style={[styles.goal, active && styles.goalActive]}>
+                      <View style={[styles.radio, active && { borderColor: C.gold }]}>{active ? <View style={styles.radioDot} /> : null}</View>
+                      <View style={{ flex: 1 }}>
+                        <Txt variant="bodyStrong">{g.label}</Txt>
+                        <Txt variant="caption" color={C.muted} style={{ fontWeight: "500" }}>{g.detail}</Txt>
+                      </View>
+                      <Txt variant="smallStrong" color={active ? C.gold : C.muted}>{g.xp} XP</Txt>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </FadeIn>
+          ) : null}
+
+          {step === 2 ? (
+            <FadeIn key="s2">
+              <Txt variant="h1">How you grow</Txt>
+              <Txt variant="body" color={C.muted} style={{ marginTop: 6 }}>Short rounds, real learning, a reason to come back.</Txt>
+              <View style={{ gap: S.md, marginTop: S.xxl }}>
+                {[
+                  { icon: "flame.fill", color: C.flame, title: "Daily streak", text: "Play once a day to keep the flame burning." },
+                  { icon: "bolt.fill", color: C.gold, title: "Combos", text: "3 right in a row is ×2 points. 6 in a row is ×3." },
+                  { icon: "book.fill", color: "#60A5FA", title: "Learn every answer", text: "Each question shows the verse and a one-line explanation." },
+                  { icon: "trophy.fill", color: C.violet, title: "Levels & badges", text: "30 levels, 24 badges, plus weekly rankings when you sign in." },
+                ].map((item) => (
+                  <Card key={item.title} style={styles.howRow}>
+                    <IconBadge icon={item.icon} color={item.color} tint={`${item.color}22`} size={44} />
+                    <View style={{ flex: 1 }}>
+                      <Txt variant="bodyStrong">{item.title}</Txt>
+                      <Txt variant="small" color={C.muted}>{item.text}</Txt>
+                    </View>
+                  </Card>
+                ))}
+              </View>
+            </FadeIn>
+          ) : null}
         </ScrollView>
 
-        {/* Bottom Navigation */}
-        <View style={styles.bottomNav}>
-          {/* Dot indicators */}
-          <View style={styles.dots}>
-            {SLIDES.map((_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.dot,
-                  {
-                    backgroundColor: index === currentSlide ? colors.primary : colors.border,
-                    width: index === currentSlide ? 28 : 8,
-                  },
-                ]}
-              />
-            ))}
-          </View>
-
-          {/* Primary Action Button */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={currentSlide === SLIDES.length - 1 ? "Enter Arena with 100 XP" : "Continue to next step"}
-            onPress={handleNext}
-            style={({ pressed }) => [
-              styles.actionButton,
-              { backgroundColor: colors.primary },
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={[styles.actionButtonText, { color: colors.background }]}>
-              {currentSlide === SLIDES.length - 1 ? "Enter Arena (+100 XP Bonus)" : "Continue"}
-            </Text>
-            <IconSymbol name="chevron.right" size={18} color={colors.background} />
-          </Pressable>
+        <View style={{ gap: S.md }}>
+          {step < 2 ? (
+            <Button label={step === 0 ? "Get started" : "Continue"} iconRight="arrow.right" onPress={() => setStep((s) => s + 1)} />
+          ) : (
+            <>
+              <Button label="Play my first round" icon="play.fill" onPress={() => finish("play")} />
+              <Button label="I have an account · Sign in" variant="ghost" onPress={() => finish("profile")} />
+            </>
+          )}
         </View>
       </View>
     </ScreenContainer>
@@ -184,27 +126,18 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "space-between", paddingTop: 12, paddingBottom: 24 },
-  topBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  stepIndicator: { fontSize: 13, fontWeight: "700" },
-  skipButton: { paddingHorizontal: 12, paddingVertical: 6 },
-  skipText: { fontSize: 13, fontWeight: "600" },
-  slideContent: { alignItems: "center", paddingBottom: 24 },
-  heroCard: { width: "100%", borderRadius: 28, borderWidth: 1, paddingVertical: 36, alignItems: "center", justifyContent: "center", gap: 14, marginBottom: 24 },
-  iconCircle: { width: 88, height: 88, borderRadius: 28, alignItems: "center", justifyContent: "center" },
-  badgePill: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, borderWidth: 1 },
-  badgeText: { fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
-  slideTitle: { fontSize: 26, fontWeight: "800", textAlign: "center", letterSpacing: -0.5, marginBottom: 10 },
-  slideSubtitle: { fontSize: 14, lineHeight: 22, textAlign: "center", marginBottom: 24, paddingHorizontal: 12 },
-  pointsList: { width: "100%", gap: 10 },
-  pointItem: { flexDirection: "row", alignItems: "center", padding: 14, borderRadius: 16, borderWidth: 1, gap: 12 },
-  checkCircle: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
-  checkMark: { color: "#000", fontSize: 13, fontWeight: "900" },
-  pointText: { flex: 1, fontSize: 13, fontWeight: "600", lineHeight: 18 },
-  bottomNav: { gap: 18, paddingTop: 12 },
-  dots: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 },
-  dot: { height: 8, borderRadius: 4 },
-  actionButton: { borderRadius: 16, paddingVertical: 16, paddingHorizontal: 24, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  actionButtonText: { fontSize: 15, fontWeight: "800" },
-  pressed: { opacity: 0.82, transform: [{ scale: 0.985 }] },
+  wrap: { flex: 1, paddingBottom: S.xl },
+  top: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: S.lg },
+  dots: { flexDirection: "row", gap: 6 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.border },
+  dotActive: { width: 24, backgroundColor: C.gold },
+  body: { flexGrow: 1, justifyContent: "center", paddingVertical: S.xl },
+  logoWrap: { width: 112, height: 112, borderRadius: 56, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.goldLine, overflow: "hidden" },
+  catStrip: { flexDirection: "row", gap: S.sm, marginTop: S.xxl },
+  input: { height: 56, borderRadius: R.lg, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.surface, color: C.text, paddingHorizontal: S.lg, fontSize: 17, fontWeight: "600", marginTop: S.md },
+  goal: { flexDirection: "row", alignItems: "center", gap: S.md, padding: S.lg, borderRadius: R.lg, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.surface },
+  goalActive: { borderColor: C.gold, backgroundColor: "rgba(245,185,66,0.07)" },
+  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: C.faint, alignItems: "center", justifyContent: "center" },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: C.gold },
+  howRow: { flexDirection: "row", alignItems: "center", gap: S.md, padding: S.lg },
 });

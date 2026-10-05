@@ -1,184 +1,211 @@
 import { router } from "expo-router";
-import * as Haptics from "expo-haptics";
-import { useEffect, useState } from "react";
-import { ScrollView, Pressable, StyleSheet, Text, View, Platform } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { useColors } from "@/hooks/use-colors";
-import { loadProgressState } from "@/domain/local-storage";
-import type { LocalProgressState } from "@/domain/local-storage";
-import { getDailyHabitSnapshot, getAdaptiveDifficulty } from "@/domain/phase8";
-import { getLevelForXp } from "@/domain/progression";
+import { Button, Card, FadeIn, IconBadge, Pill, ProgressBar, Ring, SectionHeader, Stars, Txt } from "@/components/ui/kit";
+import { C, R, S } from "@/constants/design";
+import { ACHIEVEMENT_CATALOG, getLevelProgress } from "@/domain/progression";
+import { dailyDoneToday, getAllMastery, msUntilTomorrow, normalizeArena, suggestNextCategory, verseOfTheDay, xpToday } from "@/domain/arena";
+import { useAuth } from "@/hooks/use-auth";
+import { useProgression } from "@/lib/progression-provider";
+import { feedback } from "@/lib/feedback";
 
-function tapFeedback() {
-  if (Platform.OS !== "web") {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }
+function greeting(): string {
+  const hour = new Date().getHours();
+  return hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+}
+
+function formatCountdown(ms: number): string {
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
 export default function HomeScreen() {
-  const colors = useColors();
-  const [onboardingNeeded, setOnboardingNeeded] = useState(false);
-  const [progress, setProgress] = useState<LocalProgressState | null>(null);
+  const { state, isLoading } = useProgression();
+  const { user } = useAuth();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(t); }, []);
 
   useEffect(() => {
-    void loadProgressState().then((state) => {
-      setProgress(state);
-      if (!state.hasCompletedOnboarding) {
-        setOnboardingNeeded(true);
-      }
-    });
-  }, []);
+    if (!isLoading && !state.hasCompletedOnboarding) router.replace("/onboarding");
+  }, [isLoading, state.hasCompletedOnboarding]);
+
+  const arena = normalizeArena(state.arena);
+  const level = getLevelProgress(state.progression.totalXp);
+  const today = xpToday(arena, now);
+  const goalPct = Math.min(100, Math.round((today / arena.dailyGoalXp) * 100));
+  const dailyDone = dailyDoneToday(arena, now);
+  const next = suggestNextCategory(arena);
+  const mastery = useMemo(() => getAllMastery(arena), [arena]);
+  const nextMastery = mastery.find((m) => m.category.id === next.id)!;
+  const verse = verseOfTheDay(now);
+  const streak = state.progression.currentStreak;
+  const name = state.displayName || (user?.name && !/^guest/i.test(user.name) ? user.name.split(" ")[0] : "") || "friend";
+  const unlocked = new Set(state.achievements.map((a) => a.key));
+  const inReach = ACHIEVEMENT_CATALOG.filter((a) => !unlocked.has(a.key)).slice(0, 3);
+
+  const play = (params: Record<string, string>) => { router.push({ pathname: "/quiz", params: { ...params, r: String(Date.now()) } }); };
 
   return (
-    <ScreenContainer className="px-5" containerClassName="bg-background">
+    <ScreenContainer>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={[styles.eyebrow, { color: colors.primary }]}>BIBLE ARENA</Text>
-            <Text style={[styles.greeting, { color: colors.foreground }]}>Welcome to Bible Arena</Text>
-            <Text style={[styles.subtle, { color: colors.muted }]}>Local progress · ready to grow</Text>
-          </View>
-          <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-            <Text style={[styles.avatarText, { color: colors.background }]}>G</Text>
-          </View>
-        </View>
-
-        {onboardingNeeded && (
-          <View style={[styles.onboardingBanner, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
-            <View style={[styles.onboardingBadge, { backgroundColor: colors.primary }]}>
-              <IconSymbol name="sparkles" size={16} color={colors.background} />
+        <FadeIn>
+          <View style={styles.header}>
+            <View style={{ flex: 1 }}>
+              <Txt variant="small" color={C.muted}>{greeting()},</Txt>
+              <Txt variant="h1" numberOfLines={1} style={{ textTransform: "capitalize" }}>{name}</Txt>
             </View>
-            <View style={styles.onboardingCopy}>
-              <Text style={[styles.onboardingTitle, { color: colors.foreground }]}>New to the Arena?</Text>
-              <Text style={[styles.onboardingSubtitle, { color: colors.muted }]}>Take the 60s interactive tour & claim +100 Starter XP!</Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Start onboarding tour"
-              onPress={() => { tapFeedback(); router.push("/onboarding"); }}
-              style={({ pressed }) => [styles.onboardingBtn, { backgroundColor: colors.primary }, pressed && styles.pressed]}
-            >
-              <Text style={[styles.onboardingBtnText, { color: colors.background }]}>Start</Text>
-              <IconSymbol name="chevron.right" size={14} color={colors.background} />
+            <Pressable accessibilityRole="button" accessibilityLabel={`${streak} day streak`} onPress={() => { feedback.tap(); router.push("/profile"); }} style={styles.streakChip}>
+              <IconSymbol name="flame.fill" size={20} color={streak > 0 ? C.flame : C.faint} />
+              <Txt variant="bodyStrong" color={streak > 0 ? C.text : C.muted}>{streak}</Txt>
             </Pressable>
           </View>
-        )}
+        </FadeIn>
 
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroCopy}>
-            <View style={styles.kickerRow}>
-              <IconSymbol name="sparkles" size={16} color={colors.primary} />
-            <Text style={[styles.kicker, { color: colors.primary }]}>START HERE</Text>
+        <FadeIn delay={60}>
+          <Card glow={{ from: "#17233D", to: "#101827", accent: C.gold }} style={styles.todayCard}>
+            <View style={styles.todayRow}>
+              <Ring value={goalPct} size={92} stroke={9} color={goalPct >= 100 ? C.success : C.gold}>
+                <Txt variant="h3" style={{ lineHeight: 22 }}>{today}</Txt>
+                <Txt variant="caption" color={C.muted} style={{ fontSize: 10 }}>/ {arena.dailyGoalXp} XP</Txt>
+              </Ring>
+              <View style={{ flex: 1, gap: 6 }}>
+                <Txt variant="overline" color={C.gold}>Today’s goal</Txt>
+                <Txt variant="h3">{goalPct >= 100 ? "Goal reached. Well done!" : streak > 0 ? `Keep your ${streak}-day streak alive` : "Start your streak today"}</Txt>
+                <Txt variant="small" color={C.muted}>{goalPct >= 100 ? "Every extra round sharpens you." : `${Math.max(0, arena.dailyGoalXp - today)} XP to go · about one round`}</Txt>
+              </View>
             </View>
-            <Text style={[styles.heroTitle, { color: colors.foreground }]}>Play a quick round.</Text>
-            <Text style={[styles.heroBody, { color: colors.muted }]}>Ten timed Bible questions with an explanation and Scripture reference after every answer.</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Play a quick round"
-              onPress={() => { tapFeedback(); router.push("/quiz"); }}
-              style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
-            >
-              <Text style={[styles.primaryButtonText, { color: colors.background }]}>Play a quick round</Text>
-              <IconSymbol name="chevron.right" size={18} color={colors.background} />
-            </Pressable>
-          </View>
-          <View style={[styles.heroMark, { borderColor: colors.primary }]}>
-            <IconSymbol name="book.fill" size={38} color={colors.primary} />
-          </View>
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Today at a glance</Text>
-          <Text style={[styles.sectionCaption, { color: colors.muted }]}>Build your rhythm</Text>
-        </View>
-        <View style={styles.statGrid}>
-          {[
-            { icon: "flame.fill" as const, label: "Streak", value: progress ? `${getDailyHabitSnapshot(progress.sessions).streak} days` : "Loading…" },
-            { icon: "trophy.fill" as const, label: "Level", value: progress ? `Level ${getLevelForXp(progress.progression.totalXp)}` : "Loading…" },
-            { icon: "chart.bar.fill" as const, label: "Accuracy", value: progress?.sessions.length ? `${Math.round(progress.sessions.reduce((sum, session) => sum + session.accuracy, 0) / progress.sessions.length)}%` : "No sessions" },
-          ].map((stat) => (
-            <View key={stat.label} style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <IconSymbol name={stat.icon} size={20} color={colors.primary} />
-              <Text style={[styles.statLabel, { color: colors.muted }]}>{stat.label}</Text>
-              <Text style={[styles.statValue, { color: colors.foreground }]}>{stat.value}</Text>
+            <View style={styles.levelRow}>
+              <View style={styles.levelBadge}><Txt variant="smallStrong" color={C.ink}>{level.level}</Txt></View>
+              <View style={{ flex: 1, gap: 6 }}>
+                <View style={styles.levelText}>
+                  <Txt variant="smallStrong">{level.name}</Txt>
+                  <Txt variant="caption" color={C.muted}>{level.next === null ? "Max level" : `${level.toNext.toLocaleString()} XP to level ${level.level + 1}`}</Txt>
+                </View>
+                <ProgressBar value={level.pct} height={7} />
+              </View>
             </View>
-          ))}
-        </View>
+          </Card>
+        </FadeIn>
 
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Keep learning</Text>
-          <Text style={[styles.sectionCaption, { color: colors.muted }]}>Choose your pace</Text>
-        </View>
-        <View style={[styles.challengeCard, { backgroundColor: colors.primary }]}>
-          <View style={styles.challengeIcon}>
-            <IconSymbol name="sparkles" size={22} color={colors.primary} />
-          </View>
-          <View style={styles.challengeCopy}>
-            <Text style={[styles.challengeTitle, { color: colors.background }]}>{progress && getDailyHabitSnapshot(progress.sessions).completedToday ? "Daily session complete" : "Daily Scripture habit"}</Text>
-            <Text style={[styles.challengeBody, { color: colors.background }]}>{progress ? `${getDailyHabitSnapshot(progress.sessions).streak}-day rhythm · ${getAdaptiveDifficulty(progress.sessions)} level today` : "One focused session. A stronger streak."}</Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open daily challenge"
-            onPress={() => { tapFeedback(); router.push({ pathname: "/quiz", params: { mode: "daily_challenge" } }); }}
-            style={({ pressed }) => [styles.roundButton, { backgroundColor: colors.background }, pressed && styles.pressed]}
-          >
-            <IconSymbol name="chevron.right" size={18} color={colors.primary} />
-          </Pressable>
-        </View>
+        <FadeIn delay={120}>
+          <Card glow={{ from: dailyDone ? "#123227" : "#3A2A0E", to: dailyDone ? "#0F1D1A" : "#1A1710", accent: dailyDone ? C.success : C.gold }} accent={dailyDone ? "rgba(52,211,153,0.3)" : C.goldLine} onPress={dailyDone ? undefined : () => play({ kind: "daily" })} accessibilityLabel="Play the Daily Challenge">
+            <View style={styles.dailyTop}>
+              <IconBadge icon={dailyDone ? "checkmark" : "calendar"} color={dailyDone ? C.success : C.gold} tint={dailyDone ? C.successSoft : C.goldSoft} />
+              <View style={{ flex: 1 }}>
+                <Txt variant="overline" color={dailyDone ? C.success : C.gold}>Daily Challenge</Txt>
+                <Txt variant="h3">{dailyDone ? `Done · ${arena.daily?.correct}/${arena.daily?.total} correct` : "7 questions, one shot"}</Txt>
+              </View>
+              {!dailyDone ? <Pill label="+100 XP" icon="bolt.fill" color={C.ink} bg={C.gold} /> : null}
+            </View>
+            <Txt variant="small" color={C.textDim} style={{ marginTop: S.md }}>
+              {dailyDone ? `A fresh challenge unlocks in ${formatCountdown(msUntilTomorrow(now))}. Everyone gets the same questions.` : "Every category, easy to hard. Same questions for everyone today, so compare with friends."}
+            </Txt>
+            {!dailyDone ? <Button label="Start today’s challenge" iconRight="arrow.right" onPress={() => play({ kind: "daily" })} style={{ marginTop: S.lg }} /> : null}
+          </Card>
+        </FadeIn>
 
-        <View style={[styles.quoteCard, { borderColor: colors.border }]}>
-          <Text style={[styles.quoteMark, { color: colors.primary }]}>“</Text>
-          <Text style={[styles.quoteText, { color: colors.foreground }]}>Learn the Bible. Test yourself. Become better.</Text>
-          <Text style={[styles.quoteCaption, { color: colors.muted }]}>The Bible Arena promise</Text>
-        </View>
+        <FadeIn delay={180}>
+          <SectionHeader title="Up next for you" />
+          <Card onPress={() => play({ kind: "category", category: next.id })} accessibilityLabel={`Play ${next.title}`} style={{ marginTop: S.md }} glow={{ from: "#141F35", to: C.surface, accent: next.color }}>
+            <View style={styles.nextRow}>
+              <IconBadge icon={next.icon} color={next.color} tint={next.tint} size={54} />
+              <View style={{ flex: 1, gap: 4 }}>
+                <Txt variant="h3">{next.title}</Txt>
+                <Txt variant="small" color={C.muted} numberOfLines={1}>{next.tagline}</Txt>
+                <View style={styles.inline}>
+                  <Stars count={nextMastery.stars} />
+                  <Txt variant="caption" color={C.muted}>{nextMastery.pct}% mastered</Txt>
+                </View>
+              </View>
+              <View style={[styles.playDot, { backgroundColor: next.color }]}>
+                <IconSymbol name="play.fill" size={22} color={C.ink} />
+              </View>
+            </View>
+          </Card>
+        </FadeIn>
+
+        <FadeIn delay={220}>
+          <View style={styles.quickRow}>
+            <Card style={styles.quickCard} onPress={() => play({ kind: "quick" })} accessibilityLabel="Quick round">
+              <IconBadge icon="bolt.fill" color={C.gold} tint={C.goldSoft} size={40} />
+              <Txt variant="bodyStrong" style={{ marginTop: S.md }}>Quick Round</Txt>
+              <Txt variant="caption" color={C.muted}>10 mixed · combos</Txt>
+            </Card>
+            <Card style={styles.quickCard} onPress={() => play({ kind: "survival" })} accessibilityLabel="Survival mode">
+              <IconBadge icon="heart.fill" color={C.heart} tint="rgba(255,93,115,0.14)" size={40} />
+              <Txt variant="bodyStrong" style={{ marginTop: S.md }}>Survival</Txt>
+              <Txt variant="caption" color={C.muted}>{arena.survivalBest ? `Best: ${arena.survivalBest}` : "3 hearts · go far"}</Txt>
+            </Card>
+          </View>
+        </FadeIn>
+
+        <FadeIn delay={260}>
+          <SectionHeader title="Your categories" action="See all" onAction={() => router.push("/play")} />
+          <Card style={{ marginTop: S.md, gap: S.lg }}>
+            {mastery.map((m) => (
+              <Pressable key={m.category.id} accessibilityRole="button" accessibilityLabel={`Play ${m.category.title}`} onPress={() => { feedback.tap(); play({ kind: "category", category: m.category.id }); }} style={styles.catRow}>
+                <IconBadge icon={m.category.icon} color={m.category.color} tint={m.category.tint} size={36} />
+                <View style={{ flex: 1, gap: 6 }}>
+                  <View style={styles.levelText}>
+                    <Txt variant="smallStrong">{m.category.title}</Txt>
+                    <Txt variant="caption" color={C.muted}>{m.mastered}/{m.total}</Txt>
+                  </View>
+                  <ProgressBar value={m.pct} color={m.category.color} height={6} />
+                </View>
+              </Pressable>
+            ))}
+          </Card>
+        </FadeIn>
+
+        {inReach.length ? (
+          <FadeIn delay={300}>
+            <SectionHeader title="Badges within reach" action="All badges" onAction={() => router.push("/profile")} />
+            <View style={styles.badgeRow}>
+              {inReach.map((badge) => (
+                <View key={badge.key} style={styles.badge}>
+                  <IconBadge icon={badge.icon} color={C.muted} tint={C.surface2} size={44} radius={22} />
+                  <Txt variant="caption" style={{ textAlign: "center", marginTop: 8 }} numberOfLines={1}>{badge.name}</Txt>
+                  <Txt variant="caption" color={C.muted} style={{ textAlign: "center", fontSize: 11, fontWeight: "500" }} numberOfLines={2}>{badge.description}</Txt>
+                </View>
+              ))}
+            </View>
+          </FadeIn>
+        ) : null}
+
+        <FadeIn delay={340}>
+          <Card style={styles.verse}>
+            <IconSymbol name="quote" size={26} color={C.gold} />
+            <Txt variant="h3" style={{ fontWeight: "600", lineHeight: 26, marginTop: S.sm }}>{verse.text}</Txt>
+            <Txt variant="smallStrong" color={C.gold} style={{ marginTop: S.md }}>{verse.ref} · KJV</Txt>
+          </Card>
+        </FadeIn>
+        <Txt variant="caption" color={C.faint} style={{ textAlign: "center", marginTop: S.sm }}>Know the Word. Challenge the World.</Txt>
       </ScrollView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { paddingTop: 18, paddingBottom: 36, gap: 22 },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 2.2 },
-  greeting: { fontSize: 30, fontWeight: "800", letterSpacing: -0.7, marginTop: 6 },
-  subtle: { fontSize: 14, marginTop: 4 },
-  avatar: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 18, fontWeight: "800" },
-  heroCard: { borderRadius: 28, borderWidth: 1, padding: 22, flexDirection: "row", minHeight: 238, overflow: "hidden" },
-  heroCopy: { flex: 1, paddingRight: 12 },
-  kickerRow: { flexDirection: "row", alignItems: "center", gap: 7 },
-  kicker: { fontSize: 11, fontWeight: "800", letterSpacing: 1.4 },
-  heroTitle: { fontSize: 31, fontWeight: "800", letterSpacing: -0.8, marginTop: 18 },
-  heroBody: { fontSize: 15, lineHeight: 22, marginTop: 8, maxWidth: 225 },
-  heroMark: { width: 74, height: 74, borderRadius: 37, borderWidth: 1, alignItems: "center", justifyContent: "center", marginTop: 10 },
-  primaryButton: { borderRadius: 15, paddingVertical: 14, paddingHorizontal: 15, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 24, maxWidth: 205 },
-  primaryButtonText: { fontSize: 13, fontWeight: "800" },
-  pressed: { opacity: 0.82, transform: [{ scale: 0.98 }] },
-  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
-  sectionTitle: { fontSize: 19, fontWeight: "800" },
-  sectionCaption: { fontSize: 12 },
-  statGrid: { flexDirection: "row", gap: 10 },
-  statCard: { flex: 1, minHeight: 112, borderRadius: 18, borderWidth: 1, padding: 14, justifyContent: "space-between" },
-  statLabel: { fontSize: 11, fontWeight: "600", marginTop: 10 },
-  statValue: { fontSize: 13, fontWeight: "800", lineHeight: 17 },
-  challengeCard: { borderRadius: 22, padding: 16, flexDirection: "row", alignItems: "center", gap: 13 },
-  challengeIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: "#FFF6E6", alignItems: "center", justifyContent: "center" },
-  challengeCopy: { flex: 1 },
-  challengeTitle: { fontSize: 16, fontWeight: "800" },
-  challengeBody: { fontSize: 12, lineHeight: 17, marginTop: 3, opacity: 0.82 },
-  roundButton: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
-  quoteCard: { borderRadius: 22, borderWidth: 1, padding: 18 },
-  quoteMark: { fontSize: 38, lineHeight: 30, fontWeight: "800" },
-  quoteText: { fontSize: 17, fontWeight: "700", lineHeight: 24, marginTop: 4 },
-  quoteCaption: { fontSize: 12, marginTop: 10 },
-  onboardingBanner: { borderRadius: 20, borderWidth: 1.5, padding: 14, flexDirection: "row", alignItems: "center", gap: 12 },
-  onboardingBadge: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  onboardingCopy: { flex: 1 },
-  onboardingTitle: { fontSize: 14, fontWeight: "800" },
-  onboardingSubtitle: { fontSize: 11, marginTop: 2, lineHeight: 15 },
-  onboardingBtn: { borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 4 },
-  onboardingBtnText: { fontSize: 12, fontWeight: "800" },
+  content: { paddingTop: S.lg, paddingBottom: 48, gap: S.xl },
+  header: { flexDirection: "row", alignItems: "center", gap: S.md },
+  streakChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, height: 40, borderRadius: R.pill, backgroundColor: C.surface, borderWidth: 1, borderColor: C.hairline },
+  todayCard: { gap: S.xl },
+  todayRow: { flexDirection: "row", alignItems: "center", gap: S.lg },
+  levelRow: { flexDirection: "row", alignItems: "center", gap: S.md, paddingTop: S.lg, borderTopWidth: 1, borderTopColor: C.hairline },
+  levelBadge: { width: 34, height: 34, borderRadius: 12, backgroundColor: C.gold, alignItems: "center", justifyContent: "center" },
+  levelText: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 8 },
+  dailyTop: { flexDirection: "row", alignItems: "center", gap: S.md },
+  nextRow: { flexDirection: "row", alignItems: "center", gap: S.lg },
+  inline: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
+  playDot: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+  quickRow: { flexDirection: "row", gap: S.md },
+  quickCard: { flex: 1, padding: S.lg },
+  catRow: { flexDirection: "row", alignItems: "center", gap: S.md },
+  badgeRow: { flexDirection: "row", gap: S.md, marginTop: S.md },
+  badge: { flex: 1, alignItems: "center", backgroundColor: C.surface, borderRadius: R.lg, borderWidth: 1, borderColor: C.hairline, padding: S.md },
+  verse: { backgroundColor: "#111A2B" },
 });

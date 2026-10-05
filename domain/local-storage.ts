@@ -4,6 +4,7 @@ import type { GameResult } from "./game-engine";
 import type { GameMode } from "./questions";
 import type { ProgressionSnapshot, UnlockedAchievement } from "./progression";
 import type { FriendChallenge } from "./competitive";
+import { EMPTY_ARENA_STATS, normalizeArena, type ArenaStats } from "./arena";
 
 export interface SessionHistoryEntry {
   id: string;
@@ -15,6 +16,9 @@ export interface SessionHistoryEntry {
   xpEarned: number;
   completedAt: number;
   answers?: Array<{ questionId: string; answerId: string | null }>;
+  kind?: "quick" | "category" | "survival" | "daily";
+  category?: string;
+  bestCombo?: number;
 }
 
 export interface LocalProgressState {
@@ -23,6 +27,8 @@ export interface LocalProgressState {
   achievements: UnlockedAchievement[];
   challenges: FriendChallenge[];
   hasCompletedOnboarding?: boolean;
+  arena?: ArenaStats;
+  displayName?: string;
 }
 
 const STORAGE_KEY = "bible-arena:local-progress:v1";
@@ -33,6 +39,7 @@ export const EMPTY_PROGRESS_STATE: LocalProgressState = {
   achievements: [],
   challenges: [],
   hasCompletedOnboarding: false,
+  arena: EMPTY_ARENA_STATS,
 };
 
 export function toHistoryEntry(result: GameResult): SessionHistoryEntry {
@@ -60,6 +67,8 @@ export async function loadProgressState(): Promise<LocalProgressState> {
       achievements: Array.isArray(parsed.achievements) ? parsed.achievements : [],
       challenges: Array.isArray(parsed.challenges) ? parsed.challenges : [],
       hasCompletedOnboarding: Boolean(parsed.hasCompletedOnboarding),
+      arena: normalizeArena(parsed.arena),
+      displayName: typeof parsed.displayName === "string" ? parsed.displayName : undefined,
     };
   } catch {
     return EMPTY_PROGRESS_STATE;
