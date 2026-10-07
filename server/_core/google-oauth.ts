@@ -1,3 +1,4 @@
+import { mergeGuestInto } from "../v3";
 import { randomBytes } from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { SignJWT, jwtVerify } from "jose";
@@ -166,8 +167,11 @@ export function registerGoogleOAuth(app: Express): void {
         res.redirect(302, back.toString());
         return;
       }
+      // Carry a guest's Bible Arena v3 progress over to the Google account.
+      const prior = await sdk.verifySession((req.headers.cookie || "").split(/;\s*/).find((c) => c.startsWith(`${COOKIE_NAME}=`))?.slice(COOKIE_NAME.length + 1)).catch(() => null);
+      if (prior?.openId?.startsWith("guest_")) await mergeGuestInto(prior.openId, openId);
       res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(req), maxAge: SESSION_MAX_AGE_MS });
-      res.redirect(302, "/profile");
+      res.redirect(302, "/#/me?signedin=1");
     } catch (error) {
       logger.error("google_oauth_failed", { error: error instanceof Error ? error.message : String(error) });
       page(res, 500, "Google sign-in failed", "Something went wrong on our side. Please try again.");

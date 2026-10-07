@@ -17,6 +17,8 @@ import { rateLimit } from "./rate-limit";
 import { logger } from "./logger";
 import { getOperationalMetrics, recordDatabaseHealth, recordHttpRequest } from "./metrics";
 import { checkDatabaseHealth } from "../db";
+import { registerV3 } from "../v3";
+import { restoreSnapshot, startPersistence, persistenceStatus } from "../persist";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -89,7 +91,7 @@ export function createApp() {
       checkDatabaseHealth();
       recordDatabaseHealth(true);
       res.setHeader("Cache-Control", "no-store");
-      res.json({ ok: true, database: "ok", timestamp: Date.now() });
+      res.json({ ok: true, database: "ok", persistence: persistenceStatus(), timestamp: Date.now() });
     } catch {
       recordDatabaseHealth(false);
       res.status(503).json({ ok: false, database: "unavailable", timestamp: Date.now() });
@@ -134,6 +136,10 @@ export function createApp() {
     res.setHeader("Cache-Control", "no-cache");
     res.redirect(302, apkUrl);
   });
+  // Bible Arena v3: the fast web game (static files in web-v3) and its API. Registered before the
+  // classic Expo web app so "/" and "/d/:code" serve v3; the classic screens keep their own routes.
+  app.use("/v3", express.static(path.resolve(process.env.V3_WEB_DIR || "web-v3"), { index: false, maxAge: "1h" }));
+  registerV3(app);
   app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext }));
   // Serve the exported Expo web app (npx expo export --platform web -> dist-web) from the same origin.
   const webDir = path.resolve(process.env.WEB_DIST_DIR || "dist-web");
@@ -151,6 +157,8 @@ async function startServer() {
   const app = createApp();
   const server = createServer(app);
 
+  await restoreSnapshot();
+  startPersistence();
   const port = await findAvailablePort(ENV.port);
   if (port !== ENV.port) logger.warn("configured_port_busy", { configuredPort: ENV.port, selectedPort: port });
   server.listen(port, () => logger.info("server_started", { port, realtimeBackplane: ENV.realtimeBackplane }));

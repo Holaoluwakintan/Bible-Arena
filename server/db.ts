@@ -33,6 +33,14 @@ export function getDb(): DatabaseSync {
   return _sqlite;
 }
 
+/** Close the SQLite connection so the file can be replaced (used by the durable-snapshot restore). */
+export function resetDbConnection(): void {
+  if (_sqlite) {
+    try { _sqlite.close(); } catch {}
+    _sqlite = null;
+  }
+}
+
 function toUnix(date?: Date | null): number {
   return date ? Math.floor(date.getTime() / 1000) : Math.floor(Date.now() / 1000);
 }
