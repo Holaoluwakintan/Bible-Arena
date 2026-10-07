@@ -10,6 +10,7 @@ import { COOKIE_NAME } from "../../shared/const";
 import { rateLimit } from "../_core/rate-limit";
 import { logger } from "../_core/logger";
 import { baPool, SCH } from "./pg";
+import { compareDuel, sqlDuelRule } from "./duel-outcome";
 
 type Tier = "b" | "s" | "t";
 type Mode = "arena" | "myth" | "who" | "gap";
@@ -190,7 +191,7 @@ function guard(fn: (req: Request, res: Response, me: { openId: string; name: str
   };
 }
 
-async function applyRound(openId: string, fallbackName: string, opts: { mode: string; tier: Tier; scored: ReturnType<typeof scoreRound>; daily?: boolean; duel?: "sent" | "played" | "won" | "rematch"; won?: boolean }) {
+async function applyRound(openId: string, fallbackName: string, opts: { mode: string; tier: Tier; scored: ReturnType<typeof scoreRound>; daily?: boolean; duel?: "sent" | "played" | "won" | "rematch"; won?: number; drawn?: number }) {
   const pool = baPool()!;
   const { scored, tier } = opts;
   const perfect = scored.count > 0 && scored.correct === scored.count;
@@ -204,7 +205,7 @@ async function applyRound(openId: string, fallbackName: string, opts: { mode: st
   }
   const lastDay = p.last_day ? new Date(p.last_day).toISOString().slice(0, 10) : null;
   const streak = lastDay === today ? p.streak : lastDay === yesterday ? p.streak + 1 : 1;
-  const s = { rounds: 0, correct: 0, answered: 0, perfect: 0, theoPerfect: 0, bestCombo: 0, gapPerfect: 0, whoFirst: 0, mythRight: 0, dailies: 0, duelsSent: 0, duelsWon: 0, duelsPlayed: 0, rematches: 0, ...(p.stats || {}) };
+  const s = { rounds: 0, correct: 0, answered: 0, perfect: 0, theoPerfect: 0, bestCombo: 0, gapPerfect: 0, whoFirst: 0, mythRight: 0, dailies: 0, duelsSent: 0, duelsWon: 0, duelsDrawn: 0, duelsPlayed: 0, rematches: 0, ...(p.stats || {}) };
   s.rounds++; s.correct += scored.correct; s.answered += scored.count;
   if (perfect) s.perfect++;
   if (perfect && tier === "t" && scored.count >= 6) s.theoPerfect++;
@@ -213,7 +214,8 @@ async function applyRound(openId: string, fallbackName: string, opts: { mode: st
   if (opts.daily) s.dailies++;
   if (opts.duel === "sent") s.duelsSent++;
   if (opts.duel === "played") s.duelsPlayed++;
-  if (opts.won) s.duelsWon++;
+  if (opts.won) s.duelsWon += opts.won;
+  if (opts.drawn) s.duelsDrawn += opts.drawn;
   if (opts.duel === "rematch") { s.rematches++; s.duelsSent++; }
   const newXp = p.xp + xp;
   const bestStreak = Math.max(p.best_streak, streak);
@@ -232,11 +234,11 @@ async function applyRound(openId: string, fallbackName: string, opts: { mode: st
   return { xp, perfect, newAchievements: merged.filter((a) => !before.includes(a)), player: publicPlayer(fresh), rankBefore: rankOf(p.xp), rankAfter: rankOf(newXp) };
 }
 
-async function bumpStat(openId: string, key: string) {
+async function bumpStat(openId: string, key: string, by = 1) {
   const p = await getPlayer(openId);
-  if (!p) return;
+  if (!p || !by) return;
   const s = { ...(p.stats || {}) };
-  s[key] = (s[key] || 0) + 1;
+  s[key] = (s[key] || 0) + by;
   const ach = Array.from(new Set([...(p.achievements || []), ...evalAchievements(s, p)]));
   await baPool()!.query(`update ${SCH}.players set stats=$2, achievements=$3, updated_at=now() where open_id=$1`, [openId, JSON.stringify(s), JSON.stringify(ach)]);
 }
@@ -384,7 +386,7 @@ export function registerV3(app: Express): void {
     const r = await baPool()!.query(
       `select d.code, d.mode, d.tier, d.creator_name, d.creator_open_id=$1 as mine, d.created_at,
         (select count(*) from ${SCH}.duel_entries x where x.code=d.code and x.finished) as players,
-        (select json_agg(json_build_object('name',x.name,'score',x.score,'finished',x.finished,'me',x.open_id=$1) order by x.score desc) from ${SCH}.duel_entries x where x.code=d.code) as entries
+        (select json_agg(json_build_object('name',x.name,'score',x.score,'timeMs',x.time_ms,'finished',x.finished,'me',x.open_id=$1) order by x.score desc, x.time_ms asc) from ${SCH}.duel_entries x where x.code=d.code) as entries
        from ${SCH}.duels d where d.creator_open_id=$1 or exists(select 1 from ${SCH}.duel_entries e where e.code=d.code and e.open_id=$1)
        order by d.created_at desc limit 30`, [me.openId]);
     send(res, 200, { duels: r.rows });
@@ -433,13 +435,23 @@ export function registerV3(app: Express): void {
       [c, me.openId, name, church, scored.total, scored.correct, scored.count, timeMs, JSON.stringify(scored.results.map((r) => r.correct))],
     );
     const isCreator = d.creator_open_id === me.openId;
-    // A challenger wins by beating the creator's score (ties go to the faster player).
-    let won = false;
-    if (!isCreator) {
-      const cr = (await pool.query(`select score, time_ms from ${SCH}.duel_entries where code=$1 and open_id=$2 and finished`, [c, d.creator_open_id])).rows[0];
-      won = !!cr && (scored.total > cr.score || (scored.total === cr.score && timeMs < cr.time_ms));
+    // Settle every head-to-head this finish completes (duel-outcome.ts: score, then time in
+    // tenths of a second, else a draw). A challenger is settled against the creator; a creator
+    // who finishes after challengers is settled against each of them. Each pair settles once,
+    // when the second of the two finishes, and both sides' stats move (win, loss or draw).
+    let won = 0, drawn = 0;
+    const mine = { score: scored.total, timeMs };
+    const others = (await pool.query(
+      `select open_id, score, time_ms from ${SCH}.duel_entries where code=$1 and open_id<>$2 and finished` + (isCreator ? "" : " and open_id=$3"),
+      isCreator ? [c, me.openId] : [c, me.openId, d.creator_open_id],
+    )).rows;
+    for (const o of others) {
+      const cmp = compareDuel(mine, { score: o.score, timeMs: o.time_ms });
+      if (cmp > 0) won++;
+      else if (cmp < 0) await bumpStat(o.open_id, "duelsWon");
+      else { drawn++; await bumpStat(o.open_id, "duelsDrawn"); }
     }
-    const applied = await applyRound(me.openId, name, { mode: "duel", tier: d.tier, scored, duel: isCreator ? (d.parent_code ? "rematch" : "sent") : "played", won });
+    const applied = await applyRound(me.openId, name, { mode: "duel", tier: d.tier, scored, duel: isCreator ? (d.parent_code ? "rematch" : "sent") : "played", won, drawn });
     const view = await duelView(c, me.openId);
     send(res, 200, { score: scored.total, correct: scored.correct, total: scored.count, results: scored.results, duel: view, ...applied });
   }));
@@ -460,14 +472,16 @@ export function registerV3(app: Express): void {
       return send(res, 200, { scope, churches: r.rows });
     } else if (scope === "rivals") {
       if (!me) return send(res, 200, { scope, rows: [] });
+      const rule = sqlDuelRule("m", "o");
+      const n = (cond: string) => `sum(case when ${cond} then 1 else 0 end)::int`;
       rows = (await pool.query(
         `select o.open_id, max(o.name) as name, max(p.church) as church, coalesce(max(p.xp),0) as xp, coalesce(max(p.xp),0) as score,
-           sum(case when m.score > o.score then 1 else 0 end)::int as wins, sum(case when m.score < o.score then 1 else 0 end)::int as losses
+           ${n(rule.win)} as wins, ${n(rule.loss)} as losses, ${n(rule.draw)} as draws
          from ${SCH}.duel_entries m join ${SCH}.duel_entries o on o.code=m.code and o.open_id<>m.open_id and o.finished
          left join ${SCH}.players p on p.open_id=o.open_id
-         where m.open_id=$1 and m.finished group by o.open_id order by (sum(case when m.score > o.score then 1 else 0 end)+sum(case when m.score < o.score then 1 else 0 end)) desc limit 30`, [me.openId])).rows;
+         where m.open_id=$1 and m.finished group by o.open_id order by count(*) desc limit 30`, [me.openId])).rows;
     }
-    send(res, 200, { scope, rows: rows.map((r: any) => ({ name: r.name, church: r.church, score: r.score, rank: rankOf(r.xp || 0).name, isMe: me?.openId === r.open_id, wins: r.wins, losses: r.losses })) });
+    send(res, 200, { scope, rows: rows.map((r: any) => ({ name: r.name, church: r.church, score: r.score, rank: rankOf(r.xp || 0).name, isMe: me?.openId === r.open_id, wins: r.wins, losses: r.losses, draws: r.draws })) });
   }, false));
 
   // ---- share pages: WhatsApp/OG previews for challenge links ----

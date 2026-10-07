@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.0.2";
+window.BA_V = "3.0.3";
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
 const app = $("#app");
@@ -568,6 +568,10 @@ async function shareCard(o) {
 }
 
 // ---------- duels ----------
+// Who won a duel: higher score; equal scores -> faster total time, in tenths of a second (what the
+// screen shows); equal score and time -> a draw. Same rule as server/v3/duel-outcome.ts.
+function duelCmp(a, b) { const sa = Number(a.score) || 0, sb = Number(b.score) || 0; if (sa !== sb) return sa > sb ? 1 : -1; const ta = Math.round(Math.max(0, Number(a.timeMs) || 0) / 100), tb = Math.round(Math.max(0, Number(b.timeMs) || 0) / 100); return ta === tb ? 0 : ta < tb ? 1 : -1; }
+const secs = (ms) => (Math.round(Math.max(0, Number(ms) || 0) / 100) / 10).toFixed(1) + "s";
 function duelText(code, score, tier, mode) {
   const url = origin() + "/d/" + code;
   return score != null
@@ -640,7 +644,9 @@ async function acceptDuel(code) {
   };
 }
 function board(v) {
-  return v.entries.filter((e) => e.finished || e.progress).map((e, i) => `<div class="lb ${e.isMe ? "me" : ""}"><div class="pos ${e.finished ? "p" + (i + 1) : ""}">${e.finished ? i + 1 : "…"}</div><div class="grow"><b>${esc(e.name)}</b>${e.isCreator ? ` <span class="small gold">challenger</span>` : ""}<div class="small muted">${e.finished ? `${e.correct}/${e.total} · ${Math.round(e.timeMs / 1000)}s` : `playing… ${e.progress}/${v.ids.length}`}${e.church ? " · " + esc(e.church) : ""}</div></div><div class="gold serif" style="font-weight:800">${fmt(e.score)}</div></div>`).join("");
+  const done = v.entries.filter((e) => e.finished).sort((a, b) => duelCmp(b, a));
+  const pos = new Map(); done.forEach((e, i) => pos.set(e, i && duelCmp(e, done[i - 1]) === 0 ? pos.get(done[i - 1]) : i + 1));
+  return [...done, ...v.entries.filter((e) => !e.finished && e.progress)].map((e) => `<div class="lb ${e.isMe ? "me" : ""}"><div class="pos ${e.finished ? "p" + pos.get(e) : ""}">${e.finished ? pos.get(e) : "…"}</div><div class="grow"><b>${esc(e.name)}</b>${e.isCreator ? ` <span class="small gold">challenger</span>` : ""}<div class="small muted">${e.finished ? `${e.correct}/${e.total} · ${secs(e.timeMs)}` : `playing… ${e.progress}/${v.ids.length}`}${e.church ? " · " + esc(e.church) : ""}</div></div><div class="gold serif" style="font-weight:800">${fmt(e.score)}</div></div>`).join("");
 }
 function duelResult(v, r, cfg) {
   if (location.hash !== "#/d/" + v.code) history.replaceState(null, "", "#/d/" + v.code);
@@ -648,17 +654,21 @@ function duelResult(v, r, cfg) {
   const others = v.entries.filter((e) => !e.isMe && e.finished);
   const opp = v.creator.isMe ? others[0] : others.find((e) => e.isCreator) || others[0];
   const url = origin() + "/d/" + v.code;
-  const beat = (a, b) => a.score > b.score || (a.score === b.score && a.timeMs < b.timeMs);
+  const cmp = me && opp ? duelCmp(me, opp) : null;
+  const onTime = cmp && me.score === opp.score;
+  const gap = onTime ? secs(Math.abs(Math.round(me.timeMs / 100) - Math.round(opp.timeMs / 100)) * 100) : "";
   let banner = "";
-  if (me && opp) banner = beat(me, opp) ? `<h1 class="title-gold">You win! 🏆</h1>` : beat(opp, me) ? `<h1 style="font-family:var(--serif)">${esc(opp.name)} wins</h1>` : `<h1 class="title-gold">A draw!</h1>`;
+  if (cmp === 1) banner = `<h1 class="title-gold">${onTime ? "You win on time! ⏱️" : "You win! 🏆"}</h1>${onTime ? `<p class="muted" style="margin:4px 0 0">Same score. You were ${gap} faster.</p>` : ""}`;
+  else if (cmp === -1) banner = `<h1 style="font-family:var(--serif)">${esc(opp.name)} wins${onTime ? " on time" : ""}</h1>${onTime ? `<p class="muted" style="margin:4px 0 0">Same score. ${esc(opp.name.split(" ")[0])} was ${gap} faster.</p>` : ""}`;
+  else if (cmp === 0) banner = `<h1 class="title-gold">It's a draw 🤝</h1><p class="muted" style="margin:4px 0 0">Same score, same time. Honours shared.</p>`;
   else if (me && v.creator.isMe) banner = `<h1 class="title-gold">Now send it!</h1><p class="muted" style="margin:4px 0 0">Your score: <b class="gold">${fmt(me.score)}</b>. Waiting for a pastor to answer your challenge.</p>`;
-  const side = (e, win) => e ? `<div class="side ${win ? "win" : ""}"><div class="avatar">${esc(e.name[0].toUpperCase())}</div><b>${esc(e.name)}</b><div class="bigscore" style="font-size:30px;margin-top:4px">${fmt(e.score)}</div><div class="small muted">${e.correct}/${e.total} · ${Math.round(e.timeMs / 1000)}s</div></div>` : `<div class="side"><div class="avatar">?</div><b>Waiting…</b><div class="small muted">Send the link</div></div>`;
+  const side = (e, win) => e ? `<div class="side ${win ? "win" : ""}"><div class="avatar">${esc(e.name[0].toUpperCase())}</div><b>${esc(e.name)}</b><div class="bigscore" style="font-size:30px;margin-top:4px">${fmt(e.score)}</div><div class="small muted">${e.correct}/${e.total} · ${secs(e.timeMs)}</div></div>` : `<div class="side"><div class="avatar">?</div><b>Waiting…</b><div class="small muted">Send the link</div></div>`;
   const n = v.ids.length;
   const grid = me && opp && me.answers.length ? `<div class="card"><b>Question by question</b><div class="grid-ans" style="--n:${n};margin-top:10px"><span class="small">You</span>${me.answers.map((a) => `<i class="${a ? "y" : "n"}"></i>`).join("")}<span class="small">${esc(opp.name.split(" ")[0])}</span>${opp.answers.map((a) => `<i class="${a ? "y" : "n"}"></i>`).join("")}</div></div>` : "";
   render(`<div class="row" style="margin-bottom:12px"><a class="iconbtn" href="#/duels">‹</a><div class="grow tiny gold">Duel · ${esc(MODES[v.mode] ? MODES[v.mode].name : "")} · ${TIER[v.tier].name}</div><button class="iconbtn" id="rf" aria-label="Refresh">↻</button></div>
   <div class="col" style="gap:14px">
     <div class="center">${banner}</div>
-    <div class="vs">${side(me, me && opp && beat(me, opp))}<div class="vsx">VS</div>${side(opp, me && opp && beat(opp, me))}</div>
+    <div class="vs">${side(me, cmp === 1)}<div class="vsx">${cmp === 0 ? "🤝" : "VS"}</div>${side(opp, cmp === -1)}</div>
     ${grid}
     ${r && r.newAchievements && r.newAchievements.length ? r.newAchievements.map((a) => ACH[a] ? `<div class="badge"><div class="bi">${ACH[a][0]}</div><div><b>Achievement: ${ACH[a][1]}</b><div class="small muted">${ACH[a][2]}</div></div></div>` : "").join("") : ""}
     ${r && r.xp ? `<div class="small muted center">+${fmt(r.xp)} XP · ${esc(r.player ? r.player.rank.name + " " + r.player.rank.division : "")}</div>` : ""}
@@ -668,10 +678,10 @@ function duelResult(v, r, cfg) {
     ${v.entries.filter((e) => e.finished).length ? `<div class="card"><b>Everyone on this challenge</b>${board(v)}</div>` : ""}
     <a class="btn ghost block" href="#/">Home</a>
   </div>${tabbar("duels")}`);
-  if (me && opp && beat(me, opp) && r) { confetti(90); sfx.win(); }
+  if (cmp === 1 && r) { confetti(90); sfx.win(); }
   $("#rf").onclick = async () => { try { const nv = await api("/api/v3/duels/" + v.code); duelResult(nv, null, cfg); } catch (e) {} };
   $("#cp").onclick = async () => { try { await navigator.clipboard.writeText(url); toast("Link copied ✓"); } catch (e) { prompt("Copy this link:", url); } };
-  $("#sh").onclick = () => shareCard({ score: me ? me.score : 0, correct: me ? me.correct : 0, total: n, tier: v.tier, title: "Pastor Duel", url, text: duelText(v.code, me ? me.score : null, v.tier, v.mode), cta: me && opp && beat(me, opp) ? "I won this duel. Your turn?" : "Can you beat me?" });
+  $("#sh").onclick = () => shareCard({ score: me ? me.score : 0, correct: me ? me.correct : 0, total: n, tier: v.tier, title: "Pastor Duel", url, text: duelText(v.code, me ? me.score : null, v.tier, v.mode), cta: cmp === 1 ? "I won this duel. Your turn?" : cmp === 0 ? "We drew this duel. Can you break the tie?" : "Can you beat me?" });
   const rm = $("#rm"); if (rm) rm.onclick = async () => {
     rm.disabled = true; rm.textContent = "Preparing the rematch…";
     try { await loadBank(); const d = await api("/api/v3/duels", { body: { mode: v.mode, tier: v.tier, name: S.name, parent: v.code } }); runRound({ ids: d.ids, tier: v.tier, mode: "duel", title: "Rematch · " + (MODES[v.mode] ? MODES[v.mode].name : ""), duel: { code: d.code, creator: true, mode: v.mode } }); }
@@ -687,8 +697,9 @@ async function duelsScreen() {
   if (!r.duels.length) { el.innerHTML = `<div class="hero center"><div class="rays"></div><div style="font-size:42px">⚔️</div><h2 style="font-family:var(--serif)">No duels yet</h2><p class="muted small">Challenge a pastor friend: you both play the same questions and the link shows who won.</p><a class="btn primary block" href="#/duel/new">Challenge a Pastor</a></div>`; return; }
   el.innerHTML = r.duels.map((d) => {
     const es = d.entries || []; const me = es.find((e) => e.me); const others = es.filter((e) => !e.me && e.finished);
-    const best = others.sort((a, b) => b.score - a.score)[0];
-    const status = !me || !me.finished ? "Your turn" : !best ? "Waiting for opponent" : me.score > best.score ? "You lead 🏆" : me.score === best.score ? "Tied" : `${best.name} leads`;
+    const best = others.sort((a, b) => duelCmp(b, a))[0];
+    const c = me && me.finished && best ? duelCmp(me, best) : null;
+    const status = !me || !me.finished ? "Your turn" : !best ? "Waiting for opponent" : c === 1 ? "You lead 🏆" : c === 0 ? "Draw 🤝" : `${best.name} leads`;
     return `<a class="card row" href="#/d/${d.code}" style="text-decoration:none;color:inherit;gap:12px"><div style="font-size:26px">${MODES[d.mode] ? MODES[d.mode].icon : "⚔️"}</div><div class="grow"><b>${d.mine ? "Your challenge" : "From " + esc(d.creator_name)}</b><div class="small muted">${MODES[d.mode] ? MODES[d.mode].name : ""} · ${TIER[d.tier] ? TIER[d.tier].name : ""} · ${d.players} played</div></div><div class="small ${status.startsWith("You") ? "gold" : "muted"}" style="text-align:right;font-weight:700">${esc(status)}</div></a>`;
   }).join("");
 }
@@ -706,7 +717,7 @@ async function ranks(tab) {
   }
   const rows = r.rows || [];
   const empty = { week: "No rounds this week yet. Play one and top the board!", daily: "Nobody has played today's challenge yet.", rivals: "Your rivals appear here after your first duel.", all: "No players yet." }[tab];
-  el.innerHTML = rows.length ? rows.map((x, i) => `<div class="lb ${x.isMe ? "me" : ""}"><div class="pos p${i + 1}">${i + 1}</div><div class="grow"><b>${esc(x.name)}</b>${x.isMe ? ` <span class="small gold">you</span>` : ""}<div class="small muted">${esc(x.rank)}${x.church ? " · " + esc(x.church) : ""}${tab === "rivals" ? ` · You ${x.wins}–${x.losses}` : ""}</div></div><div class="gold serif" style="font-weight:800">${fmt(x.score)}</div></div>`).join("") : `<div class="muted">${empty}</div>${tab === "rivals" ? `<a class="btn primary block" style="margin-top:12px" href="#/duel/new">Challenge a Pastor</a>` : ""}`;
+  el.innerHTML = rows.length ? rows.map((x, i) => `<div class="lb ${x.isMe ? "me" : ""}"><div class="pos p${i + 1}">${i + 1}</div><div class="grow"><b>${esc(x.name)}</b>${x.isMe ? ` <span class="small gold">you</span>` : ""}<div class="small muted">${esc(x.rank)}${x.church ? " · " + esc(x.church) : ""}${tab === "rivals" ? ` · You ${x.wins}–${x.losses}${x.draws ? ` · ${x.draws} draw${x.draws > 1 ? "s" : ""}` : ""}` : ""}</div></div><div class="gold serif" style="font-weight:800">${fmt(x.score)}</div></div>`).join("") : `<div class="muted">${empty}</div>${tab === "rivals" ? `<a class="btn primary block" style="margin-top:12px" href="#/duel/new">Challenge a Pastor</a>` : ""}`;
 }
 
 // ---------- profile & settings ----------
