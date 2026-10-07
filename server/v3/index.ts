@@ -11,6 +11,8 @@ import { rateLimit } from "../_core/rate-limit";
 import { logger } from "../_core/logger";
 import { baPool, SCH } from "./pg";
 import { compareDuel, sqlDuelRule } from "./duel-outcome";
+import { registerLive, flushLive } from "./live";
+import { shutdownHooks } from "../persist";
 
 type Tier = "b" | "s" | "t";
 type Mode = "arena" | "myth" | "who" | "gap";
@@ -299,6 +301,8 @@ export function registerV3(app: Express): void {
   loadBank();
   const limitWrites = rateLimit({ windowMs: 60_000, max: 90, name: "v3-writes" });
 
+  registerLive(app, () => BANK as any, WEB_DIR);
+  shutdownHooks.push(flushLive);
   app.get("/api/v3/health", (_req, res) => send(res, 200, { ok: true, bank: BANK.length, storage: !!baPool() }));
 
   app.get("/api/v3/me", guard(async (_req, res, me) => {

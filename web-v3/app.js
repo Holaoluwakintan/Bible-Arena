@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.0.3";
+window.BA_V = "3.1.0";
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
 const app = $("#app");
@@ -236,6 +236,11 @@ async function home() {
       <div class="grow"><b style="font-size:17px">Challenge a Pastor</b><div class="small muted">Play a set, send the link on WhatsApp. Same questions, who wins?</div></div>
       <div class="gold" style="font-size:22px">›</div>
     </button>
+    <div class="card livecta">
+      <div class="row" style="gap:12px;align-items:flex-start"><div style="font-size:34px">⛪</div>
+        <div class="grow"><div class="tiny" style="color:#FF8A9A">● LIVE · NEW</div><b style="font-size:17px">Church Quiz Night</b><div class="small muted">Put it on the projector. Up to 200 people play on their phones with a code. Teams, podium, confetti.</div></div></div>
+      <div class="row" style="margin-top:12px"><a class="btn primary grow" href="/live">Host a quiz night</a><a class="btn ghost grow" href="/join">Join with a code</a></div>
+    </div>
     <div class="grid2">
       ${modeTile("gap", true)}${modeTile("who")}${modeTile("myth")}${modeTile("arena")}${modeTile("mixed")}${modeTile("sudden")}
     </div>
@@ -247,7 +252,7 @@ async function home() {
     <div class="card">
       <div class="row between"><b>Classic modes</b><span class="small dim">from Bible Arena v2</span></div>
       <div class="row" style="flex-wrap:wrap;gap:8px;margin-top:10px">
-        <a class="chip" href="/room">🔴 Live Room</a><a class="chip" href="/ai-battle">🤖 AI Battle</a><a class="chip" href="/quiz?kind=puzzle">🔤 Word Puzzle</a><a class="chip" href="/friends">👥 Friends</a><a class="chip" href="/play">🏛️ Classic Arena</a>
+        <a class="chip" href="/room">🔴 Live Room (classic)</a><a class="chip" href="/ai-battle">🤖 AI Battle</a><a class="chip" href="/quiz?kind=puzzle">🔤 Word Puzzle</a><a class="chip" href="/friends">👥 Friends</a><a class="chip" href="/play">🏛️ Classic Arena</a>
       </div>
     </div>
     ${androidCard()}

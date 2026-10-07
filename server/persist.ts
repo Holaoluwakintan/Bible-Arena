@@ -11,6 +11,8 @@ import { ENV } from "./_core/env";
 import { logger } from "./_core/logger";
 import { baPool, SCH } from "./v3/pg";
 
+/** Extra async work to finish before the process exits on SIGTERM (e.g. Live quiz rooms). */
+export const shutdownHooks: Array<() => Promise<void>> = [];
 const INSTANCE = (process.env.RENDER_INSTANCE_ID || process.env.HOSTNAME || "local") + ":" + process.pid;
 const KEEP = 40;
 let restoreOk = false;
@@ -143,7 +145,7 @@ export function startPersistence(): void {
     logger.info("persist_shutdown", { signal });
     const done = () => process.exit(0);
     const timer = setTimeout(done, 20_000);
-    snapshotNow("shutdown:" + signal).finally(() => { clearTimeout(timer); done(); });
+    Promise.allSettled([snapshotNow("shutdown:" + signal), ...shutdownHooks.map((h) => h())]).finally(() => { clearTimeout(timer); done(); });
   };
   process.once("SIGTERM", () => onSignal("SIGTERM"));
   process.once("SIGINT", () => onSignal("SIGINT"));
