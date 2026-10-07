@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.0.0";
+window.BA_V = "3.0.1";
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
 const app = $("#app");
@@ -257,7 +257,9 @@ async function home() {
   $$(".mode", h).forEach((m) => (m.onclick = () => { sfx.tap(); buzz(8); go("#/play/" + m.dataset.m); }));
 }
 function androidCard() {
-  const isApp = document.referrer.startsWith("android-app://") || matchMedia("(display-mode: standalone)").matches;
+  if (/[?&]app=android/.test(location.search)) { try { sessionStorage.setItem("ba3:app", "1"); } catch (e) {} }
+  let flag = null; try { flag = sessionStorage.getItem("ba3:app"); } catch (e) {}
+  const isApp = flag || document.referrer.startsWith("android-app://") || matchMedia("(display-mode: standalone)").matches;
   if (isApp || !/Android/i.test(navigator.userAgent)) return "";
   return `<a class="card row" href="/download" style="text-decoration:none;color:inherit"><div style="font-size:28px">📱</div><div class="grow"><b>Get the Android app</b><div class="small muted">Full screen, one tap from your home screen</div></div><div class="gold">›</div></a>`;
 }
