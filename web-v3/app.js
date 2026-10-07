@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.0.1";
+window.BA_V = "3.0.2";
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
 const app = $("#app");

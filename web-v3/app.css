@@ -31,7 +31,7 @@ h2{font-size:20px}h3{font-size:16px}
 .btn.wa{background:#1FAF55;color:#fff}
 .btn.block{width:100%}
 .btn[disabled]{opacity:.45;pointer-events:none}
-.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--line2);font-size:13px;font-weight:700}
+.chip{white-space:nowrap;text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--line2);font-size:13px;font-weight:700}
 .chip.on{background:rgba(245,185,66,.16);border-color:rgba(245,185,66,.5);color:var(--gold2)}
 .topbar{display:flex;align-items:center;gap:12px;margin-bottom:16px}
 .emblem{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-family:var(--serif);font-weight:800;font-size:20px;color:#1B1305;background:conic-gradient(from 210deg,#FFE7AE,var(--gold),#B97A12,var(--gold),#FFE7AE);box-shadow:0 0 0 2px rgba(245,185,66,.25),0 6px 18px rgba(245,185,66,.18)}
