@@ -90,7 +90,7 @@ const PRIVACY = shell("Privacy Policy", `
 <h2>How long we keep it</h2>
 <p>We keep your profile and game history until you delete your account. Quiz-night rooms expire after 12 hours. Quiz-night results pages (nicknames and scores) are kept so the church can share them; email us to have one removed. Automatic backups are rotated and older copies are overwritten over time.</p>
 <h2>Deleting your account and data</h2>
-<p>In the app, open <b>Profile → Delete account</b>. Or go to <a href="/delete-account">bible-arena.onrender.com/delete-account</a>. This permanently deletes your profile, email, church, scores, rounds and the duels you created. If you cannot open the app, email <a href="mailto:${CONTACT}?subject=Bible%20Arena%20account%20deletion">${CONTACT}</a> with your display name and, if you used Google, your email. We will delete your account within 30 days.</p>
+<p>In the app, open <b>Me → Delete account</b> (the Me tab at the bottom). Or go to <a href="/delete-account">bible-arena.onrender.com/delete-account</a>. This permanently deletes your profile, email, church, scores, rounds and the duels you created. If you cannot open the app, email <a href="mailto:${CONTACT}?subject=Bible%20Arena%20account%20deletion">${CONTACT}</a> with your display name and, if you used Google, your email. We will delete your account within 30 days.</p>
 <h2>Children</h2>
 <p>Bible Arena is meant for people aged 13 and over. We do not knowingly collect data from children under 13. If you believe a child under 13 has created an account, email us and we will delete it.</p>
 <h2>Your rights</h2>
@@ -105,7 +105,7 @@ const DELETE = shell("Delete your account", `
 <p>Deleting your account permanently removes your profile, display name, email address (if you signed in with Google), church or group, level, scores, rounds, achievements and the duels you created. Your entries in other players' duels are removed too. This cannot be undone.</p>
 <div class="card" id="box"><p class="muted">Checking whether you are signed in on this browser…</p></div>
 <h2>Other ways to delete</h2>
-<ul><li><b>In the app:</b> open <b>Profile</b>, then <b>Delete account</b>.</li>
+<ul><li><b>In the app:</b> open the <b>Me</b> tab, then <b>Delete account</b>.</li>
 <li><b>By email:</b> if you can't open the app, email <a href="mailto:${CONTACT}?subject=Bible%20Arena%20account%20deletion">${CONTACT}</a> with your display name and, if you used Google, the Google email. We delete it within 30 days and reply to confirm.</li></ul>
 <p class="muted">Quiz-night rooms expire on their own after 12 hours. Read the <a href="/privacy">privacy policy</a>.</p>
 <script>
@@ -113,7 +113,7 @@ const DELETE = shell("Delete your account", `
   var box=document.getElementById("box");
   var me=null; try{var r=await fetch("/api/v3/me",{credentials:"same-origin"}); if(r.ok) me=await r.json();}catch(e){}
   var signed = me && me.user;
-  if(!signed){ box.innerHTML='<p>You are not signed in on this browser. Open the Bible Arena app and go to <b>Profile → Delete account</b>, or <a href="/">open Bible Arena here</a>, sign in, then come back to this page. You can also email us (below).</p>'; return; }
+  if(!signed){ box.innerHTML='<p>You are not signed in on this browser. Open the Bible Arena app and go to <b>Me → Delete account</b> (the Me tab at the bottom), or <a href="/">open Bible Arena here</a>, sign in, then come back to this page. You can also email us (below).</p>'; return; }
   var name=(me.player&&me.player.name)||me.user.name||"your account";
   box.innerHTML='<p>Signed in as <b></b>.</p><button class="btn danger" id="del">Delete my account</button>';
   box.querySelector("b").textContent=name;
