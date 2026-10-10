@@ -3,7 +3,7 @@
 A tiny Android wrapper that opens https://bible-arena.onrender.com full screen in Chrome (android-browser-helper LauncherActivity).
 Because it is the live site, web updates reach the app without a new APK.
 
-- Package: `com.holaoluwakintan.biblearena` · versionCode 1 · versionName 1.0.0 · minSdk 23 · targetSdk 35 · compileSdk 36
+- Package: `com.holaoluwakintan.biblearena` · versionCode 2 · versionName 1.1.0 · minSdk 23 · targetSdk 36 (Play requires 36 since Aug 31 2026) · compileSdk 36
 - AGP 8.12.0, Gradle 9.3.1 wrapper
 - Signed v1+v2+v3. No native libs, so one universal APK fits every phone.
 - Opens `https://bible-arena.onrender.com/?app=android`
