@@ -261,11 +261,13 @@ async function home() {
   $("#tierchip").onclick = () => tierSheet(() => home());
   $$(".mode", h).forEach((m) => (m.onclick = () => { sfx.tap(); buzz(8); go("#/play/" + m.dataset.m); }));
 }
-function androidCard() {
+function inAppShell() {
   if (/[?&]app=android/.test(location.search)) { try { sessionStorage.setItem("ba3:app", "1"); } catch (e) {} }
   let flag = null; try { flag = sessionStorage.getItem("ba3:app"); } catch (e) {}
-  const isApp = flag || document.referrer.startsWith("android-app://") || matchMedia("(display-mode: standalone)").matches;
-  if (isApp || !/Android/i.test(navigator.userAgent)) return "";
+  return !!(flag || document.referrer.startsWith("android-app://") || matchMedia("(display-mode: standalone)").matches);
+}
+function androidCard() {
+  if (inAppShell() || !/Android/i.test(navigator.userAgent)) return "";
   return `<a class="card row" href="/download" style="text-decoration:none;color:inherit"><div style="font-size:28px">📱</div><div class="grow"><b>Get the Android app</b><div class="small muted">Full screen, one tap from your home screen</div></div><div class="gold">›</div></a>`;
 }
 function untilMidnight() {
@@ -748,8 +750,10 @@ async function profile() {
       <div class="setrow"><div>Sound</div><button class="switch ${S.sound ? "on" : ""}" id="snd" aria-label="Sound"></button></div>
       <div class="setrow"><div>Vibration</div><button class="switch ${S.haptics ? "on" : ""}" id="hap" aria-label="Vibration"></button></div>
       <div class="setrow"><div class="grow"><div>Account</div><div class="small muted">${google ? "Signed in with Google ✓ (progress is safe across phones)" : "Guest on this phone. Sign in to keep your progress on any phone."}</div></div>${google ? `<button class="chip" id="out">Sign out</button>` : `<a class="chip on" href="/api/oauth/google/start">Google</a>`}</div>
+      <div class="setrow"><div class="grow"><div>Privacy policy</div><div class="small muted">What we keep and why</div></div><a class="chip" href="/privacy">Read</a></div>
+      <div class="setrow"><div class="grow"><div>Delete account</div><div class="small muted">Permanently erase your profile, scores and duels</div></div><button class="chip" id="delacct" style="color:#ff8a80">Delete</button></div>
     </div>
-    <div class="card"><b>More</b><div class="row" style="flex-wrap:wrap;gap:8px;margin-top:10px"><a class="chip" href="/play">🏛️ Classic app</a><a class="chip" href="/download">📱 Android app</a><a class="chip" href="#/ranks?tab=church">⛪ Pastors' League</a></div>
+    <div class="card"><b>More</b><div class="row" style="flex-wrap:wrap;gap:8px;margin-top:10px"><a class="chip" href="/play">🏛️ Classic app</a>${inAppShell() ? "" : `<a class="chip" href="/download">📱 Android app</a>`}<a class="chip" href="#/ranks?tab=church">⛪ Pastors' League</a></div>
       <p class="small dim" style="margin:12px 0 0">Scripture quotations are from the King James Version (public domain). Every answer carries its reference so you can read it yourself.</p></div>
   </div>`;
   const ed = async (key, label, max) => { const v = prompt(label, S[key] || ""); if (v == null) return; S[key] = v.trim().slice(0, max); save(); await savePlayer(); profile(); };
@@ -758,6 +762,13 @@ async function profile() {
   $("#etier").onclick = () => tierSheet(() => profile());
   $("#snd").onclick = (e) => { S.sound = !S.sound; save(); e.target.classList.toggle("on", S.sound); sfx.ok(); };
   $("#hap").onclick = (e) => { S.haptics = !S.haptics; save(); e.target.classList.toggle("on", S.haptics); buzz(30); };
+  $("#delacct").onclick = async () => {
+    if (!confirm("Delete your Bible Arena account? This permanently erases your profile, scores, rounds and the duels you created. It cannot be undone.")) return;
+    try { await api("/api/v3/account/delete", { body: { confirm: "DELETE" } }); } catch (e) { toast("Couldn't delete right now. Try again, or use bible-arena.onrender.com/delete-account"); return; }
+    try { Object.keys(localStorage).forEach((k) => { if (k.indexOf("ba3:") === 0) localStorage.removeItem(k); }); } catch (e) {}
+    alert("Your account and all its data have been deleted.");
+    location.replace("/");
+  };
   const out = $("#out"); if (out) out.onclick = async () => { await api("/api/auth/logout", { body: {} }).catch(() => {}); ME = { user: null, player: null }; await ensureSession(); toast("Signed out"); profile(); };
 }
 

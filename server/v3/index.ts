@@ -13,6 +13,7 @@ import { baPool, SCH } from "./pg";
 import { compareDuel, sqlDuelRule } from "./duel-outcome";
 import { registerLive, flushLive } from "./live";
 import { shutdownHooks } from "../persist";
+import { registerLegal } from "./legal";
 
 type Tier = "b" | "s" | "t";
 type Mode = "arena" | "myth" | "who" | "gap";
@@ -298,6 +299,7 @@ export async function mergeGuestInto(guestOpenId: string, googleOpenId: string):
 }
 
 export function registerV3(app: Express): void {
+  registerLegal(app);
   loadBank();
   const limitWrites = rateLimit({ windowMs: 60_000, max: 90, name: "v3-writes" });
 
