@@ -14,6 +14,7 @@ import { compareDuel, sqlDuelRule } from "./duel-outcome";
 import { registerLive, flushLive } from "./live";
 import { shutdownHooks } from "../persist";
 import { registerLegal } from "./legal";
+import { sentryBrowserTags } from "../_core/sentry-lite";
 
 type Tier = "b" | "s" | "t";
 type Mode = "arena" | "myth" | "who" | "gap";
@@ -498,6 +499,7 @@ export function registerV3(app: Express): void {
     const origin = `${req.protocol}://${req.get("host")}`;
     const tags = `<meta property="og:title" content="${esc(og.title)}"><meta property="og:description" content="${esc(og.desc)}"><meta property="og:image" content="${origin}${og.image}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:url" content="${origin}${req.originalUrl}"><meta property="og:type" content="website"><meta name="twitter:card" content="summary_large_image">`;
     html = html.replace(/<!--OG-->[\s\S]*?<!--\/OG-->/, tags).replace(/<title>[^<]*<\/title>/, `<title>${esc(og.title)}</title>`);
+    html = html.replace("</head>", `${sentryBrowserTags()}</head>`);
     res.setHeader("Cache-Control", "no-cache");
     res.type("html").send(html);
   };

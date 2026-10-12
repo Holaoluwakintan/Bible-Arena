@@ -18,6 +18,7 @@ import { logger } from "./logger";
 import { getOperationalMetrics, recordDatabaseHealth, recordHttpRequest } from "./metrics";
 import { checkDatabaseHealth } from "../db";
 import { registerV3 } from "../v3";
+import { installErrorReporting } from "./sentry-lite";
 import { restoreSnapshot, startPersistence, persistenceStatus } from "../persist";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -165,6 +166,7 @@ export function createApp() {
       res.sendFile(path.join(webDir, "index.html"));
     });
   }
+  installErrorReporting(app); // no-op unless SENTRY_DSN is set
   return app;
 }
 
