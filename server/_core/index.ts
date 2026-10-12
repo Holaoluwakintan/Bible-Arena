@@ -138,6 +138,12 @@ export function createApp() {
   });
   // Bible Arena v3: the fast web game (static files in web-v3) and its API. Registered before the
   // classic Expo web app so "/" and "/d/:code" serve v3; the classic screens keep their own routes.
+  // Rollback build: serve a self-unregistering service worker so phones that installed v3.2.0's worker drop it.
+  app.get("/sw.js", (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Service-Worker-Allowed", "/");
+    res.type("application/javascript").sendFile(path.join(path.resolve(process.env.V3_WEB_DIR || "web-v3"), "sw.js"));
+  });
   app.use("/v3", express.static(path.resolve(process.env.V3_WEB_DIR || "web-v3"), { index: false, maxAge: "1h" }));
   registerV3(app);
   app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext }));
