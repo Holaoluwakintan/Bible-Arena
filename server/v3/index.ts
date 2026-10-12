@@ -21,6 +21,7 @@ type Mode = "arena" | "myth" | "who" | "gap";
 interface Item {
   id: string; m: Mode; tiers: Tier[]; k: string; q?: string; o?: string[]; a?: number | string;
   clues?: string[]; text?: string; g?: Record<Tier, { blanks: number[]; decoys: string[] }>; r?: string; x?: string;
+  since?: string; // Lagos day (YYYY-MM-DD) a top-up item joins the Daily Challenge pool; other modes use it at once
 }
 
 const WEB_DIR = path.resolve(process.env.V3_WEB_DIR || "web-v3");
@@ -144,13 +145,15 @@ function seeded(seed: string) {
   let h = crypto.createHash("sha256").update(seed).digest().readUInt32LE(0);
   return () => { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; return ((h >>> 0) % 1_000_000) / 1_000_000; };
 }
-function pick(mode: Mode, tier: Tier, n: number, rnd: () => number, exclude = new Set<string>()): string[] {
-  const pool = BANK.filter((i) => i.m === mode && i.tiers.includes(tier) && !exclude.has(i.id));
+// day: only items already in the bank on that Lagos day (no since, or since <= day), so a top-up
+// deployed mid-day never changes the Daily Challenge anyone is playing today.
+function pick(mode: Mode, tier: Tier, n: number, rnd: () => number, exclude = new Set<string>(), day?: string): string[] {
+  const pool = BANK.filter((i) => i.m === mode && i.tiers.includes(tier) && !exclude.has(i.id) && (!day || !i.since || i.since <= day));
   const out: string[] = [];
   const copy = [...pool];
   while (out.length < n && copy.length) out.push(copy.splice(Math.floor(rnd() * copy.length), 1)[0].id);
   // A thin tier borrows from the tier below it.
-  if (out.length < n && tier !== "b") out.push(...pick(mode, tier === "t" ? "s" : "b", n - out.length, rnd, new Set([...exclude, ...out])));
+  if (out.length < n && tier !== "b") out.push(...pick(mode, tier === "t" ? "s" : "b", n - out.length, rnd, new Set([...exclude, ...out]), day));
   return out;
 }
 export function buildSet(kind: string, tier: Tier, seed: string): string[] {
@@ -163,7 +166,8 @@ export function buildSet(kind: string, tier: Tier, seed: string): string[] {
 }
 export function dailySet(day = lagosDay()): string[] {
   const rnd = seeded("daily:" + day);
-  return [...pick("arena", "s", 3, rnd), ...pick("gap", "s", 3, rnd), ...pick("myth", "s", 2, rnd), ...pick("who", "s", 2, rnd)];
+  const none = new Set<string>();
+  return [...pick("arena", "s", 3, rnd, none, day), ...pick("gap", "s", 3, rnd, none, day), ...pick("myth", "s", 2, rnd, none, day), ...pick("who", "s", 2, rnd, none, day)];
 }
 function code(): string {
   const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
