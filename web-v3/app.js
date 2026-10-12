@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.1.0";
+window.BA_V = "3.2.0";
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
 const app = $("#app");
@@ -777,7 +777,13 @@ async function profile() {
   document.addEventListener("click", () => { const a = audio(); if (a && a.state === "suspended") a.resume(); }, { once: true });
   ensureSession().then(() => { if (ME.player) { if (!S.name && ME.player.name) S.name = ME.player.name; if (!S.church && ME.player.church) S.church = ME.player.church; save(); } });
   loadBank().catch(() => {});
-  if (S.onboarded) await ensureSession();
+  // A sleeping server can take up to a minute to answer. Show the app after 2.5 s at most and
+  // refresh the home screen once the session arrives.
+  if (S.onboarded) {
+    let late = false;
+    const sess = ensureSession().then(() => { if (late && (!location.hash || location.hash === "#/" || location.hash === "#")) route(); });
+    await Promise.race([sess, new Promise((r) => setTimeout(() => { late = true; r(); }, 2500))]);
+  }
   route();
 })();
 })();
