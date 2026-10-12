@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.2.0";
+window.BA_V = "3.3.0";
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
 const app = $("#app");
@@ -228,8 +228,9 @@ async function home() {
       <div class="rays"></div>
       <div class="tiny gold">☀️ Daily Challenge · ${esc(daily ? daily.day : "")}</div>
       <h2 style="margin:6px 0 4px;font-family:var(--serif)">${daily && daily.played ? `Done: ${fmt(daily.played.score)} pts` : "Today's 10 for everyone"}</h2>
-      <p class="small muted" style="margin:0 0 14px">${daily && daily.played ? `You got ${daily.played.correct}/${daily.played.total}. New challenge in ${untilMidnight()}.` : "Gaps, myths, clues and deep questions. +100 bonus XP. One try only."}</p>
-      <div class="row">${daily && daily.played ? `<a class="btn ghost grow" href="#/ranks?tab=daily">See today's board</a>` : `<a class="btn primary grow" href="#/play/daily">Play today's challenge</a>`}</div>
+      <p class="small muted" style="margin:0 0 ${daily && daily.played ? 8 : 14}px">${daily && daily.played ? `You got ${daily.played.correct}/${daily.played.total}. New set at midnight, in ${untilMidnight()}.` : "Gaps, myths, clues and deep questions. +100 bonus XP. One try only."}</p>
+      ${daily && daily.played ? dailyWhy() : ""}
+      ${daily && daily.played ? `<div class="col" style="gap:8px"><a class="btn primary block" href="#/play/practice">🔁 Practise today's set again</a><a class="btn ghost block" href="#/ranks?tab=daily">See today's board</a></div>` : `<div class="row"><a class="btn primary grow" href="#/play/daily">Play today's challenge</a></div>`}
     </div>
     <button class="card gold row" id="duelcta" style="text-align:left;gap:14px">
       <div style="font-size:34px">⚔️</div>
@@ -273,6 +274,23 @@ function androidCard() {
 function untilMidnight() {
   const now = Date.now() + 3600e3; const left = 864e5 - (now % 864e5);
   const h = Math.floor(left / 36e5), m = Math.floor((left % 36e5) / 6e4); return `${h}h ${m}m`;
+}
+// The daily set changes at 00:00 West Africa Time (UTC+1): lagosDay() on the server, untilMidnight() here.
+const DAILY_WHY = "One official try a day keeps it fair: everyone gets the same 10. Practise below anytime.";
+function dailyWhy() { return `<p class="dailywhy">${DAILY_WHY}</p>`; }
+// The correct answer, spelled out, for the practice review.
+function answerText(it) {
+  if (!it) return "";
+  if (it.k === "gap") return it.text;
+  if (it.k === "tf") return String(it.a) === "myth" ? "MYTH: not in the Bible" : "FACT: it's in the Bible";
+  if (it.k === "order") return String(it.a).split(">").map((i) => it.o[+i]).join(" → ");
+  return it.o ? it.o[it.a] : String(it.a);
+}
+function practiceQ(it) {
+  if (!it) return "";
+  if (it.k === "gap") return "Fill in the Gap";
+  if (it.k === "who") return "Who Am I? " + (it.clues && it.clues[0] ? it.clues[0] : "");
+  return it.q || "";
 }
 function modeTile(k, isNew) {
   const m = MODES[k];
@@ -338,6 +356,13 @@ async function startMode(mode, tier) {
     if (d.played) { toast("You've played today's challenge. See the board!"); return go("#/ranks?tab=daily"); }
     return runRound({ ids: d.ids, tier: "s", mode: "daily", title: "Daily Challenge" });
   }
+  if (mode === "practice") {
+    // Practice replays today's Daily Challenge set on this phone only. Nothing is sent to the server,
+    // so the board, streak, XP and leagues are untouched. It opens only after the official try.
+    let d = null; try { d = await api("/api/v3/daily"); } catch (e) { toast("Couldn't reach the server. Check your data."); return go("#/"); }
+    if (!d.played) { toast("Play today's official try first. Practice opens after."); return go("#/play/daily"); }
+    return runRound({ ids: d.ids, tier: "s", mode: "practice", title: "Practice — not scored", practice: true });
+  }
   if (mode === "sudden") {
     const ids = shuffled([].concat(drawSet("arena", tier, 30), drawSet("myth", tier, 12), drawSet("gap", tier, 10)), Math.random() + "");
     return runRound({ ids, tier, mode: "sudden", title: "Sudden Death", sudden: true });
@@ -366,7 +391,7 @@ function runRound(cfg) {
   }
   function header() {
     const dots = cfg.sudden ? `<div class="grow small muted">Question ${idx + 1} · one life</div>` : `<div class="dots">${items.map((_, i) => `<i class="${i < idx ? (answers[i] && answers[i].correct ? "ok" : "bad") : i === idx ? "cur" : ""}"></i>`).join("")}</div>`;
-    return `<div class="playtop"><button class="iconbtn" id="quit" aria-label="Quit">✕</button>${dots}${combo >= 2 ? `<span class="combo">x${(1 + Math.min(combo, 10) * 0.1).toFixed(1)}</span>` : ""}<div class="score-pill" id="sc">${fmt(score)}</div></div><div id="rival"></div>`;
+    return `<div class="playtop"><button class="iconbtn" id="quit" aria-label="Quit">✕</button>${dots}${combo >= 2 ? `<span class="combo">x${(1 + Math.min(combo, 10) * 0.1).toFixed(1)}</span>` : ""}<div class="score-pill" id="sc">${fmt(score)}</div></div>${cfg.practice ? `<div class="practicetag">Practice — not scored</div>` : ""}<div id="rival"></div>`;
   }
   function next() {
     clearTimeout(timerH); clearInterval(tickH);
@@ -492,7 +517,8 @@ function runRound(cfg) {
   }
   function finish() {
     clearInterval(rivalH);
-    markSeen(answers.map((a) => a.id), tier);
+    if (!cfg.practice) markSeen(answers.map((a) => a.id), tier);
+    if (cfg.practice) return practiceResults(cfg, answers, { score, correct: correctN, bestCombo, total: answers.length });
     results(cfg, answers, { score, correct: correctN, bestCombo, total: answers.length });
   }
   next();
@@ -523,6 +549,7 @@ async function results(cfg, answers, local) {
     ${err && !r ? `<div class="card small">⚠️ Couldn't save this round (no connection). Your score still counts here.</div>` : ""}
     ${r && r.newAchievements && r.newAchievements.length ? r.newAchievements.map((a) => ACH[a] ? `<div class="badge"><div class="bi">${ACH[a][0]}</div><div><b>Achievement: ${ACH[a][1]}</b><div class="small muted">${ACH[a][2]}</div></div></div>` : "").join("") : ""}
     ${cfg.mode !== "daily" && cfg.mode !== "sudden" ? `<button class="card gold row" id="dset" style="text-align:left;gap:12px"><div style="font-size:28px">⚔️</div><div class="grow"><b>Challenge a pastor with this exact set</b><div class="small muted">They play the same ${total} questions and try to beat ${fmt(score)}</div></div><div class="gold">›</div></button>` : ""}
+    ${cfg.mode === "daily" ? `<div class="card"><p class="small muted" style="margin:0 0 6px">New set at midnight, in ${untilMidnight()}.</p>${dailyWhy()}<a class="btn ghost block" href="#/play/practice">🔁 Practise today's set again</a></div>` : ""}
     <div class="row"><button class="btn primary grow" id="again">${cfg.mode === "daily" ? "Today's board" : "Play again"}</button><button class="btn ghost" id="share" aria-label="Share">📤</button></div>
     <div class="card"><b>Review</b>${answers.map((a) => { const it = BY[a.id]; return `<div class="review"><div>${a.correct ? "✅" : a.partial > 0 ? "🟨" : "❌"}</div><div class="grow"><div>${esc(shortQ(it))}</div><div class="small gold">${esc(it.r || "")}</div></div></div>`; }).join("")}</div>
     <a class="btn ghost block" href="#/">Home</a>
@@ -534,6 +561,27 @@ async function results(cfg, answers, local) {
   $("#again").onclick = () => (cfg.mode === "daily" ? go("#/ranks?tab=daily") : startMode(cfg.mode, cfg.tier));
   const ds = $("#dset"); if (ds) ds.onclick = () => createDuelFromSet(cfg, answers);
   $("#share").onclick = () => shareCard({ score, correct, total, tier: cfg.tier, title: cfg.title });
+}
+// Practice results: scored on the phone only, never posted. Shows every correct answer.
+function practiceResults(cfg, answers, local) {
+  const { score, correct, total } = local;
+  render(`
+  <div class="col" style="gap:14px">
+    <div class="center" style="padding-top:10px">
+      <div class="practicetag" style="margin:0 auto 6px">Practice — not scored</div>
+      <div class="tiny gold">Today's Daily Challenge set</div>
+      <div class="bigscore" id="big">0</div>
+      <div class="muted">${correct === total ? "All ten! You know today's set by heart. 👑" : `You got ${correct}/${total} this time. Every answer is below.`}</div>
+    </div>
+    <div class="stats3"><div class="stat"><b>${correct}/${total}</b><span>Correct</span></div><div class="stat"><b>x${local.bestCombo}</b><span>Best streak</span></div><div class="stat"><b class="dim">0</b><span>XP · practice</span></div></div>
+    <div class="card small muted">Your board place, 🔥 streak, XP and league stay exactly as they were. Only your official try counts.</div>
+    <div class="card"><b>The answers</b>${answers.map((a) => { const it = BY[a.id]; return `<div class="review"><div>${a.correct ? "✅" : a.partial > 0 ? "🟨" : "❌"}</div><div class="grow"><div>${esc(practiceQ(it))}</div><div class="answer">${esc(answerText(it))}</div><div class="small gold">${esc(it.r || "")}</div></div></div>`; }).join("")}</div>
+    <div class="col" style="gap:8px"><button class="btn primary block" id="again">🔁 Practise again</button><a class="btn ghost block" href="#/ranks?tab=daily">Today's board</a></div>
+    <a class="btn ghost block" href="#/">Home</a>
+  </div>`);
+  countUp($("#big"), score);
+  sfx.ok();
+  $("#again").onclick = () => startMode("practice", "s");
 }
 function shortQ(it) { if (!it) return ""; if (it.k === "gap") return "“" + it.text.slice(0, 70) + (it.text.length > 70 ? "…”" : "”"); if (it.k === "who") return "Who Am I: " + it.o[it.a]; const q = it.q || ""; return q.length > 90 ? q.slice(0, 88) + "…" : q; }
 function countUp(el, to) { if (!el) return; const t0 = performance.now(), d = 1100; const f = (t) => { const p = Math.min(1, (t - t0) / d); el.textContent = fmt(Math.round(to * (1 - Math.pow(1 - p, 3)))); if (p < 1) requestAnimationFrame(f); }; requestAnimationFrame(f); }
