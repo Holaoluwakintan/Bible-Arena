@@ -204,8 +204,14 @@ async function micToggle() {
         meter();
       } catch (e) {
         micDenied = true; render();
-        const inAppView = /BibleArenaApp\//.test(navigator.userAgent); // the app's built-in viewer (phones without Chrome) has no mic access
-        toast(inAppView ? "Talking needs Chrome on this phone. You can still listen here." : e && e.name === "NotAllowedError" ? "Microphone blocked. Allow it for this site in your browser settings to talk. You can still listen." : "Couldn't start your microphone. You can still listen.");
+        // The app's built-in viewer (phones without Chrome) sends "BibleArenaApp/x.y.z". Before app 1.3.0 it had no mic access at all;
+        // from 1.3.0 it asks Android for the mic, so a refusal there is a phone setting (v3.8.1).
+        const appV = (navigator.userAgent.match(/BibleArenaApp\/(\d+)\.(\d+)/) || []).slice(1).map(Number);
+        const oldAppView = appV.length === 2 && (appV[0] < 1 || (appV[0] === 1 && appV[1] < 3));
+        const appView = appV.length === 2 && !oldAppView;
+        toast(oldAppView ? "Talking needs Chrome on this phone. You can still listen here."
+          : e && e.name === "NotAllowedError" ? (appView ? "Microphone blocked. Allow it for Bible Arena in your phone settings (Apps > Bible Arena > Permissions) to talk. You can still listen." : "Microphone blocked. Allow it for this site in your browser settings to talk. You can still listen.")
+          : "Couldn't start your microphone. You can still listen.");
         return;
       }
     }
