@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.3.4";
+window.BA_V = "3.4.0";
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
 const app = $("#app");
@@ -25,7 +25,7 @@ const ACH = {
   correct_100: ["📖", "Student", "100 correct"], correct_500: ["🎓", "Teacher of the Law", "500 correct"], streak_3: ["🕯️", "Kindled", "3-day streak"],
   streak_7: ["🔥", "Seven Days", "7-day streak"], streak_30: ["🏆", "Steadfast", "30-day streak"], daily_5: ["☀️", "Daily Bread", "5 daily challenges"],
   duel_sent: ["⚔️", "Challenger", "Send a pastor duel"], duel_won: ["🥇", "Giant Slayer", "Win a duel"], duel_5: ["🛡️", "Mighty Man", "Win 5 duels"],
-  rematch: ["🔄", "Seventy Times Seven", "Ask for a rematch"], church: ["⛪", "One Body", "Join the Pastors' League"],
+  rematch: ["🔄", "Seventy Times Seven", "Ask for a rematch"], church: ["⛪", "One Body", "Join a church team"],
   rank_elder: ["🧔", "Elder", "Reach Elder"], rank_apostle: ["✨", "Apostle", "Reach Apostle"],
 };
 const RANKS = [["Seeker", 0], ["Disciple", 600], ["Servant", 1800], ["Watchman", 4000], ["Scribe", 8000], ["Elder", 14000], ["Prophet", 24000], ["Apostle", 40000]];
@@ -145,7 +145,9 @@ async function route() {
   const { parts, q } = parseHash();
   const pathDuel = location.pathname.match(/^\/d\/([A-Za-z0-9]{4,12})/);
   if (pathDuel && !parts.length) { history.replaceState(null, "", "/#/d/" + pathDuel[1].toUpperCase()); return route(); }
-  if (!S.onboarded && parts[0] !== "d") return onboarding();
+  const pathChurch = location.pathname.match(/^\/c\/([A-Za-z0-9]{4,8})/);
+  if (pathChurch && !parts.length) { history.replaceState(null, "", "/#/c/" + pathChurch[1].toUpperCase()); return route(); }
+  if (!S.onboarded && parts[0] !== "d" && parts[0] !== "c") return onboarding();
   const [a, b] = parts;
   if (!a) return home();
   if (a === "play") return startMode(b || q.get("mode") || "arena", q.get("tier") || S.tier);
@@ -153,6 +155,8 @@ async function route() {
   if (a === "duel" && b === "new") return newDuel(q.get("from"));
   if (a === "d" && b) return acceptDuel(b.toUpperCase());
   if (a === "ranks") return ranks(q.get("tab") || "week");
+  if (a === "church") { if (b === "new") return createChurch(); if (b) return churchPage(b, q); return churchHub(); }
+  if (a === "c" && b) return joinByCode(b.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8));
   if (a === "me") { if (q.get("signedin")) { toast("Signed in with Google ✓"); history.replaceState(null, "", "#/me"); } return profile(); }
   return home();
 }
@@ -170,7 +174,7 @@ function onboarding(after) {
     </div>
     <div class="card gold col">
       <div class="field"><label for="nm">What should we call you?</label><input id="nm" maxlength="40" placeholder="e.g. Pastor Michael" value="${esc(S.name)}"></div>
-      <div class="field"><label for="ch">Your church or group <span class="dim">(for the Pastors' League, optional)</span></label><input id="ch" maxlength="60" placeholder="e.g. RCCG Jesus House, Ibadan" value="${esc(S.church)}"></div>
+      <div class="small muted">⛪ After this you can join your church's team in the Church League.</div>
     </div>
     <div class="col" style="gap:8px">
       <div class="tiny muted">Choose your level</div>
@@ -182,7 +186,7 @@ function onboarding(after) {
   </div>`);
   $("#tiers").onclick = (e) => { const t = e.target.closest(".tier"); if (!t) return; S.tier = t.dataset.t; $$(".tier").forEach((x) => x.classList.toggle("on", x === t)); sfx.tap(); };
   $("#go").onclick = async () => {
-    S.name = $("#nm").value.trim().slice(0, 40) || "Player"; S.church = $("#ch").value.trim().slice(0, 60);
+    S.name = $("#nm").value.trim().slice(0, 40) || "Player";
     S.onboarded = true; save(); buzz(15); sfx.ok();
     $("#go").disabled = true; $("#go").textContent = "Opening the gates…";
     await ensureSession();
@@ -239,6 +243,7 @@ async function home() {
     </div>
     <div id="moregames" class="col" style="gap:14px">
     <div class="sechead"><b>🎮 More games</b><span class="small muted">Play anytime, as many times as you like. These don't use your daily try.</span></div>
+    <div id="homechurch"></div>
     <button class="card gold row" id="duelcta" style="text-align:left;gap:14px">
       <div style="font-size:34px">⚔️</div>
       <div class="grow"><b style="font-size:17px">Challenge a Pastor</b><div class="small muted">Play a set, send the link on WhatsApp. Same questions, who wins?</div></div>
@@ -267,6 +272,7 @@ async function home() {
     ${androidCard()}
   </div>`;
   $("#duelcta").onclick = () => { sfx.tap(); go("#/duel/new"); };
+  homeChurchCard();
   $("#tierchip").onclick = () => tierSheet(() => home());
   $$(".mode", h).forEach((m) => (m.onclick = () => { sfx.tap(); buzz(8); go("#/play/" + m.dataset.m); }));
   $$("[data-more]", h).forEach((b) => (b.onclick = () => { sfx.tap(); showMoreGames(); }));
@@ -578,6 +584,7 @@ async function results(cfg, answers, local) {
     </div>
     <div class="stats3"><div class="stat"><b>${correct}/${total}</b><span>Correct</span></div><div class="stat"><b>x${local.bestCombo}</b><span>Best streak</span></div><div class="stat"><b class="gold">+${fmt(r ? r.xp : 0)}</b><span>XP</span></div></div>
     ${r && r.player ? `<div class="card"><div class="row between"><b>${esc(r.player.rank.name)} ${r.player.rank.division}</b><span class="small muted">${fmt(r.player.xp)} XP</span></div><div class="xpbar" style="margin-top:8px"><i id="xpb" style="width:${Math.round((r.rankBefore ? r.rankBefore.progress : 0) * 100)}%"></i></div><div class="small dim" style="margin-top:6px">${r.player.rank.next ? `${fmt(r.player.rank.nextXp - r.player.xp)} XP to ${r.player.rank.next}` : "You've reached Apostle"} · 🔥 ${r.player.streak}-day streak</div></div>` : ""}
+    ${r && !cfg.duel ? `<div id="reschurch"></div>` : ""}
     ${err && !r ? `<div class="card small">⚠️ Couldn't save this round (no connection). Your score still counts here.</div>` : ""}
     ${r && r.newAchievements && r.newAchievements.length ? r.newAchievements.map((a) => ACH[a] ? `<div class="badge"><div class="bi">${ACH[a][0]}</div><div><b>Achievement: ${ACH[a][1]}</b><div class="small muted">${ACH[a][2]}</div></div></div>` : "").join("") : ""}
     ${cfg.mode !== "daily" && cfg.mode !== "sudden" ? `<button class="card gold row" id="dset" style="text-align:left;gap:12px"><div style="font-size:28px">⚔️</div><div class="grow"><b>Challenge a pastor with this exact set</b><div class="small muted">They play the same ${total} questions and try to beat ${fmt(score)}</div></div><div class="gold">›</div></button>` : ""}
@@ -587,6 +594,7 @@ async function results(cfg, answers, local) {
     <a class="btn ghost block" href="#/">Home</a>
   </div>`);
   countUp($("#big"), score);
+  if (r && !cfg.duel) resultsChurchLine(score);
   setTimeout(() => { const b = $("#xpb"); if (b && r && r.player) b.style.width = Math.round((r.rankAfter && r.rankAfter.index > r.rankBefore.index ? 1 : r.player.rank.progress) * 100) + "%"; }, 300);
   if (perfect) { confetti(80); sfx.win(); } else sfx.ok();
   if (r && r.rankAfter && r.rankBefore && r.rankAfter.index > r.rankBefore.index) setTimeout(() => rankUp(r.rankAfter), 900);
@@ -623,6 +631,213 @@ function rankUp(rk) {
   const el = document.createElement("div"); el.className = "modal center";
   el.innerHTML = `<div class="sheet rankup"><div class="burst"></div><div class="emblem">${rk.name[0]}</div><div class="tiny gold">New rank</div><h1 class="title-gold" style="font-size:34px;margin:4px 0">${esc(rk.name)}</h1><p class="muted">“Well done, thou good and faithful servant.” Matthew 25:21</p><button class="btn primary block" style="margin-top:12px">Amen!</button></div>`;
   document.body.appendChild(el); el.querySelector("button").onclick = () => el.remove();
+}
+
+// ---------- Church League: church teams, invite links, weekly + all-time church boards ----------
+let CH_META = null;
+async function chMeta() { if (!CH_META) { try { CH_META = await api("/api/v3/churches/meta"); } catch (e) { CH_META = { states: [], kinds: ["church", "fellowship", "campus"] }; } } return CH_META; }
+const KIND = { church: "Church", fellowship: "Fellowship", campus: "Campus fellowship" };
+function untilReset(ts) {
+  const left = Math.max(0, (ts || 0) - Date.now()); const d = Math.floor(left / 864e5), h = Math.floor((left % 864e5) / 36e5), m = Math.floor((left % 36e5) / 6e4);
+  return d ? `${d}d ${h}h` : `${h}h ${m}m`;
+}
+function churchLink(code) { return origin() + "/c/" + code; }
+function churchShareText(c) { return `Join ${c.name} on Bible Arena ⛪\nWe're playing in the Church League. Every round you play adds points for our church. Tap to join our team:\n${churchLink(c.code)}\n(Invite code: ${c.code})`; }
+async function shareChurch(c) {
+  sfx.tap();
+  const text = churchShareText(c);
+  if (navigator.share && !/Windows|Macintosh/.test(navigator.userAgent)) { try { await navigator.share({ text }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+  location.href = waLink(text);
+}
+// S.church mirrors the church team (the server also forces a member's church to the team name).
+function syncChurch(c) { if (c) { S.church = c.name; S.teamName = c.name; } else if (S.teamName) { S.church = ""; S.teamName = ""; } save(); }
+function placeLine(c) { return `${esc(c.city)}, ${esc(c.state)} · ${KIND[c.kind] || "Church"}`; }
+function medal(i) { return i === 1 ? "🥇" : i === 2 ? "🥈" : i === 3 ? "🥉" : i; }
+
+async function churchHub() {
+  render(`<div id="chh"><div class="boot"><div class="boot-mark">⛪</div><div class="boot-sub">Opening the Church League…</div></div></div>${tabbar("ranks")}`);
+  await ensureSession();
+  let mine = null; try { mine = await api("/api/v3/churches/mine"); } catch (e) {}
+  if (mine && mine.church) { syncChurch(mine.church); return go("#/church/" + mine.church.id); }
+  const el = $("#chh"); if (!el) return;
+  el.innerHTML = `<div class="col" style="gap:14px">
+    <div class="hero"><div class="rays"></div><div class="tiny gold">⛪ Church League</div>
+      <h2 style="margin:6px 0 6px;font-family:var(--serif)">Play for your church</h2>
+      <p class="small muted" style="margin:0">Join your church, fellowship or campus team. Every round you play adds points to your church on the weekly league. The top church each week is crowned champion 🏆</p></div>
+    <div class="card gold col">
+      <div class="field"><label for="jc">Got an invite code?</label><input id="jc" maxlength="8" autocapitalize="characters" autocomplete="off" placeholder="e.g. K7Q2MX" style="text-transform:uppercase;letter-spacing:.2em;font-weight:800"></div>
+      <div id="jerr" class="small" style="color:#ff8a80;display:none"></div>
+      <button class="btn primary block" id="jgo">Join my church</button>
+    </div>
+    <div class="card row" style="gap:14px">
+      <div style="font-size:30px">✨</div><div class="grow"><b>Your church isn't here yet?</b><div class="small muted">Create its team in 30 seconds, then share the link in your church WhatsApp group.</div></div>
+    </div>
+    <a class="btn ghost block" href="#/church/new">➕ Create a church team</a>
+    <a class="btn ghost block" href="#/ranks?tab=church">🏆 See the Church League</a>
+  </div>`;
+  const join = () => { const c = $("#jc").value.trim().toUpperCase().replace(/[^A-Z0-9]/g, ""); if (c.length < 4) { $("#jerr").textContent = "Type the invite code from your church."; $("#jerr").style.display = "block"; return; } go("#/c/" + c); };
+  $("#jgo").onclick = join; $("#jc").onkeydown = (e) => { if (e.key === "Enter") join(); };
+}
+
+async function createChurch() {
+  render(`<div id="chn"></div>${tabbar("ranks")}`);
+  await ensureSession();
+  const meta = await chMeta();
+  const el = $("#chn"); if (!el) return;
+  el.innerHTML = `<div class="col" style="gap:14px">
+    <div class="row" style="gap:10px"><a class="iconbtn" href="#/church" aria-label="Back">‹</a><h2>Create a church team</h2></div>
+    <div class="card gold col" style="gap:14px">
+      <div class="field"><label>This team is for a</label><div class="row" id="kinds" style="flex-wrap:wrap;gap:8px">${meta.kinds.map((k, i) => `<button class="chip ${i === 0 ? "on" : ""}" data-k="${k}">${k === "church" ? "⛪" : k === "fellowship" ? "🙌" : "🎓"} ${KIND[k]}</button>`).join("")}</div></div>
+      <div class="field"><label for="cn">Name</label><input id="cn" maxlength="50" placeholder="e.g. RCCG Jesus House" autocomplete="off"><span class="small dim" id="cnc">3–50 characters. Use the name your members know.</span></div>
+      <div class="field"><label for="cc">City or town</label><input id="cc" maxlength="40" placeholder="e.g. Akure" autocomplete="off"></div>
+      <div class="field"><label for="cs">State</label><select id="cs"><option value="">Choose a state</option>${meta.states.map((s) => `<option>${esc(s)}</option>`).join("")}</select></div>
+      <div id="cerr" class="small" style="color:#ff8a80;display:none"></div>
+      <button class="btn primary block" id="cgo">Create team</button>
+      <p class="small dim" style="margin:0">You'll get an invite link to share. You can be in one church team at a time; creating this one moves you into it.</p>
+    </div></div>`;
+  let kind = meta.kinds[0];
+  $("#kinds").onclick = (e) => { const b = e.target.closest("[data-k]"); if (!b) return; kind = b.dataset.k; $$("#kinds .chip").forEach((x) => x.classList.toggle("on", x === b)); sfx.tap(); };
+  ["#cn", "#cc", "#cs"].forEach((s) => $(s).addEventListener("input", () => { $("#cerr").style.display = "none"; }));
+  $("#cn").oninput = () => { const n = $("#cn").value.trim().length; $("#cnc").textContent = n ? `${n}/50` : "3–50 characters. Use the name your members know."; };
+  $("#cgo").onclick = async () => {
+    const body = { name: $("#cn").value, city: $("#cc").value, state: $("#cs").value, kind };
+    const err = (m) => { $("#cerr").textContent = m; $("#cerr").style.display = "block"; buzz([20, 40, 20]); };
+    if (body.name.trim().length < 3) return err("Please enter your church name (at least 3 letters).");
+    if (body.city.trim().length < 2) return err("Please enter the city or town.");
+    if (!body.state) return err("Please pick the state.");
+    $("#cgo").disabled = true; $("#cgo").textContent = "Creating…";
+    try {
+      const r = await api("/api/v3/churches", { body });
+      syncChurch(r.church); sfx.win(); confetti(70); toast("Your church team is live ⛪");
+      go("#/church/" + r.church.id + "?new=1");
+    } catch (e) {
+      $("#cgo").disabled = false; $("#cgo").textContent = "Create team";
+      err((e.data && e.data.message) || (e.status === 429 ? "Too many new teams from here. Try again later." : "Couldn't create the team. Check your connection and try again."));
+    }
+  };
+}
+
+async function churchPage(id, q) {
+  render(`<div id="chp"><div class="boot"><div class="boot-mark">⛪</div><div class="boot-sub">Loading…</div></div></div>${tabbar("ranks")}`);
+  await ensureSession();
+  let d; try { d = await api("/api/v3/churches/" + encodeURIComponent(id)); } catch (e) {
+    const el = $("#chp"); if (el) el.innerHTML = `<div class="col center" style="padding-top:18vh;gap:12px"><div style="font-size:48px">🕊️</div><h2>Church not found</h2><p class="muted">This team may have closed.</p><a class="btn primary" href="#/church">Church League</a></div>`;
+    return;
+  }
+  const c = d.church; if (d.isMember) syncChurch(Object.assign({}, c));
+  let per = (q && q.get("p")) === "all" ? "all" : "week";
+  const el = $("#chp"); if (!el) return;
+  const isNew = q && q.get("new");
+  const board = () => {
+    const rows = d.members.slice().sort((a, b) => (b[per] - a[per]) || (b.xp - a.xp));
+    return rows.length ? rows.slice(0, 50).map((m, i) => `<div class="lb ${m.isMe ? "me" : ""}"><div class="pos p${i + 1}">${medal(i + 1)}</div><div class="grow"><b>${esc(m.name)}</b>${m.isMe ? ` <span class="small gold">you</span>` : ""}${m.role === "owner" ? ` <span class="small dim">· team lead</span>` : ""}<div class="small muted">${esc(rankOf(m.xp).name)}</div></div><div class="gold serif" style="font-weight:800">${fmt(m[per])}</div>${d.isOwner && !m.isMe ? `<button class="chip" data-rm="${m.idx}" aria-label="Remove ${esc(m.name)}" style="padding:4px 8px">✕</button>` : ""}</div>`).join("") : `<div class="muted">No members yet.</div>`;
+  };
+  el.innerHTML = `<div class="col" style="gap:14px">
+    <div class="row" style="gap:10px"><a class="iconbtn" href="#/ranks?tab=church" aria-label="Back">‹</a><div class="tiny gold grow">⛪ Church League</div></div>
+    <div class="hero center"><div class="rays"></div>
+      ${c.champion ? `<div class="chip on" style="margin-bottom:8px">🏆 Last week's champion</div>` : ""}
+      <div style="font-size:40px;line-height:1">${c.kind === "campus" ? "🎓" : c.kind === "fellowship" ? "🙌" : "⛪"}</div>
+      <h2 style="font-family:var(--serif);margin:8px 0 2px">${esc(c.name)}</h2>
+      <div class="small muted">${placeLine(c)}</div>
+      ${c.titles ? `<div class="small gold" style="margin-top:6px">🏆 ${c.titles}× weekly champion</div>` : ""}
+    </div>
+    <div class="stats3">
+      <div class="stat"><b>${d.week.rank ? "#" + d.week.rank : "–"}</b><span>This week</span></div>
+      <div class="stat"><b class="gold">${fmt(d.week.points)}</b><span>Week points</span></div>
+      <div class="stat"><b>${c.members}</b><span>Member${c.members === 1 ? "" : "s"}</span></div>
+    </div>
+    <div class="small dim center" style="margin-top:-4px">All-time: ${fmt(d.all.points)} pts${d.all.rank ? ` · #${d.all.rank} of ${d.all.of}` : ""} · Weekly league resets in ${untilReset(d.resetsAt)}</div>
+    ${d.isMember ? `<div class="card gold col" style="gap:10px">
+      <div class="row between"><b>${isNew ? "🎉 Now invite your church" : "Invite your church"}</b><span class="small muted">More members, more points</span></div>
+      <div class="row" style="gap:10px"><div class="grow"><div class="tiny muted">Invite code</div><div class="serif gold" style="font-size:26px;font-weight:800;letter-spacing:.18em" id="ccode">${esc(c.code)}</div></div><button class="chip" id="ccopy">Copy link</button></div>
+      <button class="btn wa block" id="cwa">Share on WhatsApp</button>
+    </div>
+    <a class="btn primary block" href="#/play/mixed">▶ Play a round for ${esc(c.name.length > 22 ? c.name.slice(0, 21) + "…" : c.name)}</a>` : `<div class="card small muted">Members join with their church's invite link or code. Ask someone from ${esc(c.name)} to share it with you.</div><a class="btn ghost block" href="#/church">Join with a code</a>`}
+    <div class="card">
+      <div class="row between" style="margin-bottom:6px"><b>Top members</b><div class="row" style="gap:6px"><button class="chip ${per === "week" ? "on" : ""}" data-per="week">This week</button><button class="chip ${per === "all" ? "on" : ""}" data-per="all">All-time</button></div></div>
+      <div id="mb">${board()}</div>
+    </div>
+    ${d.isMember ? `<button class="btn ghost block" id="cleave" style="color:#ff8a80">Leave this team</button>` : ""}
+    <p class="small dim center" style="margin:0">Points = round scores members earn after joining. Switching churches never carries points across.</p>
+  </div>`;
+  $$("[data-per]", el).forEach((b) => (b.onclick = () => { per = b.dataset.per; $$("[data-per]", el).forEach((x) => x.classList.toggle("on", x === b)); $("#mb").innerHTML = board(); bindRm(); sfx.chip(); }));
+  const bindRm = () => $$("[data-rm]", el).forEach((b) => (b.onclick = async () => {
+    const m = d.members.find((x) => String(x.idx) === b.dataset.rm); if (!m || !confirm(`Remove ${m.name} from ${c.name}?`)) return;
+    try { await api("/api/v3/churches/" + c.id + "/remove", { body: { member: m.idx } }); toast("Removed"); churchPage(id, q); } catch (e) { toast("Couldn't remove. Try again."); }
+  }));
+  bindRm();
+  if (d.isMember) {
+    $("#cwa").onclick = () => shareChurch(c);
+    $("#ccopy").onclick = async () => { const u = churchLink(c.code); try { await navigator.clipboard.writeText(u); toast("Invite link copied ✓"); } catch (e) { prompt("Copy this link:", u); } };
+    $("#cleave").onclick = async () => {
+      if (!confirm(c.members <= 1 ? `You're the only member. Leaving closes ${c.name}. Leave?` : `Leave ${c.name}? Your future rounds will stop counting for this church.`)) return;
+      try { await api("/api/v3/churches/leave", { body: {} }); syncChurch(null); toast("You left the team"); go("#/church"); } catch (e) { toast("Couldn't leave. Try again."); }
+    };
+  }
+}
+
+async function joinByCode(code) {
+  render(`<div id="chj"><div class="boot"><div class="boot-mark">⛪</div><div class="boot-sub">Finding your church…</div></div></div>`);
+  await ensureSession();
+  let d; try { d = await api("/api/v3/churches/code/" + encodeURIComponent(code)); } catch (e) {
+    return render(`<div class="col center" style="padding-top:18vh;gap:12px"><div style="font-size:48px">🕊️</div><h2>Code not found</h2><p class="muted">Check the invite code (${esc(code)}) and try again.</p><a class="btn primary" href="#/church">Try another code</a><a class="btn ghost" href="#/">Home</a></div>`);
+  }
+  const c = d.church;
+  if (d.alreadyMember) return go("#/church/" + c.id);
+  const needName = !S.onboarded;
+  render(`<div class="col" style="gap:16px;padding-top:4vh">
+    <div class="center"><div class="tiny gold">⛪ You're invited to the Church League</div></div>
+    <div class="hero center"><div class="rays"></div>
+      <div style="font-size:44px;line-height:1">${c.kind === "campus" ? "🎓" : c.kind === "fellowship" ? "🙌" : "⛪"}</div>
+      <h2 style="font-family:var(--serif);margin:10px 0 4px">${esc(c.name)}</h2>
+      <div class="small muted">${placeLine(c)}</div>
+      <div class="small gold" style="margin-top:8px">${c.members} member${c.members === 1 ? "" : "s"} playing</div>
+    </div>
+    <div class="card small muted">Every round you play adds points for ${esc(c.name)} on the weekly league. The top church each week is crowned champion 🏆</div>
+    ${needName ? `<div class="card gold"><div class="field"><label for="nm">What should we call you?</label><input id="nm" maxlength="40" placeholder="e.g. Sister Grace" value="${esc(S.name)}"></div></div>` : ""}
+    ${d.current ? `<div class="card small">You're in <b>${esc(d.current.name)}</b> now. Joining moves you to ${esc(c.name)}.</div>` : ""}
+    <button class="btn primary block" id="jgo">Join ${esc(c.name.length > 26 ? c.name.slice(0, 25) + "…" : c.name)}</button>
+    <a class="btn ghost block" href="#/">Not now</a>
+  </div>`);
+  $("#jgo").onclick = async () => {
+    if (needName) { const n = $("#nm").value.trim().slice(0, 40); if (!n) { $("#nm").focus(); return toast("Tell us your name first"); } S.name = n; S.onboarded = true; save(); await savePlayer(); }
+    $("#jgo").disabled = true; $("#jgo").textContent = "Joining…";
+    try { const r = await api("/api/v3/churches/join", { body: { code } }); syncChurch(r.church); sfx.win(); confetti(60); toast(`Welcome to ${r.church.name} ⛪`); go("#/church/" + r.church.id); }
+    catch (e) { $("#jgo").disabled = false; $("#jgo").textContent = "Join"; toast((e.data && e.data.message) || "Couldn't join. Try again."); }
+  };
+}
+
+async function leagueBoard(el, per) {
+  let r; try { r = await api("/api/v3/league?period=" + per); } catch (e) { el.innerHTML = "Couldn't load the league."; return; }
+  const champ = r.champion;
+  const mine = r.mine;
+  el.innerHTML = `
+    <div class="row" style="gap:6px;margin-bottom:10px"><button class="chip ${per === "week" ? "on" : ""}" data-lp="week">This week</button><button class="chip ${per === "all" ? "on" : ""}" data-lp="all">All-time</button><span class="grow"></span>${per === "week" ? `<span class="small dim">Resets in ${untilReset(r.resetsAt)}</span>` : ""}</div>
+    ${champ && per === "week" ? `<a class="badge" href="#/church/${esc(champ.id)}" style="text-decoration:none;color:inherit;margin-bottom:10px"><div class="bi">🏆</div><div><b>Last week's champion</b><div class="small muted">${esc(champ.name)} · ${fmt(champ.points)} pts</div></div></a>` : ""}
+    ${mine && mine.pos > 5 ? `<a class="lb me" href="#/church/${esc(mine.id)}" style="text-decoration:none;color:inherit;margin-bottom:6px"><div class="pos">${mine.pos}</div><div class="grow"><b>⛪ ${esc(mine.name)}</b> <span class="small gold">your church</span><div class="small muted">${mine.members} member${mine.members === 1 ? "" : "s"}</div></div><div class="gold serif" style="font-weight:800">${fmt(mine.points)}</div></a>`
+      : mine ? "" : `<a class="card gold row" href="#/church" style="text-decoration:none;color:inherit;gap:12px;margin-bottom:10px"><div style="font-size:26px">⛪</div><div class="grow"><b>Play for your church</b><div class="small muted">Join with an invite code or create your church's team</div></div><div class="gold">›</div></a>`}
+    ${r.churches.length ? r.churches.map((c) => `<a class="lb ${c.isMine ? "me" : ""}" href="#/church/${esc(c.id)}" style="text-decoration:none;color:inherit"><div class="pos p${c.pos}">${medal(c.pos)}</div><div class="grow"><b>${esc(c.name)}</b>${c.titles ? ` <span class="small gold">🏆${c.titles > 1 ? "×" + c.titles : ""}</span>` : ""}<div class="small muted">${esc(c.city)}, ${esc(c.state)} · ${c.members} member${c.members === 1 ? "" : "s"}</div></div><div class="gold serif" style="font-weight:800">${fmt(c.points)}</div></a>`).join("")
+      : `<div class="muted">No church teams yet. Create the first one!</div>`}`;
+  $$("[data-lp]", el).forEach((b) => (b.onclick = () => { sfx.chip(); history.replaceState(null, "", "#/ranks?tab=church&p=" + b.dataset.lp); leagueBoard(el, b.dataset.lp); }));
+}
+
+async function homeChurchCard() {
+  const box = $("#homechurch"); if (!box) return;
+  let m = null; try { m = await api("/api/v3/churches/mine"); } catch (e) { return; }
+  const b2 = $("#homechurch"); if (!b2) return;
+  if (m && m.church) {
+    const c = m.church; syncChurch(c);
+    b2.innerHTML = `<a class="card gold row" href="#/church/${esc(c.id)}" style="text-decoration:none;color:inherit;gap:14px"><div style="font-size:34px">⛪</div><div class="grow"><div class="tiny gold">${c.champion ? "🏆 Champions · " : ""}Church League</div><b style="font-size:17px">${esc(c.name)}</b><div class="small muted">#${c.rank || "–"} this week · ${fmt(c.weekPoints)} pts · you added ${fmt(c.myWeekPoints)}</div></div><div class="gold" style="font-size:22px">›</div></a>`;
+  } else {
+    b2.innerHTML = `<a class="card row" href="#/church" style="text-decoration:none;color:inherit;gap:14px;border-color:rgba(245,185,66,.35)"><div style="font-size:34px">⛪</div><div class="grow"><div class="tiny gold">New · Church League</div><b style="font-size:17px">Church vs Church</b><div class="small muted">Join your church's team and push it up the weekly league</div></div><div class="gold" style="font-size:22px">›</div></a>`;
+  }
+}
+async function resultsChurchLine(score) {
+  const box = $("#reschurch"); if (!box) return;
+  let m = null; try { m = await api("/api/v3/churches/mine"); } catch (e) { return; }
+  const b2 = $("#reschurch"); if (!b2 || !m) return;
+  if (m.church) { const c = m.church; b2.innerHTML = `<a class="badge" href="#/church/${esc(c.id)}" style="text-decoration:none;color:inherit"><div class="bi">⛪</div><div class="grow"><b>+${fmt(score)} for ${esc(c.name)}</b><div class="small muted">Your church is #${c.rank || "–"} this week with ${fmt(c.weekPoints)} pts</div></div><div class="gold">›</div></a>`; }
+  else b2.innerHTML = `<a class="card row small" href="#/church" style="text-decoration:none;color:inherit;gap:10px"><div style="font-size:22px">⛪</div><div class="grow">Join your church's team and this score would count for your church.</div><div class="gold">›</div></a>`;
 }
 
 // ---------- share ----------
@@ -794,9 +1009,10 @@ async function duelsScreen() {
 
 // ---------- leaderboards ----------
 async function ranks(tab) {
-  const tabs = [["week", "This week"], ["church", "Pastors' League"], ["rivals", "Rivals"], ["daily", "Today"], ["all", "All-time"]];
+  const tabs = [["week", "This week"], ["church", "⛪ Churches"], ["rivals", "Rivals"], ["daily", "Today"], ["all", "All-time"]];
   render(`<h2 style="margin-bottom:12px">Leaderboards</h2><div class="segs">${tabs.map(([k, l]) => `<a class="chip ${tab === k ? "on" : ""}" href="#/ranks?tab=${k}">${l}</a>`).join("")}</div>${tab === "daily" ? `<p class="small muted" style="margin:0 0 10px">🌍 Global Scoreboard for today's Daily Challenge: one official try each.</p>` : ""}<div id="lb" class="card"><div class="muted small">Loading…</div></div>${tabbar("ranks")}`);
   await ensureSession();
+  if (tab === "church") { const l = $("#lb"); if (l) leagueBoard(l, parseHash().q.get("p") === "all" ? "all" : "week"); return; }
   let r; try { r = await api("/api/v3/leaderboard?scope=" + tab); } catch (e) { const l = $("#lb"); if (l) l.innerHTML = "Couldn't load the board."; return; }
   const el = $("#lb"); if (!el) return;
   if (tab === "church") {
@@ -812,6 +1028,7 @@ async function ranks(tab) {
 async function profile() {
   render(`<div id="pf"></div>${tabbar("me")}`);
   await ensureSession();
+  try { const m = await api("/api/v3/churches/mine"); syncChurch(m.church); } catch (e) {}
   const p = ME.player || { xp: 0, achievements: [], stats: {} };
   const rk = rankOf(p.xp); const st = p.stats || {}; const got = p.achievements || [];
   const google = ME.user && ME.user.openId === "google";
@@ -826,7 +1043,7 @@ async function profile() {
     <div class="card">
       <b>Settings</b>
       <div class="setrow"><div class="grow"><div>Name</div><div class="small muted">${esc(S.name)}</div></div><button class="chip" id="ename">Edit</button></div>
-      <div class="setrow"><div class="grow"><div>Church / group</div><div class="small muted">${esc(S.church || "Not set")}</div></div><button class="chip" id="echurch">${S.church ? "Edit" : "Add"}</button></div>
+      <div class="setrow"><div class="grow"><div>Church team</div><div class="small muted">${esc(S.teamName || "Not in a church team yet")}</div></div><a class="chip ${S.teamName ? "" : "on"}" href="#/church">${S.teamName ? "Open" : "Join"}</a></div>
       <div class="setrow"><div class="grow"><div>Level</div><div class="small muted">${TIER[S.tier].name}</div></div><button class="chip" id="etier">Change</button></div>
       <div class="setrow"><div>Sound</div><button class="switch ${S.sound ? "on" : ""}" id="snd" aria-label="Sound"></button></div>
       <div class="setrow"><div>Vibration</div><button class="switch ${S.haptics ? "on" : ""}" id="hap" aria-label="Vibration"></button></div>
@@ -834,12 +1051,11 @@ async function profile() {
       <div class="setrow"><div class="grow"><div>Privacy policy</div><div class="small muted">What we keep and why</div></div><a class="chip" href="/privacy">Read</a></div>
       <div class="setrow"><div class="grow"><div>Delete account</div><div class="small muted">Permanently erase your profile, scores and duels</div></div><button class="chip" id="delacct" style="color:#ff8a80">Delete</button></div>
     </div>
-    <div class="card"><b>More</b><div class="row" style="flex-wrap:wrap;gap:8px;margin-top:10px"><a class="chip" href="/play">🏛️ Classic app</a>${inAppShell() ? "" : `<a class="chip" href="/download">📱 Android app</a>`}<a class="chip" href="#/ranks?tab=church">⛪ Pastors' League</a></div>
+    <div class="card"><b>More</b><div class="row" style="flex-wrap:wrap;gap:8px;margin-top:10px"><a class="chip" href="/play">🏛️ Classic app</a>${inAppShell() ? "" : `<a class="chip" href="/download">📱 Android app</a>`}<a class="chip" href="#/ranks?tab=church">⛪ Church League</a></div>
       <p class="small dim" style="margin:12px 0 0">Scripture quotations are from the King James Version (public domain). Every answer carries its reference so you can read it yourself.</p></div>
   </div>`;
   const ed = async (key, label, max) => { const v = prompt(label, S[key] || ""); if (v == null) return; S[key] = v.trim().slice(0, max); save(); await savePlayer(); profile(); };
   $("#ename").onclick = () => ed("name", "Your name", 40);
-  $("#echurch").onclick = () => ed("church", "Your church or group (for the Pastors' League)", 60);
   $("#etier").onclick = () => tierSheet(() => profile());
   $("#snd").onclick = (e) => { S.sound = !S.sound; save(); e.target.classList.toggle("on", S.sound); sfx.ok(); };
   $("#hap").onclick = (e) => { S.haptics = !S.haptics; save(); e.target.classList.toggle("on", S.haptics); buzz(30); };

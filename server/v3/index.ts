@@ -15,6 +15,7 @@ import { registerLive, flushLive } from "./live";
 import { shutdownHooks } from "../persist";
 import { registerLegal } from "./legal";
 import { sentryBrowserTags } from "../_core/sentry-lite";
+import { registerChurches, teamNameFor, mergeChurchMembership, previewForOg } from "./churches";
 
 type Tier = "b" | "s" | "t";
 type Mode = "arena" | "myth" | "who" | "gap";
@@ -298,6 +299,7 @@ export async function mergeGuestInto(guestOpenId: string, googleOpenId: string):
     await pool.query(`delete from ${SCH}.duel_entries e where e.open_id=$1 and exists(select 1 from ${SCH}.duel_entries x where x.code=e.code and x.open_id=$2)`, [guestOpenId, googleOpenId]);
     await pool.query(`update ${SCH}.duel_entries set open_id=$2 where open_id=$1`, [guestOpenId, googleOpenId]);
     await pool.query(`update ${SCH}.duels set creator_open_id=$2 where creator_open_id=$1`, [guestOpenId, googleOpenId]);
+    mergeChurchMembership(guestOpenId, googleOpenId);
   } catch (error) {
     logger.warn("v3_merge_failed", { error: error instanceof Error ? error.message : String(error) });
   }
@@ -320,7 +322,7 @@ export function registerV3(app: Express): void {
   app.post("/api/v3/player", limitWrites, guard(async (req, res, me) => {
     const b = req.body || {};
     const name = clean(b.name, 40) || me.name || "Player";
-    const church = clean(b.church, 60) || null;
+    const church = teamNameFor(me.openId) || clean(b.church, 60) || null; // a church-team member always plays for the team
     const tier = asTier(b.tier);
     const importXp = Math.max(0, Math.min(Number(b.importXp) || 0, 20000));
     const pool = baPool()!;
@@ -495,6 +497,9 @@ export function registerV3(app: Express): void {
     send(res, 200, { scope, rows: rows.map((r: any) => ({ name: r.name, church: r.church, score: r.score, rank: rankOf(r.xp || 0).name, isMe: me?.openId === r.open_id, wins: r.wins, losses: r.losses, draws: r.draws })) });
   }, false));
 
+  // ---- Church League (teams, invite codes, weekly + all-time boards) ----
+  registerChurches(app, guard as any, send);
+
   // ---- share pages: WhatsApp/OG previews for challenge links ----
   const indexFile = path.join(WEB_DIR, "index.html");
   const page = (req: Request, res: Response, og: { title: string; desc: string; image: string }) => {
@@ -524,6 +529,15 @@ export function registerV3(app: Express): void {
       }
     } catch {}
     page(req, res, { title, desc, image: "/v3/og-duel.jpg" });
+  });
+  app.get("/c/:code", async (req, res) => {
+    let title = "Join your church on Bible Arena";
+    let desc = "Your church is competing in the Bible Arena Church League. Join the team, play rounds and push your church up the weekly league.";
+    try {
+      const r = await previewForOg(clean(req.params.code, 12));
+      if (r) { title = `Join ${r.name} on Bible Arena ⛪`; desc = `${r.name}, ${r.city} is in the Church League with ${r.members} member${r.members === 1 ? "" : "s"}. Join the team, play rounds and push your church up the weekly league.`; }
+    } catch {}
+    page(req, res, { title, desc, image: "/v3/og-church.jpg" });
   });
   app.get(["/", "/index.html"], (req, res) => page(req, res, { title: "Bible Arena — Know the Word. Challenge the World.", desc: "Fill in the Gap, Who Am I, Bible or Myth, daily challenges and head-to-head pastor duels. Every answer with its verse.", image: "/v3/og.jpg" }));
 }

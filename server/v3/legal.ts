@@ -8,6 +8,7 @@ import { logger } from "../_core/logger";
 import { getUserByOpenId, deleteUserAccount } from "../db";
 import { snapshotNow } from "../persist";
 import { baPool, SCH } from "./pg";
+import { deleteChurchData } from "./churches";
 
 const CONTACT = process.env.SUPPORT_EMAIL || "michaelolaoluwagab@gmail.com";
 const UPDATED = "10 October 2026";
@@ -48,6 +49,7 @@ export async function deleteAccountData(openId: string): Promise<Record<string, 
       c.release();
     }
   }
+  out.church_memberships = deleteChurchData(openId);
   const user = await getUserByOpenId(openId);
   if (user) { deleteUserAccount((user as any).id); out.users = 1; }
   snapshotNow("account-delete").catch(() => {});

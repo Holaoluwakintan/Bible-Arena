@@ -187,3 +187,8 @@ h2{font-size:20px}h3{font-size:16px}
 #moregames.flash{animation:moreflash 1.2s ease-in-out 2}
 @keyframes moreflash{0%,100%{box-shadow:0 0 0 0 rgba(245,185,66,0)}50%{box-shadow:0 0 0 3px rgba(245,185,66,.75),0 0 28px rgba(245,185,66,.35)}}
 @media (max-width:340px){.guide li{font-size:13px}.btn.sm{font-size:13px}}
+
+.field select{height:52px;border-radius:14px;border:1px solid var(--line2);background:rgba(255,255,255,.05);color:var(--ivory);padding:0 12px;font-size:16px;outline:none;-webkit-appearance:none;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--gold) 50%),linear-gradient(135deg,var(--gold) 50%,transparent 50%);background-position:calc(100% - 20px) 23px,calc(100% - 14px) 23px;background-size:6px 6px;background-repeat:no-repeat}
+.field select:focus{border-color:var(--gold)}
+.field select option{background:#0E1730;color:var(--ivory)}
+a.badge,a.lb{cursor:pointer}
