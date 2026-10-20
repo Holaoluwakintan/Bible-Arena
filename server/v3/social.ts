@@ -36,7 +36,7 @@ let nowFn = () => Date.now();
 export function _setNow(fn: () => number) { nowFn = fn; }
 export const CFG = {
   onlineMs: 75_000, popupGapMs: 120_000, waitFreshMs: 25_000, waitMaxMs: 15 * 60_000, matchKeepMs: 5 * 60_000,
-  runningMs: 12 * 60_000, inviteMaxAgeMs: 3 * 60_000, pushDelayMs: 15_000, pushPerDay: 3, pushGapMs: 60 * 60_000,
+  runningMs: 10 * 60_000, inviteMaxAgeMs: 3 * 60_000, pushDelayMs: 15_000, pushPerDay: 3, pushGapMs: 60 * 60_000,
 };
 const MODES = ["mixed", "arena", "gap", "who", "myth"];
 const TIERS: Tier[] = ["b", "s", "t"];
@@ -70,7 +70,7 @@ export interface Wait {
   pushed?: boolean;
 }
 const waits = new Map<string, Wait>();
-const running = new Map<string, { code: string; names: string[]; tier: Tier; mode: string; startedAt: number }>();
+const running = new Map<string, { code: string; names: string[]; tier: Tier; mode: string; startedAt: number; ids: string[] }>();
 let seq = 0;
 const newId = () => (Date.now().toString(36) + (++seq).toString(36) + Math.random().toString(36).slice(2, 6)).slice(-12);
 function fresh(w: Wait, now: number) { return w.status === "waiting" && now - w.polledAt < CFG.waitFreshMs && now - w.createdAt < CFG.waitMaxMs; }
@@ -121,7 +121,7 @@ async function pair(w: Wait, joiner: Me, joinerName: string, now: number) {
     const d = await deps.createDuel(w.openId, w.name, w.mode, w.tier);
     w.status = "matched"; w.endedAt = nowFn();
     w.match = { code: d.code, ids: d.ids, tier: w.tier, mode: w.mode, opp: joinerName };
-    running.set(d.code, { code: d.code, names: [w.name, joinerName], tier: w.tier, mode: w.mode, startedAt: now });
+    running.set(d.code, { code: d.code, names: [w.name, joinerName], tier: w.tier, mode: w.mode, startedAt: now, ids: [w.openId, joiner.openId] });
     logger.info("social_matched", { kind: w.kind, waitedS: Math.round((now - w.createdAt) / 1000) });
     return { status: "matched", code: d.code, ids: d.ids, tier: w.tier, mode: w.mode, opp: w.name, role: "challenger" };
   } catch (error) {
@@ -151,6 +151,7 @@ export function subsOf(openId: string): SubRow[] { return db().prepare("SELECT *
 export function deleteSocialData(openId: string): number {
   for (const w of waits.values()) if (w.openId === openId && w.status === "waiting") { w.status = "gone"; w.endedAt = nowFn(); }
   const p = byOpen.get(openId); if (p) { pres.delete(p.key); byOpen.delete(openId); }
+  for (const [c, r] of running) if (r.ids.includes(openId)) running.delete(c); // its duel is deleted with the account
   try { return Number(db().prepare("DELETE FROM v3_push_subs WHERE open_id = ?").run(openId).changes || 0); } catch { return 0; }
 }
 export function mergeSocial(fromOpenId: string, toOpenId: string) {

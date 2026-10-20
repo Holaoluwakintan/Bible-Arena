@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.5.0";
+window.BA_V = "3.5.1";
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
 const app = $("#app");
@@ -420,10 +420,11 @@ function runRound(cfg) {
   let timerH = null, tickH = null, rivalH = null, rival = null;
   const total = cfg.sudden ? null : items.length;
   const rid = ++ROUND_SEQ; const live = () => rid === ROUND_SEQ;
-  onLeave(() => { clearTimeout(timerH); clearInterval(tickH); clearInterval(rivalH); });
-  if (window.BAS) { BAS.setBusy(true); onLeave(() => BAS.setBusy(false)); }
+  // v3.5.0 fix: the rival poll is round-level, so it is not tied to onLeave (each question's render runs the onLeave
+  // cleanups, which stopped the poll after its first read); it stops itself when the round is left or over.
+  onLeave(() => { clearTimeout(timerH); clearInterval(tickH); });
   if (cfg.duel) {
-    const poll = async () => { if (!live()) return clearInterval(rivalH); try { const v = await api("/api/v3/duels/" + cfg.duel.code); const others = v.entries.filter((e) => !e.isMe); rival = others.find((e) => !e.finished && e.progress > 0 && Date.now() - new Date(e.updatedAt).getTime() < 60000) || others.find((e) => e.isCreator) || others[0] || null; drawRival(); } catch (e) {} };
+    const poll = async () => { if (!live()) return clearInterval(rivalH); try { const v = await api("/api/v3/duels/" + cfg.duel.code); if (!live() || !$("#rival")) return clearInterval(rivalH); const others = v.entries.filter((e) => !e.isMe); rival = others.find((e) => !e.finished && e.progress > 0 && Date.now() - new Date(e.updatedAt).getTime() < 60000) || others.find((e) => e.isCreator) || others[0] || null; drawRival(); } catch (e) {} };
     poll(); rivalH = setInterval(poll, 4000);
   }
   function drawRival() {
@@ -448,6 +449,7 @@ function runRound(cfg) {
       <div class="qcard"><div class="qmeta"><span class="tiny">${esc(label)}</span><span class="pill-tier">${TIER[tier].name}</span></div><div id="qbody"></div></div>
       <div id="ans"></div><div id="fb"></div>`);
     onLeave(() => { clearTimeout(timerH); clearInterval(tickH); });
+    if (window.BAS) { BAS.setBusy(true); onLeave(() => BAS.setBusy(false)); }
     $("#quit").onclick = () => { if (confirm("Leave this round? Your progress in it will be lost.")) go("#/"); };
     drawRival();
     const started = performance.now();
