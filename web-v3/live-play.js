@@ -43,11 +43,13 @@ function enterCode(err) {
 async function profile() {
   app.innerHTML = `<div class="center"><div class="mark">✦</div><div class="muted">Finding the game…</div></div>`;
   try { peek = await L.api("/lv/r/" + code + "/peek"); } catch (e) { code = ""; return enterCode(e.status === 404 ? "No game with that code. Check the screen." : e.message); }
-  if (peek.phase === "final") return enterCode("That game has finished.");
+  if (peek.phase === "final" && !peek.ko) return enterCode("That game has finished.");
   const me = store.get("bal:me", {});
+  if (!me.name) { const app3 = store.get("ba3:v1", {}); if (app3 && app3.name) me.name = String(app3.name).slice(0, 18); }
   let avatar = me.avatar && peek.avatars.includes(me.avatar) ? me.avatar : peek.avatars[Math.floor(Math.random() * 12)], team = null;
   app.innerHTML = `<div class="center" style="gap:12px">
-    <div class="tiny" style="color:var(--gold)">${esc(peek.church || "Bible Arena Live")}</div><h2>${esc(peek.title)}</h2>
+    ${peek.ko ? `<div class="tiny" style="color:var(--gold)">⚔️ Bible knockout</div><h2>${esc(peek.ko.host)} challenges you!</h2><p class="muted small" style="margin:0">${peek.n} in so far · ${peek.phase === "lobby" ? "waiting to start" : "game on: you'll watch this one and play the next"}</p>`
+      : `<div class="tiny" style="color:var(--gold)">${esc(peek.church || "Bible Arena Live")}</div><h2>${esc(peek.title)}</h2>`}
     <input class="namein" id="name" maxlength="18" placeholder="Your name" value="${esc(me.name || "")}" autocomplete="nickname" enterkeyhint="go">
     <div class="avs" id="avs">${peek.avatars.map((a) => `<button data-a="${a}" class="${a === avatar ? "on" : ""}" aria-label="avatar ${a}">${a}</button>`).join("")}</div>
     ${peek.teams ? `<div class="tiny muted" style="margin-top:4px">Pick your team</div><div class="teams" id="teams">${peek.teams.map((t) => `<button data-t="${t.id}" style="--tc:${t.color}"><span class="dot"></span>${t.emoji} ${esc(t.name)}</button>`).join("")}</div>` : ""}
@@ -59,7 +61,7 @@ async function profile() {
   $("#other").onclick = (e) => { e.preventDefault(); code = ""; history.replaceState(null, "", "/join"); enterCode(); };
   const join = async () => {
     const name = $("#name").value.trim();
-    if (!name) { $("#err").textContent = "Type your name so the screen can show it."; $("#name").focus(); return; }
+    if (!name) { $("#err").textContent = peek.ko ? "Type your name so the others can see you." : "Type your name so the screen can show it."; $("#name").focus(); return; }
     if (peek.teams && !team) { $("#err").textContent = "Pick your team."; return; }
     $("#join").disabled = true; $("#err").textContent = "";
     try {
@@ -112,6 +114,7 @@ function onState(s) {
   const prev = S; S = s;
   if (window.BAS) window.BAS.setBusy(s.phase !== "final");
   if (typeof s.remain === "number" && s.remain > 0) deadline = performance.now() + s.remain;
+  if (s.ko) return koState(s, prev);
   const key = s.phase + ":" + s.qi;
   if (key === scene) { const p = $("#pts"); if (p && s.me) p.textContent = fmt(s.me.score); if (s.phase === "lobby") lobbyUpdate(s); return; }
   scene = key;
@@ -146,7 +149,7 @@ function question(s) {
   shownAt = performance.now();
   if (ans) { myPick = ans.c; return feedback(s, ans); }
   app.innerHTML = `${top(s)}<div class="tbar" id="tb"><div class="bar"><i id="tbi"></i></div><span class="s" id="ts">${Math.ceil((s.remain || 0) / 1000)}</span></div>
-    <p class="qtext">${esc(q.q)}</p>${q.type === "who" ? `<p class="hintw">🎭 The clues are on the big screen.</p>` : ""}
+    ${s.ko ? `<div class="tiny muted" style="margin:-4px 0 6px">${koRoundLabel(s)} · Question ${s.ko.rq} of ${s.ko.rlen}</div>` : ""}<p class="qtext">${esc(q.q)}</p>${s.ko && q.clues && q.clues.length ? `<div class="clues">${q.clues.map((c) => `<div>🎭 ${esc(c)}</div>`).join("")}</div>` : q.type === "who" ? `<p class="hintw">🎭 The clues are on the big screen.</p>` : ""}
     <div class="btns ${q.o.length === 2 ? "two" : ""}" id="btns">${q.o.map((o, i) => `<button class="ab" data-i="${i}" style="--oc:${L.OPT[i].c}"><span class="sh">${L.OPT[i].s}</span><span>${esc(o)}</span></button>`).join("")}</div>`;
   $$("#btns .ab").forEach((b) => (b.onclick = () => pick(+b.dataset.i, b)));
 }
@@ -176,14 +179,15 @@ function feedback(s, a) {
   if (fbShown === key) return; fbShown = key;
   const right = a.right !== undefined ? a.right : q.a;
   let inner;
-  if (a.ok === undefined) inner = `<div class="fb wait"><div class="ic">🔒</div><div class="big">Locked in!</div><p class="muted">You picked <b style="color:var(--ivory)">${L.OPT[a.c] ? L.OPT[a.c].s : ""} ${esc(q.o[a.c] || "")}</b>.<br>Wait for the reveal on the screen.</p></div>`;
+  if (a.ok === undefined) inner = `<div class="fb wait"><div class="ic">🔒</div><div class="big">Locked in!</div><p class="muted">You picked <b style="color:var(--ivory)">${L.OPT[a.c] ? L.OPT[a.c].s : ""} ${esc(q.o[a.c] || "")}</b>.<br>${s.ko ? "Wait for the answer." : "Wait for the reveal on the screen."}</p></div>`;
   else if (a.ok) { inner = `<div class="fb ok"><div class="ic">✅</div><div class="big">Correct!</div><div class="pts">+${fmt(a.pts)}</div><div class="chips">${a.speed ? `<span class="chip sp">⚡ Speed bonus +${fmt(a.speed)}</span>` : ""}${a.streak ? `<span class="chip st">🔥 Streak +${fmt(a.streak)}</span>` : ""}</div></div>`; L.buzz([20, 60, 30]); }
   else { inner = `<div class="fb bad"><div class="ic">❌</div><div class="big">Not quite</div>${right !== undefined && q.o[right] ? `<p class="right">The answer: <b>${esc(q.o[right])}</b></p>` : ""}<p class="muted small">Streak reset. You'll get the next one 💪</p></div>`; L.buzz(120); }
   app.innerHTML = `${top(s)}${s.phase === "question" ? `<div class="tbar" id="tb"><div class="bar"><i id="tbi"></i></div><span class="s" id="ts"></span></div>` : ""}${inner}`;
 }
 function reveal(s) {
   const a = s.me && s.me.ans, q = s.q || {};
-  const rk = s.me && s.me.rank ? `<p class="muted" style="margin:0">You're <b style="color:var(--ivory)">${ord(s.me.rank)}</b> of ${s.n}</p>` : "";
+  const rk = s.ko ? (s.ko.mePos ? `<p class="muted" style="margin:0">${s.ko.final ? "Final" : "This round"}: you're <b style="color:var(--ivory)">${ord(s.ko.mePos)}</b> of ${s.ko.left}${!s.ko.final && s.ko.rq === s.ko.rlen ? "" : ""}</p>` : "")
+    : s.me && s.me.rank ? `<p class="muted" style="margin:0">You're <b style="color:var(--ivory)">${ord(s.me.rank)}</b> of ${s.n}</p>` : "";
   let inner;
   if (!a) inner = `<div class="fb bad"><div class="ic">⏰</div><div class="big">Time's up</div>${q.o && q.o[q.a] ? `<p class="right">The answer: <b>${esc(q.o[q.a])}</b></p>` : ""}${rk}</div>`;
   else if (a.ok) inner = `<div class="fb ok"><div class="ic">✅</div><div class="big">Correct!</div><div class="pts">+${fmt(a.pts)}</div><div class="chips">${a.speed ? `<span class="chip sp">⚡ +${fmt(a.speed)}</span>` : ""}${a.streak ? `<span class="chip st">🔥 +${fmt(a.streak)}</span>` : ""}</div>${rk}</div>`;
@@ -219,6 +223,127 @@ function final(s) {
   $("#share").onclick = () => L.shareCard(f, { name: me.name, rank: me.rank, score: me.score });
   if (!confettiDone && me.rank && me.rank <= 3) { confettiDone = true; setTimeout(() => L.confetti({ count: 140 }), 300); L.buzz([30, 80, 30, 80, 60]); }
   store.del("bal:p:" + code);
+}
+
+
+/* ---------- knockout ("Challenge someone", v3.6.0): no big screen, everything on the phone ---------- */
+let koAgainBusy = false;
+function koUrl() { return location.origin + "/j/" + code; }
+function koShareText(s) {
+  const h = s.ko.host ? s.ko.host.name : "I";
+  return `⚔️ ${h} challenges you on Bible Arena!\nLive Bible knockout: answer fast, lose a round and you're out. Last one standing wins. 📖\nTap to join: ${koUrl()}\nOr enter code ${code} in Bible Arena.`;
+}
+function koState(s, prev) {
+  const key = s.phase + ":" + s.qi + ":" + s.ko.game;
+  if (key === scene) {
+    const p = $("#pts"); if (p && s.me) p.textContent = fmt(s.me.score);
+    if (s.phase === "lobby" || s.phase === "final" || s.phase === "board") return koRefreshList(s);
+    if (s.ko.meOut && (s.phase === "question" || s.phase === "reveal")) return koRefreshList(s);
+    return;
+  }
+  scene = key;
+  if (s.phase === "lobby") { confettiDone = false; return koLobby(s); }
+  if (s.phase === "final") return koFinal(s);
+  if (s.phase === "board") return koBoard(s);
+  if (s.ko.meOut) return koWatch(s);
+  if (s.phase === "intro") return koIntro(s);
+  if (s.phase === "question") return question(s, prev);
+  if (s.phase === "reveal") return reveal(s);
+}
+function koRoundLabel(s) { return s.ko.final ? "🏆 FINAL" : "Round " + s.ko.round; }
+function koList(s, opts) {
+  const o = opts || {};
+  const rows = s.ko.list.filter((x) => (o.alive ? !x.out : true)).slice(0, o.limit || 60);
+  return `<div class="kol">${rows.map((x, i) => `<div class="${x.me ? "me " : ""}${x.out ? "out " : ""}${x.justOut ? "just " : ""}${x.on ? "" : "off"}">
+    <span class="kp">${o.lobby ? "" : x.out ? "❌" : i + 1}</span><span class="ka">${x.avatar}</span><span class="kn">${esc(x.name)}${x.host ? " 👑" : ""}${x.me ? " (you)" : ""}</span>
+    <b>${o.lobby ? (x.on ? "" : "away") : x.out ? (x.out === -1 ? "watching" : s.phase === "final" && x.out === s.ko.round ? "2nd 🥈" : "out R" + x.out) : o.round ? "+" + fmt(x.rp) : fmt(x.score)}</b></div>`).join("")}</div>`;
+}
+function koRefreshList(s) {
+  const el = $("#kolist"); if (el) el.innerHTML = koList(s, el.dataset.mode === "lobby" ? { lobby: true } : el.dataset.mode === "round" ? { round: true } : {});
+  const n = $("#kon"); if (n) n.textContent = s.ko.left;
+  const st = $("#kostart"); if (st) koStartBtn(s);
+}
+function koStartBtn(s) {
+  const b = $("#kostart"); if (!b) return;
+  const on = s.ko.list.filter((x) => x.on).length;
+  b.disabled = on < 2; b.textContent = on < 2 ? "Waiting for 1 more player…" : `▶ Start (${on} players)`;
+}
+function koShareButtons() {
+  return `<div class="row2"><a class="btn wa" id="kowa" href="https://wa.me/?text=${encodeURIComponent(koShareText(S))}" target="_blank" rel="noopener">📲 WhatsApp</a><button class="btn ghost" id="kocopy">🔗 Copy invite</button></div>`;
+}
+function koBindShare(s) {
+  const c = $("#kocopy"); if (c) c.onclick = async () => { try { await navigator.clipboard.writeText(koShareText(s)); toast("Link copied. Paste it anywhere 👍"); } catch (e) { toast(koUrl()); } };
+  const w = $("#kowa"); if (w && navigator.share && /Android|iPhone|iPad/i.test(navigator.userAgent)) w.onclick = (e) => { e.preventDefault(); navigator.share({ title: "Bible Arena challenge", text: koShareText(s) }).catch(() => { location.href = "https://wa.me/?text=" + encodeURIComponent(koShareText(s)); }); };
+}
+async function koAction(action, btn) {
+  if (btn) btn.disabled = true;
+  try { const r = await L.api("/lv/r/" + code + "/ko", { t: sess.token, action }); if (r && r.state) onState(r.state); }
+  catch (e) { toast(e.message); if (btn) btn.disabled = false; }
+}
+function koLobby(s) {
+  const k = s.ko, host = k.host || {};
+  app.innerHTML = `${top(s)}<div class="center" style="justify-content:flex-start;gap:12px">
+    <div class="tiny" style="color:var(--gold);margin-top:6px">⚔️ Bible knockout${k.game > 1 ? " · game " + k.game : ""}</div>
+    <h1>${k.isHost ? "Your challenge is ready" : esc(host.name || "") + "'s challenge"}</h1>
+    <div class="card kocode"><div class="tiny muted">Challenge code</div><div class="kc">${esc(code)}</div><div class="small muted">Friends tap your link, or enter this code in Bible Arena.</div></div>
+    ${koShareButtons()}
+    <div class="card" style="width:100%;text-align:left"><div class="row3"><b><span id="kon">${k.left}</span> joined</b><span class="small muted">up to ${k.max}</span></div><div id="kolist" data-mode="lobby">${koList(s, { lobby: true })}</div></div>
+    ${k.isHost ? `<button class="btn primary" id="kostart"></button>` : `<div class="card" style="width:100%"><div class="tiny muted">Waiting for ${esc(host.name || "the host")} to start</div><div class="small muted" style="margin-top:6px">Keep this screen open. ${host.on === false ? `<a href="#" id="kotake">${esc(host.name || "The host")} left? Start it yourself</a>` : ""}</div></div>`}
+    <div class="card small muted" style="width:100%;text-align:left">📜 <b style="color:var(--ivory)">How it works:</b> ${esc(k.rule)}</div>
+    <p class="foot"><a href="/">Bible Arena home</a></p></div>`;
+  koBindShare(s);
+  const st = $("#kostart"); if (st) { koStartBtn(s); st.onclick = () => { L.buzz(15); koAction("start", st); }; }
+  const tk = $("#kotake"); if (tk) tk.onclick = (e) => { e.preventDefault(); koAction("start"); };
+}
+function koIntro(s) {
+  myPick = null; fbShown = "";
+  const q = s.q || {};
+  app.innerHTML = `${top(s)}<div class="center"><div class="tiny" style="color:var(--gold)">${koRoundLabel(s)} · Question ${s.ko.rq} of ${s.ko.rlen}</div>
+    ${s.ko.rq === 1 ? `<h1>${s.ko.final ? "The final! 🔥" : s.ko.round === 1 ? "Here we go!" : "You made it through!"}</h1><p class="muted small" style="margin:0">${s.ko.left} still in${s.ko.final ? ". Most points in 5 questions wins." : ". Bottom half after this round is out."}</p>` : `<h1>Get ready</h1>`}
+    <p class="qmini">${esc(q.q || "")}</p>${q.clues && q.clues.length ? `<div class="clues">${q.clues.map((c) => `<div>🎭 ${esc(c)}</div>`).join("")}</div>` : ""}
+    <div class="bar" style="max-width:280px"><i id="ib" style="transform:scaleX(0)"></i></div></div>`;
+  const total = Math.max(300, s.remain || 3000), t0 = performance.now();
+  const step = () => { const el = $("#ib"); if (!el || !S || S.phase !== "intro") return; el.style.transform = `scaleX(${Math.min(1, (performance.now() - t0) / total)})`; requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+function koWatch(s) {
+  const q = s.q || { o: [] }, k = s.ko;
+  const showAns = s.phase === "reveal";
+  app.innerHTML = `${top(s)}<div class="kowatch"><div class="tiny" style="color:#FF8A9A">👀 ${k.meOut === -1 ? "You joined mid-game: watching this one" : "You're out (round " + k.meOut + "): watching"}</div>
+    <div class="tiny muted" style="margin-top:6px">${koRoundLabel(s)} · Question ${k.rq} of ${k.rlen}</div>
+    ${s.phase === "question" ? `<div class="tbar" id="tb"><div class="bar"><i id="tbi"></i></div><span class="s" id="ts"></span></div>` : ""}
+    <p class="qtext">${esc(q.q || "")}</p>${q.clues && q.clues.length ? `<div class="clues">${q.clues.map((c) => `<div>🎭 ${esc(c)}</div>`).join("")}</div>` : ""}
+    ${q.o && q.o.length ? `<div class="wopts">${q.o.map((o, i) => `<div class="${showAns && i === q.a ? "ok" : ""}">${L.OPT[i].s} ${esc(o)}${showAns && i === q.a ? " ✅" : ""}</div>`).join("")}</div>` : ""}
+    <div class="card" style="text-align:left;margin-top:10px"><div class="row3"><b>Still in: <span id="kon">${k.left}</span></b><span class="small muted">points this round</span></div><div id="kolist" data-mode="round">${koList(s, { round: true })}</div></div>
+    <p class="foot">You'll play again in the next challenge. Stay here!</p></div>`;
+}
+function koBoard(s) {
+  const k = s.ko, justOut = k.meOut === k.round;
+  const next = k.left <= 2 ? "the FINAL" : "round " + (k.round + 1);
+  app.innerHTML = `${top(s)}<div class="center" style="justify-content:flex-start;gap:12px;padding-top:8px">
+    <div class="tiny" style="color:var(--gold)">Round ${k.round} results</div>
+    ${justOut ? `<div class="medal">😢</div><h1>You're out!</h1><p class="muted" style="margin:0">Good fight. Stay and watch who wins, then play the next one.</p>`
+      : k.meOut ? `<div class="medal">👀</div><h1>${k.left} left</h1>`
+      : `<div class="medal">🔥</div><h1>You're through to ${next}!</h1>`}
+    ${k.lastOut.length ? `<div class="card" style="width:100%"><div class="tiny" style="color:#FF8A9A">Knocked out</div><div class="koout">${k.lastOut.map((x) => `<span>${x.avatar} ${esc(x.name)}</span>`).join("")}</div></div>` : ""}
+    <div class="card" style="width:100%;text-align:left"><div class="row3"><b>Still in: <span id="kon">${k.left}</span></b><span class="small muted">${next} starts soon</span></div><div id="kolist" data-mode="round">${koList(s, { alive: true, round: true })}</div></div></div>`;
+  if (!justOut && !k.meOut) L.buzz([20, 60, 30]); else if (justOut) L.buzz(150);
+}
+function koFinal(s) {
+  const k = s.ko, w = k.winner || {}, me = s.me || {};
+  const iWon = w.id && me.id === w.id;
+  app.innerHTML = `${top(s)}<div class="center" style="justify-content:flex-start;gap:10px;padding-top:8px">
+    <div class="medal">🏆</div><div class="tiny" style="color:var(--gold)">Winner</div>
+    <h1 class="kowin">${w.avatar || ""} ${esc(w.name || "")}</h1>
+    <p class="muted" style="margin:0">${iWon ? "That's you! Last one standing 🎉" : k.meOut > 0 ? `You were knocked out in round ${k.meOut}. Next time!` : k.meOut === -1 ? "You'll play in the next one." : "So close! You made the final 💪"}</p>
+    ${k.isHost ? `<button class="btn primary" id="koagain">🔁 Play again: everyone back in</button>` : `<div class="card small muted" style="width:100%">Waiting for ${esc(k.host ? k.host.name : "the host")} to start the next challenge. ${k.host && k.host.on === false ? `<a href="#" id="kotake">They left? Start it yourself</a>` : ""}</div>`}
+    ${koShareButtons()}
+    <div class="card" style="width:100%;text-align:left"><div class="row3"><b>Final standings</b><span class="small muted">${k.list.length} players</span></div><div id="kolist" data-mode="">${koList(s)}</div></div>
+    <a class="btn ghost" href="/" style="text-decoration:none">Bible Arena home</a></div>`;
+  koBindShare(s);
+  const a = $("#koagain"); if (a) a.onclick = () => { L.buzz(15); koAction("again", a); };
+  const tk = $("#kotake"); if (tk) tk.onclick = (e) => { e.preventDefault(); koAction("again"); };
+  if (!confettiDone) { confettiDone = true; setTimeout(() => L.confetti({ count: iWon ? 200 : 120 }), 300); if (iWon) L.buzz([30, 80, 30, 80, 60]); }
 }
 
 /* phone countdown */

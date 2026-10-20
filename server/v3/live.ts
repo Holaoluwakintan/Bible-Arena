@@ -111,7 +111,7 @@ export async function flushLive(): Promise<void> {
 
 async function saveResults(room: E.LRoom) {
   const pool = baPool();
-  if (!pool) return;
+  if (!pool || room.ko) return; // knockout rooms keep no results page
   try {
     await pool.query(
       `insert into ${SCH}.live_results(code,title,church,summary) values($1,$2,$3,$4)
@@ -140,14 +140,41 @@ export function playerView(room: E.LRoom, p: E.LPlayer | undefined, now = Date.n
     n: E.activePlayers(room).length, instant: room.instant,
     teams: room.teams ? E.teamTotals(room).map((t) => ({ id: t.id, name: t.name, color: t.color, emoji: t.emoji, avg: t.avg, members: t.members })) : null,
   };
-  if (q && room.phase !== "lobby") v.q = room.phase === "intro" ? { type: q.type, q: q.q, n: q.o.length, cat: q.cat } : qPublic(q, showAns);
+  if (q && room.phase !== "lobby") v.q = room.phase === "intro" ? { type: q.type, q: q.q, n: q.o.length, cat: q.cat, clues: room.ko ? q.clues : undefined } : qPublic(q, showAns);
   if (p) {
     v.me = { id: p.id, name: p.name, avatar: p.avatar, team: p.team, score: p.score, rank: p.rank || null, streak: p.streak, kicked: !!p.kicked,
       ans: ans ? { c: ans.c, ok: showAns || room.instant ? ans.ok : undefined, pts: showAns || room.instant ? ans.pts : undefined, speed: showAns || room.instant ? ans.speed : undefined, streak: showAns || room.instant ? ans.streak : undefined } : null };
     if (showAns && room.teams) { const t = E.teamTotals(room).findIndex((x) => x.id === p.team); v.me.teamPos = t + 1; }
   }
   if (room.phase === "final") v.final = E.summary(room);
+  if (room.ko) v.ko = koView(room, p, now);
   return v;
+}
+
+/** What every phone in a knockout room sees: round, who is still in, who just went out, the winner. */
+function koView(room: E.LRoom, p: E.LPlayer | undefined, now: number) {
+  const ko = room.ko!;
+  const alive = room.phase === "lobby" ? [] : E.koStandings(room);
+  const pos = new Map(alive.map((x, i) => [x.id, i + 1]));
+  const host = room.players[ko.hostId];
+  const all = E.activePlayers(room);
+  const order = room.phase === "lobby"
+    ? all.sort((a, b) => a.joinedAt - b.joinedAt)
+    : [...alive, ...all.filter((x) => x.id in ko.out).sort((a, b) => (ko.out[b.id] - ko.out[a.id]) || b.score - a.score)];
+  const lastOut = new Set(ko.lastOut);
+  const winner = ko.winner ? room.players[ko.winner] : undefined;
+  return {
+    game: ko.game, round: ko.round, rq: room.qi >= 0 ? room.qi - ko.roundStart + 1 : 0, rlen: ko.roundLen,
+    final: room.phase !== "lobby" && alive.length <= 2 && ko.roundLen === E.KO_FINAL_LEN,
+    left: room.phase === "lobby" ? all.length : alive.length, rule: E.KO_RULE, max: room.maxPlayers,
+    host: host ? { id: host.id, name: host.name, avatar: host.avatar, on: online(room.code, host, now) } : null,
+    isHost: !!p && p.id === ko.hostId,
+    meOut: p && p.id in ko.out ? ko.out[p.id] : 0, mePos: p ? pos.get(p.id) || null : null,
+    lastOut: ko.lastOut.map((id) => room.players[id]).filter(Boolean).map((x) => ({ name: x.name, avatar: x.avatar })),
+    winner: winner ? { id: winner.id, name: winner.name, avatar: winner.avatar, score: winner.score } : null,
+    list: order.slice(0, 60).map((x) => ({ id: x.id, name: x.name, avatar: x.avatar, score: x.score, rp: room.phase === "lobby" ? 0 : E.roundPoints(room, x).pts,
+      out: x.id in ko.out ? ko.out[x.id] : 0, justOut: lastOut.has(x.id), on: online(room.code, x, now), me: !!p && x.id === p.id, host: x.id === ko.hostId })),
+  };
 }
 
 export function hostView(room: E.LRoom, now = Date.now()) {
@@ -282,11 +309,61 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
     json(res, 200, { code: room.code, hostKey: room.hostKey, questions: questions.length });
   });
 
+  // v3.6.0 "Challenge someone": a knockout room. The creator plays too (from their phone) and is the host.
+  app.post("/lv/ko", async (req, res) => {
+    if (!allow("kocreate:" + ipOf(req), 20, 600_000)) return json(res, 429, { error: "Too many challenges from this network. Wait a few minutes." });
+    const b = req.body || {};
+    const tier = ["b", "s", "t"].includes(b.tier) ? String(b.tier) : "s";
+    const questions = pickSet(bank(), { tiers: [tier], count: 45 });
+    if (questions.length < 10) return json(res, 503, { error: "Questions are loading. Try again in a moment." });
+    const name = E.cleanName(b.name) || "Player";
+    const room = E.createRoom({ code: genCode(), title: `${name}'s challenge`, questions, timer: E.KO_TIMER, auto: true, instant: true, now: Date.now() });
+    room.maxPlayers = E.KO_MAX;
+    const j = E.joinRoom(room, { name, avatar: b.avatar }, Date.now());
+    if (!j.ok) return json(res, 400, { error: j.error });
+    room.ko = E.makeKo(j.player.id, tier);
+    rooms.set(room.code, room);
+    touch(room);
+    void flushLive();
+    logger.info("ko_room_created", { code: room.code, questions: questions.length });
+    json(res, 200, { code: room.code, token: j.player.token, id: j.player.id, state: playerView(room, j.player) });
+  });
+
+  app.post("/lv/r/:code/ko", async (req, res) => {
+    const b = req.body || {};
+    const token = String(b.t || "");
+    if (!token || !allow("ko:" + token, 30, 60_000)) return json(res, 429, { error: "Slow down." });
+    const room = await loadRoom(cleanCode(req.params.code));
+    if (!room || !room.ko) return json(res, 404, { error: "No challenge with that code." });
+    const p = Object.values(room.players).find((x) => x.token === token && !x.kicked);
+    if (!p) return json(res, 404, { error: "Join first." });
+    const now = Date.now();
+    p.lastSeen = now;
+    const host = room.players[room.ko.hostId];
+    // the host runs it; if the host has left (offline), anyone in the room can take over
+    if (p.id !== room.ko.hostId) {
+      if (host && !host.kicked && online(room.code, host, now)) return json(res, 403, { error: `Only ${host.name} can do that.` });
+      room.ko.hostId = p.id;
+    }
+    const action = String(b.action);
+    if (action === "start") {
+      const r = E.koStart(room, now, (x) => online(room.code, x, now));
+      if (!r.ok) return json(res, 400, { error: r.error });
+    } else if (action === "again") {
+      if (room.phase !== "final" && room.phase !== "lobby") return json(res, 400, { error: "Wait for this game to finish." });
+      if (room.phase === "final") E.koAgain(room, pickSet(bank(), { tiers: [room.ko.tier], count: 45 }), now);
+    } else return json(res, 400, { error: "Unknown action." });
+    touch(room);
+    pushRoom(room, true);
+    json(res, 200, { ok: true, state: playerView(room, p) });
+  });
+
   app.get("/lv/r/:code/peek", async (req, res) => {
     const room = await loadRoom(cleanCode(req.params.code));
     if (!room) return json(res, 404, { error: "No game with that code. Check the screen and try again." });
     json(res, 200, { code: room.code, title: room.title, church: room.church, phase: room.phase, n: E.activePlayers(room).length, max: room.maxPlayers,
-      locked: room.locked, teams: room.teams, full: E.activePlayers(room).length >= room.maxPlayers, avatars: E.AVATARS });
+      locked: room.locked, teams: room.teams, full: E.activePlayers(room).length >= room.maxPlayers, avatars: E.AVATARS,
+      ko: room.ko ? { host: room.players[room.ko.hostId]?.name || "", rule: E.KO_RULE } : undefined });
   });
 
   app.post("/lv/r/:code/join", async (req, res) => {
@@ -439,6 +516,10 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
   app.get(["/join", "/join/"], (req, res) => page("play.html", req, res, { title: "Join Bible Arena Live", desc: "Enter the code on the screen and play along on your phone. No account needed.", image: "/v3/og-live.jpg" }));
   app.get("/j/:code", async (req, res) => {
     const room = await loadRoom(cleanCode(req.params.code)).catch(() => null);
+    if (room?.ko) {
+      const n = E.activePlayers(room).length;
+      return page("play.html", req, res, { title: `⚔️ ${room.players[room.ko.hostId]?.name || "Someone"} challenges you on Bible Arena`, desc: `Bible knockout: ${n} in so far. Tap to join, no account needed. Lose a round and you watch; last one standing wins.`, image: "/v3/og-duel.jpg?v=3.6.0" });
+    }
     const title = room ? `Join "${room.title}" on Bible Arena Live` : "Join Bible Arena Live";
     page("play.html", req, res, { title, desc: room?.church ? `${room.church} · tap to play along on your phone, no account needed.` : "Tap to play along on your phone. No account needed.", image: "/v3/og-live.jpg" });
   });

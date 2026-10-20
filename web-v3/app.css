@@ -213,3 +213,14 @@ a.badge,a.lb{cursor:pointer}
 .vtick{font-size:.8em;vertical-align:1px}
 #verbox select{width:100%;min-height:46px;border-radius:12px;background:rgba(255,255,255,.06);color:inherit;border:1px solid rgba(255,255,255,.12);padding:0 12px;font:inherit}
 #verbox select option{color:#111}
+
+/* v3.6.0: the three ways to play lead the home screen; church is a quiet extra */
+.way{border-color:rgba(245,185,66,.28)}
+.wayico{font-size:30px;width:52px;height:52px;flex:none;display:grid;place-items:center;border-radius:16px;background:rgba(245,185,66,.12)}
+.wayt{font-size:19px;display:block;margin-bottom:2px}
+.card.slim{padding:12px 14px;gap:12px}
+.codebox{display:flex;gap:8px}
+.codebox input{flex:1;min-width:0;min-height:44px;border-radius:14px;border:1px solid var(--line2);background:#0A1230;color:var(--ivory);padding:0 14px;font:inherit;font-size:15px;letter-spacing:.04em}
+.codebox input:focus{outline:none;border-color:var(--gold)}
+.bigcode{font-size:40px;font-weight:900;letter-spacing:.16em;color:var(--gold2);margin:4px 0;font-variant-numeric:tabular-nums}
+.way .btn{white-space:nowrap;font-size:15px;padding:0 12px}

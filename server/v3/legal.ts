@@ -77,7 +77,7 @@ const PRIVACY = shell("Privacy Policy", `
 <ul>
 <li><b>Your display name</b>, which you type in or which comes from your Google profile if you sign in with Google.</li>
 <li><b>Your email address</b>, only if you sign in with Google. We ask Google for your basic profile and email address and nothing else.</li>
-<li><b>Your church or group name</b>, if you choose to add one (used for the Pastors' League).</li>
+<li><b>Your church or group name</b>, if you choose to add one (used for the Church League).</li>
 <li><b>Your game activity</b>: rounds played, answers, scores, times, streaks, achievements, duels you send or accept, and your level.</li>
 <li><b>Quiz-night entries</b>: the nickname, team and answers you use when you join a Bible Arena Live room.</li>
 <li><b>Technical data</b>: a sign-in cookie that keeps you logged in, and your IP address, which is used briefly in memory to stop abuse (rate limiting) and is not stored with your profile.</li>
@@ -88,7 +88,7 @@ const PRIVACY = shell("Privacy Policy", `
 <li>To keep your progress safe across phones when you sign in with Google.</li>
 <li>To protect the service from abuse.</li></ul>
 <h2>What other players can see</h2>
-<p>Your display name, church or group, level and scores appear on leaderboards, in duels you take part in and in the Pastors' League. Your quiz-night nickname and score appear on the host's screen and on that night's results page. Your email address is never shown to anyone.</p>
+<p>Your display name, church or group, level and scores appear on leaderboards, in duels you take part in and in the Church League. Your quiz-night nickname and score appear on the host's screen and on that night's results page. Your email address is never shown to anyone.</p>
 <h2>Who we share it with</h2>
 <p>We do not sell or rent your data, and we do not share it with advertisers. It is processed only by the services that run the game: our server host (Render) and our database host (Supabase). Google handles the sign-in step if you choose Google. Data is sent over encrypted connections (HTTPS).</p>
 <h2>How long we keep it</h2>

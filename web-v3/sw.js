@@ -1,18 +1,18 @@
-/* Bible Arena service worker (v3.5.1).
+/* Bible Arena service worker (v3.6.0).
  * - Opens instantly on repeat visits, even while the free server is waking up:
  *   page loads try the network for 3 s, then fall back to the last saved copy.
  * - Game files (/v3/...) are served from the cache and refreshed in the background.
  * - API calls, sign-in, downloads and legal pages always go to the network.
  * - Web Push (v3.5.0): shows "a challenger is waiting" notifications; a tap opens (or focuses) the game at the challenge.
  */
-const VERSION = "ba-3.5.1";
+const VERSION = "ba-3.6.0";
 const SHELL = "/";
 const PRECACHE = [
   "/",
-  "/v3/app.css?v=3.5.1",
-  "/v3/app.js?v=3.5.1",
-  "/v3/social.js?v=3.5.1",
-  "/v3/bank.json?v=3.5.1",
+  "/v3/app.css?v=3.6.0",
+  "/v3/app.js?v=3.6.0",
+  "/v3/social.js?v=3.6.0",
+  "/v3/bank.json?v=3.6.0",
   "/v3/fonts/cinzel-latin.woff2",
   "/v3/fonts/jakarta-latin.woff2",
   "/v3/icon-192.png",

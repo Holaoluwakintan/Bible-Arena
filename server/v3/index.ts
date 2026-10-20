@@ -1,5 +1,5 @@
-// Bible Arena v3 API: server-scored rounds, ranks, achievements, daily challenge, pastor duels
-// (challenge links), leaderboards (weekly, all-time, Pastors' League by church, rivals, daily).
+// Bible Arena v3 API: server-scored rounds, ranks, achievements, daily challenge, challenges
+// (challenge links), leaderboards (weekly, all-time, Church League, rivals, daily).
 // Durable data lives in Postgres (Supabase schema bible_arena) via ./pg.
 import fs from "node:fs";
 import path from "node:path";
@@ -420,7 +420,7 @@ export function registerV3(app: Express): void {
     const tier = asTier(b.tier);
     const kind = ["mixed", "arena", "gap", "who", "myth"].includes(b.mode) ? b.mode : "mixed";
     const p = await getPlayer(me.openId);
-    const name = clean(b.name, 40) || p?.name || me.name || "A pastor";
+    const name = clean(b.name, 40) || p?.name || me.name || "A player";
     let ids: string[] = Array.isArray(b.ids) ? b.ids.map(String).filter((id: string) => BY_ID.has(id)).slice(0, 12) : [];
     if (ids.length < 4) ids = buildSet(kind, tier, code() + Date.now());
     const parent = b.parent ? clean(b.parent, 12) : null;
@@ -592,7 +592,7 @@ export function registerV3(app: Express): void {
         }
       }
     } catch {}
-    page(req, res, { title, desc, image: "/v3/og-duel.jpg" });
+    page(req, res, { title, desc, image: "/v3/og-duel.jpg?v=3.6.0" });
   });
   app.get("/c/:code", async (req, res) => {
     let title = "Join your church on Bible Arena";
@@ -603,5 +603,5 @@ export function registerV3(app: Express): void {
     } catch {}
     page(req, res, { title, desc, image: "/v3/og-church.jpg" });
   });
-  app.get(["/", "/index.html"], (req, res) => page(req, res, { title: "Bible Arena — Know the Word. Challenge the World.", desc: "Fill in the Gap, Who Am I, Bible or Myth, daily challenges and head-to-head pastor duels. Every answer with its verse.", image: "/v3/og.jpg" }));
+  app.get(["/", "/index.html"], (req, res) => page(req, res, { title: "Bible Arena — Know the Word. Challenge the World.", desc: "Play solo, play online, or challenge your friends with a code: Fill in the Gap, Who Am I, Bible or Myth and more. Every answer with its verse.", image: "/v3/og.jpg?v=3.6.0" }));
 }

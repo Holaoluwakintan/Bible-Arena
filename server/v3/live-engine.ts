@@ -23,7 +23,26 @@ export interface LRoom {
   locked: boolean; auto: boolean; instant: boolean; maxPlayers: number; endedAt?: number;
   /** listed in the app's "Live now" so anyone can join (v3.5.0) */
   public?: boolean;
+  /** v3.6.0 "Challenge someone": a knockout room played from phones, no projector */
+  ko?: LKo;
 }
+/** Knockout: rounds of a few questions; after each round the bottom half (by points in that round) is out and
+ * watches; the last two play a longer final; one winner. "Play again" puts everyone back in the lobby. */
+export interface LKo {
+  hostId: string; tier: string; game: number;
+  round: number; roundStart: number; roundLen: number;
+  /** player id -> round they were knocked out in; -1 = joined mid-game or missed the start (watching) */
+  out: Record<string, number>;
+  lastOut: string[]; winner?: string;
+  history: Array<{ round: number; out: string[]; left: number }>;
+}
+export const KO_MAX = 50;
+export const KO_ROUND_LEN = 3;
+export const KO_FINAL_LEN = 5;
+export const KO_TIMER = 15;
+export const KO_REVEAL_MS = 5000;
+export const KO_BOARD_MS = 8000;
+export const KO_RULE = "3 questions a round. After each round the bottom half (fewest points that round) is knocked out and watches. The last two play a 5-question final.";
 
 export const MAX_PLAYERS = 200;
 export const INTRO_MS = 4000;
@@ -73,6 +92,8 @@ export function createRoom(opts: {
 
 const bump = (room: LRoom, players = true) => { room.version++; if (players) room.pversion++; };
 export const activePlayers = (room: LRoom) => Object.values(room.players).filter((p) => !p.kicked);
+/** Players still in the game: everyone in a normal room; in a knockout, those not yet knocked out. */
+export const alivePlayers = (room: LRoom) => activePlayers(room).filter((p) => !room.ko || !(p.id in room.ko.out));
 
 export type JoinResult = { ok: true; player: LPlayer; rejoined: boolean } | { ok: false; error: string; code: string };
 
@@ -89,7 +110,7 @@ export function joinRoom(room: LRoom, input: { name?: unknown; avatar?: unknown;
       return { ok: true, player: back, rejoined: true };
     }
   }
-  if (room.phase === "final") return { ok: false, error: "This game has finished.", code: "ended" };
+  if (room.phase === "final" && !room.ko) return { ok: false, error: "This game has finished.", code: "ended" };
   if (room.locked) return { ok: false, error: "The host has locked this game.", code: "locked" };
   const live = activePlayers(room);
   if (live.length >= room.maxPlayers) return { ok: false, error: `This room is full (${room.maxPlayers} players). Bigger rooms are coming with Church Premium.`, code: "full" };
@@ -116,6 +137,7 @@ export function joinRoom(room: LRoom, input: { name?: unknown; avatar?: unknown;
     joinedAt: now, lastSeen: now, answers: {},
   };
   room.players[player.id] = player;
+  if (room.ko && room.phase !== "lobby") room.ko.out[player.id] = -1; // joined mid-game or after the end: watches until Play again
   bump(room);
   return { ok: true, player, rejoined: false };
 }
@@ -177,6 +199,7 @@ export function submitAnswer(room: LRoom, token: string, qi: number, choice: unk
   if (!p) return { ok: false, error: "Not in this game. Join again.", code: "unknown" };
   if (p.kicked) return { ok: false, error: "The host removed you from this game.", code: "kicked" };
   p.lastSeen = now;
+  if (room.ko && p.id in room.ko.out) return { ok: false, error: "You're out of this one. Watch who wins!", code: "out" };
   if (Number(qi) !== room.qi) return { ok: false, error: "That question has closed.", code: "stale" };
   const q = room.questions[room.qi];
   const prev = p.answers[String(room.qi)];
@@ -194,7 +217,7 @@ export function submitAnswer(room: LRoom, token: string, qi: number, choice: unk
   p.score += s.pts;
   if (ok) { p.streak++; p.correct++; p.best = Math.max(p.best, p.streak); p.timeMs += ms; } else p.streak = 0;
   bump(room, false);
-  const live = activePlayers(room);
+  const live = alivePlayers(room);
   const allIn = live.length > 0 && live.every((x) => x.answers[String(room.qi)]);
   return { ok: true, answer, correctIndex: room.instant ? q.a : undefined, allIn };
 }
@@ -227,6 +250,7 @@ export function finish(room: LRoom, now: number): boolean {
 
 /** Host's "next" button: lobby → Q1 intro; reveal → board; board → next intro (or final). */
 export function advance(room: LRoom, now: number): void {
+  if (room.ko) return koAdvance(room, now);
   switch (room.phase) {
     case "lobby": if (activePlayers(room).length && room.questions.length) startQuestion(room, now, 0); break;
     case "intro": openAnswers(room, now); break;
@@ -242,10 +266,14 @@ export const AUTO_REVEAL_MS = 7000;
 export const AUTO_BOARD_MS = 6000;
 export function tick(room: LRoom, now: number): boolean {
   if (room.phase === "intro" && now >= room.endsAt) { openAnswers(room, now); return true; }
+  if (room.ko) {
+    if (room.phase === "reveal" && now >= room.phaseAt + KO_REVEAL_MS) { koAdvance(room, now); return true; }
+    if (room.phase === "board" && now >= room.phaseAt + KO_BOARD_MS) { koAdvance(room, now); return true; }
+  }
   if (room.auto && room.phase === "reveal" && now >= room.phaseAt + AUTO_REVEAL_MS) { advance(room, now); return true; }
   if (room.auto && room.phase === "board" && now >= room.phaseAt + AUTO_BOARD_MS) { advance(room, now); return true; }
   if (room.phase === "question") {
-    const live = activePlayers(room);
+    const live = alivePlayers(room);
     const allIn = live.length > 0 && live.every((x) => x.answers[String(room.qi)]);
     if (now >= room.endsAt + GRACE_MS) { reveal(room, now); return true; }
     if (allIn) { // a short beat after the last answer, so the room feels the moment
@@ -315,4 +343,92 @@ export function summary(room: LRoom) {
     top: list.slice(0, 10).map((p) => ({ name: p.name, avatar: p.avatar, score: p.score, rank: p.rank, team: p.team })),
     teams: teamTotals(room), hardest, fastest,
   };
+}
+
+
+// ---------- knockout (v3.6.0 "Challenge someone") ----------
+export function makeKo(hostId: string, tier: string): LKo {
+  return { hostId, tier, game: 1, round: 0, roundStart: 0, roundLen: KO_ROUND_LEN, out: {}, lastOut: [], history: [] };
+}
+/** Points and correct-answer time a player earned in the current knockout round. */
+export function roundPoints(room: LRoom, p: LPlayer): { pts: number; ms: number; ok: number } {
+  const ko = room.ko; let pts = 0, ms = 0, ok = 0;
+  if (!ko) return { pts, ms, ok };
+  for (let i = ko.roundStart; i < ko.roundStart + ko.roundLen && i <= room.qi; i++) {
+    const a = p.answers[String(i)];
+    if (a) { pts += a.pts; if (a.ok) { ms += a.ms; ok++; } }
+  }
+  return { pts, ms, ok };
+}
+/** Who is still in, best first in this round (round points, then faster correct answers, then total, then who joined first). */
+export function koStandings(room: LRoom): LPlayer[] {
+  const list = alivePlayers(room);
+  const rp = new Map(list.map((p) => [p.id, roundPoints(room, p)]));
+  return list.sort((a, b) => rp.get(b.id)!.pts - rp.get(a.id)!.pts || rp.get(a.id)!.ms - rp.get(b.id)!.ms || b.score - a.score || a.joinedAt - b.joinedAt);
+}
+function koNewRound(room: LRoom, now: number, startQi: number): boolean {
+  const ko = room.ko!;
+  ko.round++;
+  ko.roundStart = startQi;
+  ko.roundLen = alivePlayers(room).length <= 2 ? KO_FINAL_LEN : KO_ROUND_LEN;
+  ko.lastOut = [];
+  if (startQi + ko.roundLen > room.questions.length) ko.roundLen = Math.max(1, room.questions.length - startQi);
+  if (startQi >= room.questions.length) return koEnd(room, now);
+  return startQuestion(room, now, startQi);
+}
+function koEnd(room: LRoom, now: number): boolean {
+  const ko = room.ko!;
+  const top = koStandings(room)[0];
+  ko.winner = top ? top.id : undefined;
+  return finish(room, now);
+}
+/** End of a round: the bottom half is knocked out (at least one, never everyone). */
+export function koCut(room: LRoom, now: number): void {
+  const ko = room.ko!;
+  const list = koStandings(room);
+  const n = list.length;
+  if (n <= 1) { koEnd(room, now); return; }
+  const keep = n === 2 ? 1 : Math.ceil(n / 2);
+  const out = list.slice(keep);
+  for (const p of out) ko.out[p.id] = ko.round;
+  ko.lastOut = out.map((p) => p.id);
+  ko.history.push({ round: ko.round, out: ko.lastOut.slice(), left: keep });
+  if (keep === 1) { ko.winner = list[0].id; finish(room, now); return; }
+  showBoard(room, now);
+}
+/** Start (from the lobby): needs two players online; anyone who is not here right now watches this game. */
+export function koStart(room: LRoom, now: number, isOnline: (p: LPlayer) => boolean): { ok: true } | { ok: false; error: string } {
+  const ko = room.ko!;
+  if (room.phase !== "lobby") return { ok: false, error: "The challenge has already started." };
+  const here = activePlayers(room).filter((p) => isOnline(p));
+  if (here.length < 2) return { ok: false, error: "You need at least 2 players. Share the link!" };
+  for (const p of activePlayers(room)) if (!isOnline(p)) ko.out[p.id] = -1;
+  ko.round = 0;
+  koNewRound(room, now, 0);
+  return { ok: true };
+}
+export function koAdvance(room: LRoom, now: number): void {
+  const ko = room.ko!;
+  switch (room.phase) {
+    case "intro": openAnswers(room, now); break;
+    case "question": reveal(room, now); break;
+    case "reveal":
+      if (room.qi >= ko.roundStart + ko.roundLen - 1 || room.qi >= room.questions.length - 1) koCut(room, now);
+      else startQuestion(room, now, room.qi + 1);
+      break;
+    case "board": koNewRound(room, now, room.qi + 1); break;
+    default: break;
+  }
+}
+/** "Play again": everyone (knocked out or not, plus anyone who joined meanwhile) back in the lobby with a new set. */
+export function koAgain(room: LRoom, questions: LQ[], now: number): void {
+  const ko = room.ko!;
+  room.questions = questions.slice(0, 60);
+  room.phase = "lobby"; room.qi = -1; room.phaseAt = now; room.endsAt = 0; delete room.endedAt;
+  room.createdAt = now; // a room that keeps being played stays alive
+  ko.game++; ko.round = 0; ko.roundStart = 0; ko.roundLen = KO_ROUND_LEN; ko.out = {}; ko.lastOut = []; ko.history = []; delete ko.winner;
+  for (const p of Object.values(room.players)) {
+    p.score = 0; p.streak = 0; p.best = 0; p.correct = 0; p.timeMs = 0; p.answers = {}; delete p.rank; delete p.prevRank;
+  }
+  bump(room);
 }
