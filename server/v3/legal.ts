@@ -9,6 +9,7 @@ import { getUserByOpenId, deleteUserAccount } from "../db";
 import { snapshotNow } from "../persist";
 import { baPool, SCH } from "./pg";
 import { deleteChurchData } from "./churches";
+import { deleteSocialData } from "./social";
 
 const CONTACT = process.env.SUPPORT_EMAIL || "michaelolaoluwagab@gmail.com";
 const UPDATED = "10 October 2026";
@@ -50,6 +51,7 @@ export async function deleteAccountData(openId: string): Promise<Record<string, 
     }
   }
   out.church_memberships = deleteChurchData(openId);
+  out.push_subscriptions = deleteSocialData(openId);
   const user = await getUserByOpenId(openId);
   if (user) { deleteUserAccount((user as any).id); out.users = 1; }
   snapshotNow("account-delete").catch(() => {});

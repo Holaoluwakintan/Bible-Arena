@@ -192,3 +192,24 @@ h2{font-size:20px}h3{font-size:16px}
 .field select:focus{border-color:var(--gold)}
 .field select option{background:#0E1730;color:var(--ivory)}
 a.badge,a.lb{cursor:pointer}
+
+/* ---------- v3.5.0 Live Multiplayer Social ---------- */
+.onlinepill{display:inline-flex;align-items:center;gap:6px;margin-top:4px;padding:3px 10px;border-radius:99px;background:rgba(61,220,151,.12);border:1px solid rgba(61,220,151,.35);color:#9ff0c9;font-size:12.5px;font-weight:700;text-decoration:none;white-space:nowrap}
+.onlinepill.big{font-size:14px;padding:5px 12px}
+.onlinepill .dot{width:8px;height:8px;border-radius:50%;background:#3DDC97;box-shadow:0 0 0 0 rgba(61,220,151,.7);animation:onpulse 1.8s infinite}
+@keyframes onpulse{0%{box-shadow:0 0 0 0 rgba(61,220,151,.7)}70%{box-shadow:0 0 0 8px rgba(61,220,151,0)}100%{box-shadow:0 0 0 0 rgba(61,220,151,0)}}
+.livenow{border-color:rgba(61,220,151,.4);background:linear-gradient(160deg,rgba(61,220,151,.10),rgba(255,255,255,.03))}
+.lnrow{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)}
+.lnrow.hot{border-color:rgba(245,185,66,.7);background:rgba(245,185,66,.08)}
+.lnrow .avatar{width:40px;height:40px;font-size:18px;flex:none}
+.lnrow b{display:block;font-size:14.5px;line-height:1.3}
+.lnrow .btn.sm,.lnrow .chip{flex:none;min-height:38px;padding:0 14px}
+.lnbadge{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:99px;background:#3DDC97;color:#052016;font-size:12px;font-weight:900;margin-left:4px}
+.radar{position:relative;width:132px;height:132px;margin:6px auto 0}
+.radar i{position:absolute;inset:0;border-radius:50%;border:2px solid rgba(245,185,66,.55);animation:radar 2.4s ease-out infinite;opacity:0}
+.radar i:nth-child(2){animation-delay:.8s}.radar i:nth-child(3){animation-delay:1.6s}
+.radar .rc{position:absolute;inset:34px;border-radius:50%;display:grid;place-items:center;font-size:34px;background:radial-gradient(circle,rgba(245,185,66,.35),rgba(245,185,66,.05));border:1px solid rgba(245,185,66,.6)}
+@keyframes radar{0%{transform:scale(.35);opacity:.9}100%{transform:scale(1.05);opacity:0}}
+.vtick{font-size:.8em;vertical-align:1px}
+#verbox select{width:100%;min-height:46px;border-radius:12px;background:rgba(255,255,255,.06);color:inherit;border:1px solid rgba(255,255,255,.12);padding:0 12px;font:inherit}
+#verbox select option{color:#111}

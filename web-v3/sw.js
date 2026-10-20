@@ -1,16 +1,18 @@
-/* Bible Arena service worker (v3.4.1).
+/* Bible Arena service worker (v3.5.0).
  * - Opens instantly on repeat visits, even while the free server is waking up:
  *   page loads try the network for 3 s, then fall back to the last saved copy.
  * - Game files (/v3/...) are served from the cache and refreshed in the background.
  * - API calls, sign-in, downloads and legal pages always go to the network.
+ * - Web Push (v3.5.0): shows "a challenger is waiting" notifications; a tap opens (or focuses) the game at the challenge.
  */
-const VERSION = "ba-3.4.1";
+const VERSION = "ba-3.5.0";
 const SHELL = "/";
 const PRECACHE = [
   "/",
-  "/v3/app.css?v=3.4.1",
-  "/v3/app.js?v=3.4.1",
-  "/v3/bank.json?v=3.4.1",
+  "/v3/app.css?v=3.5.0",
+  "/v3/app.js?v=3.5.0",
+  "/v3/social.js?v=3.5.0",
+  "/v3/bank.json?v=3.5.0",
   "/v3/fonts/cinzel-latin.woff2",
   "/v3/fonts/jakarta-latin.woff2",
   "/v3/icon-192.png",
@@ -77,4 +79,30 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (url.pathname.startsWith("/v3/")) event.respondWith(staticRequest(event));
+});
+
+// ---------- Web Push (v3.5.0) ----------
+self.addEventListener("push", (event) => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch (e) { d = { body: event.data ? event.data.text() : "" }; }
+  const title = d.title || "Bible Arena";
+  event.waitUntil(self.registration.showNotification(title, {
+    body: d.body || "Someone is waiting for a challenger. Tap to join!",
+    icon: "/v3/icon-192.png", badge: "/v3/icon-192.png", tag: d.tag || "ba", renotify: true,
+    data: { url: typeof d.url === "string" && d.url.startsWith("/") ? d.url : "/#/live" },
+  }));
+});
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = new URL((event.notification.data && event.notification.data.url) || "/#/live", self.location.origin).href;
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const c of all) {
+      if (new URL(c.url).origin === self.location.origin && "focus" in c) {
+        try { await c.navigate(url); } catch (e) {}
+        return c.focus();
+      }
+    }
+    return self.clients.openWindow(url);
+  })());
 });

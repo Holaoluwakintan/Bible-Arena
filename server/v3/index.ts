@@ -15,7 +15,9 @@ import { registerLive, flushLive } from "./live";
 import { shutdownHooks } from "../persist";
 import { registerLegal } from "./legal";
 import { sentryBrowserTags } from "../_core/sentry-lite";
-import { registerChurches, teamNameFor, mergeChurchMembership, previewForOg } from "./churches";
+import { registerChurches, registerVerify, teamNameFor, mergeChurchMembership, previewForOg } from "./churches";
+import { registerSocial, mergeSocial } from "./social";
+import { publicRooms, liveWinner } from "./live";
 
 type Tier = "b" | "s" | "t";
 type Mode = "arena" | "myth" | "who" | "gap";
@@ -231,15 +233,13 @@ async function applyRound(openId: string, fallbackName: string, opts: { mode: st
   const before: string[] = Array.isArray(p.achievements) ? p.achievements : [];
   const after = evalAchievements(s, { ...p, xp: newXp, best_streak: bestStreak });
   const merged = Array.from(new Set([...before, ...after]));
-  await pool.query(
-    `update ${SCH}.players set xp=$2, streak=$3, best_streak=$4, last_day=$5, rounds=rounds+1, stats=$6, achievements=$7, updated_at=now() where open_id=$1`,
-    [openId, newXp, streak, bestStreak, today, JSON.stringify(s), JSON.stringify(merged)],
-  );
-  await pool.query(
-    `insert into ${SCH}.rounds(open_id, mode, tier, score, correct, total, xp, day) values ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    [openId, opts.mode, tier, scored.total, scored.correct, scored.count, xp, today],
-  );
-  const fresh = await getPlayer(openId);
+  // v3.5.0: one round trip for the player update + the round insert (was 3: update, insert, re-read the player).
+  const fresh = (await pool.query(
+    `with u as (update ${SCH}.players set xp=$2, streak=$3, best_streak=$4, last_day=$5, rounds=rounds+1, stats=$6, achievements=$7, updated_at=now() where open_id=$1 returning *),
+       r as (insert into ${SCH}.rounds(open_id, mode, tier, score, correct, total, xp, day) values ($1,$8,$9,$10,$11,$12,$13,$5) returning 1)
+     select u.*, (select count(*) from r) as _r from u`,
+    [openId, newXp, streak, bestStreak, today, JSON.stringify(s), JSON.stringify(merged), opts.mode, tier, scored.total, scored.correct, scored.count, xp],
+  )).rows[0];
   return { xp, perfect, newAchievements: merged.filter((a) => !before.includes(a)), player: publicPlayer(fresh), rankBefore: rankOf(p.xp), rankAfter: rankOf(newXp) };
 }
 
@@ -300,9 +300,59 @@ export async function mergeGuestInto(guestOpenId: string, googleOpenId: string):
     await pool.query(`update ${SCH}.duel_entries set open_id=$2 where open_id=$1`, [guestOpenId, googleOpenId]);
     await pool.query(`update ${SCH}.duels set creator_open_id=$2 where creator_open_id=$1`, [guestOpenId, googleOpenId]);
     mergeChurchMembership(guestOpenId, googleOpenId);
+    mergeSocial(guestOpenId, googleOpenId);
   } catch (error) {
     logger.warn("v3_merge_failed", { error: error instanceof Error ? error.message : String(error) });
   }
+}
+
+// ---------- Live Multiplayer Social helpers (v3.5.0) ----------
+const BOT_ID = "bot:arena";
+export const BOT_NAME = "Arena Bot 🤖";
+async function insertDuel(creatorOpenId: string, name: string, kind: string, tier: Tier, ids: string[]): Promise<string> {
+  let c = code();
+  for (let i = 0; i < 3; i++) {
+    try {
+      await baPool()!.query(`insert into ${SCH}.duels(code, creator_open_id, creator_name, mode, tier, question_ids, parent_code) values ($1,$2,$3,$4,$5,$6,$7)`, [c, creatorOpenId, name, kind, tier, JSON.stringify(ids), null]);
+      return c;
+    } catch (e) { if (i === 2) throw e; c = code(); }
+  }
+  return c;
+}
+/** The Arena Bot's answers for a set: right about 75/62/50% of the time (Believer/Scholar/Theologian), at a human pace. */
+export function botAnswers(ids: string[], tier: Tier, rnd: () => number = Math.random) {
+  const acc = { b: 0.75, s: 0.62, t: 0.5 }[tier];
+  return ids.map((id) => {
+    const item = BY_ID.get(id)!;
+    const right = rnd() < acc;
+    const ms = Math.round(timeLimit(item, tier) * 1000 * (0.3 + rnd() * 0.45)) || Math.round(8000 + rnd() * 12000);
+    let choice: unknown = null;
+    if (item.k === "gap") { const want = gapAnswer(item, tier); choice = right ? want : want.map((w, i) => (i === 0 ? "" : w)); }
+    else if (item.k === "order") choice = right ? item.a : "x";
+    else if (Array.isArray(item.o) && item.o.length) { const a = Number(item.a); choice = right ? item.a : (a + 1 + Math.floor(rnd() * (item.o.length - 1))) % item.o.length; }
+    else choice = right ? item.a : "__wrong__";
+    return { id, choice, ms, clues: item.k === "who" ? 2 + Math.floor(rnd() * 2) : undefined };
+  });
+}
+async function createBotDuel(openId: string, name: string, mode: string, tier: Tier) {
+  const ids = buildSet(mode, tier, code() + Date.now());
+  const c = await insertDuel(openId, name, mode, tier, ids);
+  const answers = botAnswers(ids, tier);
+  const scored = scoreRound(tier, answers);
+  const timeMs = answers.reduce((t, a) => t + a.ms, 0);
+  await baPool()!.query(
+    `insert into ${SCH}.duel_entries(code, open_id, name, church, score, correct, total, time_ms, answers, progress, finished) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$7,true) on conflict do nothing`,
+    [c, BOT_ID, BOT_NAME, null, scored.total, scored.correct, scored.count, timeMs, JSON.stringify(scored.results.map((r) => r.correct))],
+  );
+  return { code: c, ids, bot: { name: BOT_NAME, score: scored.total } };
+}
+async function duelWinner(c: string): Promise<{ openId: string; name: string } | null> {
+  const rows = (await baPool()!.query(`select open_id, name, score, time_ms from ${SCH}.duel_entries where code=$1 and finished`, [c])).rows;
+  if (rows.length < 2) return null;
+  rows.sort((a: any, b: any) => compareDuel({ score: b.score, timeMs: b.time_ms }, { score: a.score, timeMs: a.time_ms }));
+  if (compareDuel({ score: rows[0].score, timeMs: rows[0].time_ms }, { score: rows[1].score, timeMs: rows[1].time_ms }) === 0) return null;
+  if (rows[0].open_id === BOT_ID) return null;
+  return { openId: rows[0].open_id, name: rows[0].name };
 }
 
 export function registerV3(app: Express): void {
@@ -470,18 +520,27 @@ export function registerV3(app: Express): void {
   }));
 
   // ---- leaderboards ----
+  // v3.5.0: the shared boards (all, week, daily, church) are cached for 20 s; rivals are per player and never cached.
+  const lbCache = new Map<string, { at: number; data: Promise<any> }>();
+  const cachedLb = (key: string, fn: () => Promise<any>) => {
+    const hit = lbCache.get(key);
+    if (hit && Date.now() - hit.at < 20_000) return hit.data;
+    const data = fn(); lbCache.set(key, { at: Date.now(), data }); data.catch(() => lbCache.delete(key));
+    return data;
+  };
   app.get("/api/v3/leaderboard", guard(async (req, res, me) => {
     const scope = String(req.query.scope || "week");
     const pool = baPool()!;
     let rows: any[] = [];
     if (scope === "all") {
-      rows = (await pool.query(`select open_id, name, church, xp as score, xp from ${SCH}.players where xp>0 order by xp desc limit 50`)).rows;
+      rows = await cachedLb("all", async () => (await pool.query(`select open_id, name, church, xp as score, xp from ${SCH}.players where xp>0 order by xp desc limit 50`)).rows);
     } else if (scope === "week") {
-      rows = (await pool.query(`select r.open_id, p.name, p.church, sum(r.score)::int as score, p.xp from ${SCH}.rounds r join ${SCH}.players p on p.open_id=r.open_id where r.created_at > now() - interval '7 days' group by r.open_id, p.name, p.church, p.xp order by score desc limit 50`)).rows;
+      rows = await cachedLb("week", async () => (await pool.query(`select r.open_id, p.name, p.church, sum(r.score)::int as score, p.xp from ${SCH}.rounds r join ${SCH}.players p on p.open_id=r.open_id where r.created_at > now() - interval '7 days' group by r.open_id, p.name, p.church, p.xp order by score desc limit 50`)).rows);
     } else if (scope === "daily") {
-      rows = (await pool.query(`select r.open_id, p.name, p.church, r.score, p.xp from ${SCH}.rounds r join ${SCH}.players p on p.open_id=r.open_id where r.mode='daily' and r.day=$1 order by r.score desc limit 50`, [lagosDay()])).rows;
+      const day = lagosDay();
+      rows = await cachedLb("daily:" + day, async () => (await pool.query(`select r.open_id, p.name, p.church, r.score, p.xp from ${SCH}.rounds r join ${SCH}.players p on p.open_id=r.open_id where r.mode='daily' and r.day=$1 order by r.score desc limit 50`, [day])).rows);
     } else if (scope === "church") {
-      const r = await pool.query(`select min(church) as church, count(*)::int as players, sum(xp)::int as score, max(xp) as top from ${SCH}.players where church is not null and church<>'' group by lower(regexp_replace(church,'\\s+',' ','g')) order by score desc limit 40`);
+      const r = await cachedLb("church", () => pool.query(`select min(church) as church, count(*)::int as players, sum(xp)::int as score, max(xp) as top from ${SCH}.players where church is not null and church<>'' group by lower(regexp_replace(church,'\\s+',' ','g')) order by score desc limit 40`));
       return send(res, 200, { scope, churches: r.rows });
     } else if (scope === "rivals") {
       if (!me) return send(res, 200, { scope, rows: [] });
@@ -499,6 +558,11 @@ export function registerV3(app: Express): void {
 
   // ---- Church League (teams, invite codes, weekly + all-time boards) ----
   registerChurches(app, guard as any, send);
+  registerVerify(app, guard as any, send);
+  registerSocial(app, guard as any, send, {
+    createDuel: async (creatorOpenId, creatorName, mode, tier) => { const ids = buildSet(mode, tier, code() + Date.now()); return { code: await insertDuel(creatorOpenId, creatorName, mode, tier, ids), ids }; },
+    createBotDuel, duelWinner, liveWinner, publicRooms,
+  });
 
   // ---- share pages: WhatsApp/OG previews for challenge links ----
   const indexFile = path.join(WEB_DIR, "index.html");
@@ -535,7 +599,7 @@ export function registerV3(app: Express): void {
     let desc = "Your church is competing in the Bible Arena Church League. Join the team, play rounds and push your church up the weekly league.";
     try {
       const r = await previewForOg(clean(req.params.code, 12));
-      if (r) { title = `Join ${r.name} on Bible Arena ⛪`; desc = `${r.name}, ${r.city} is in the Church League with ${r.members} member${r.members === 1 ? "" : "s"}. Join the team, play rounds and push your church up the weekly league.`; }
+      if (r) { title = `Join ${r.name}${r.verified ? " ✅" : ""} on Bible Arena ⛪`; desc = `${r.name}${r.verified ? " (verified)" : ""}, ${r.city} is in the Church League with ${r.members} member${r.members === 1 ? "" : "s"}. Join the team, play rounds and push your church up the weekly league.`; }
     } catch {}
     page(req, res, { title, desc, image: "/v3/og-church.jpg" });
   });

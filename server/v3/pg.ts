@@ -15,7 +15,8 @@ export function baPool(): pg.Pool | null {
   pool = new pg.Pool({
     connectionString: url,
     ssl: { rejectUnauthorized: false },
-    max: 4,
+    // 4 -> 10 (v3.5.0): the load test showed 4 connections x ~90 ms per query capped the site at ~21 requests/s.
+    max: Math.max(2, Math.min(15, Number(process.env.BA_PG_POOL) || 10)),
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
   });

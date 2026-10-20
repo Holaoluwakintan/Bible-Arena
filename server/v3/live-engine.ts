@@ -21,6 +21,8 @@ export interface LRoom {
   phase: Phase; qi: number; phaseAt: number; endsAt: number;
   players: Record<string, LPlayer>; version: number; pversion: number;
   locked: boolean; auto: boolean; instant: boolean; maxPlayers: number; endedAt?: number;
+  /** listed in the app's "Live now" so anyone can join (v3.5.0) */
+  public?: boolean;
 }
 
 export const MAX_PLAYERS = 200;
@@ -56,7 +58,7 @@ export function makeTeams(preset: unknown, names?: unknown): LTeam[] | null {
 
 export function createRoom(opts: {
   code: string; title?: string; church?: string; teams?: LTeam[] | null; questions: LQ[];
-  timer?: number; auto?: boolean; instant?: boolean; now: number;
+  timer?: number; auto?: boolean; instant?: boolean; public?: boolean; now: number;
 }): LRoom {
   const timer = [10, 15, 20, 30, 45, 60].includes(Number(opts.timer)) ? Number(opts.timer) : 20;
   return {
@@ -65,6 +67,7 @@ export function createRoom(opts: {
     teams: opts.teams || null, questions: opts.questions.slice(0, 60), timer, intro: INTRO_MS,
     phase: "lobby", qi: -1, phaseAt: opts.now, endsAt: 0, players: {}, version: 1, pversion: 1,
     locked: false, auto: opts.auto === true, instant: opts.instant !== false, maxPlayers: MAX_PLAYERS,
+    public: opts.public === true,
   };
 }
 

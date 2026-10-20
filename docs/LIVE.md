@@ -26,6 +26,9 @@ If the laptop refreshes, `/live` resumes the same game (the host key is kept on 
 - `server/v3/live-bank.ts`: turns the 951-item v3 bank into 2–4 button questions (Complete the Verse uses the exact KJV word with the gap decoys; Bible or Myth is Fact/Myth; Who Am I shows the clues on the big screen).
 - Client: `web-v3/live.html` + `live-host.js` + `live.css` (host), `play.html` + `live-play.js` + `play.css` (phones, system fonts, ~20 KB), `live-common.js` (transport, synthesized sound, confetti, share card), `live-quick.js` (quick-quiz parser), `qrcode.min.js` (MIT).
 
+## Live now (v3.5.0)
+"List in Live now" (setup screen and the ⋯ menu) shows the room in the app's Live now list while the host screen is connected and the room is unlocked and not full, so anyone can join mid-game. Off by default. The phones' final screen offers "Challenge the winner" (or "Winner stays on" for the winner), which opens a challenge in the app.
+
 ## Church Premium (shown as "coming soon")
 Saved quiz sets, church branding, more than 200 players.
 

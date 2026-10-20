@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.4.1";
+window.BA_V = "3.5.0";
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
 const app = $("#app");
@@ -147,9 +147,12 @@ async function route() {
   if (pathDuel && !parts.length) { history.replaceState(null, "", "/#/d/" + pathDuel[1].toUpperCase()); return route(); }
   const pathChurch = location.pathname.match(/^\/c\/([A-Za-z0-9]{4,8})/);
   if (pathChurch && !parts.length) { history.replaceState(null, "", "/#/c/" + pathChurch[1].toUpperCase()); return route(); }
-  if (!S.onboarded && parts[0] !== "d" && parts[0] !== "c") return onboarding();
+  if (!S.onboarded && parts[0] !== "d" && parts[0] !== "c") return parts[0] === "qm" || parts[0] === "live" ? onboarding(() => route()) : onboarding();
   const [a, b] = parts;
+  if (window.BAS) { BAS.setBusy(false); BAS.watchLive(!a || a === "live"); }
   if (!a) return home();
+  if (a === "live") return liveNow();
+  if (a === "qm") return quickMatch(q);
   if (a === "play") return startMode(b || q.get("mode") || "arena", q.get("tier") || S.tier);
   if (a === "duels") return duelsScreen();
   if (a === "duel" && b === "new") return newDuel(q.get("from"));
@@ -229,7 +232,7 @@ async function home() {
   const h = $("#h"); if (!h) return;
   h.innerHTML = `
   <div class="col" style="gap:14px">
-    <div class="row between"><div><div class="small muted">${hello},</div><h2>${esc(S.name || "friend")}</h2></div>
+    <div class="row between"><div><div class="small muted">${hello},</div><h2>${esc(S.name || "friend")}</h2><a class="onlinepill" href="#/live" id="onlpill"><i class="dot"></i><span data-online>${onlineText()}</span></a></div>
       <button class="chip on" id="tierchip">${TIER[S.tier].icon} ${TIER[S.tier].name}</button></div>
     <div class="hero">
       <div class="rays"></div>
@@ -241,6 +244,7 @@ async function home() {
         ? `<div class="col" style="gap:8px"><button class="btn primary block" data-more>↓ Play more games below</button><div class="row" style="gap:8px"><a class="btn ghost grow sm" href="#/play/practice">🔁 Practise again</a><a class="btn ghost grow sm" href="#/ranks?tab=daily">🌍 Scoreboard</a></div></div>`
         : `<div class="col" style="gap:6px"><a class="btn primary block" href="#/play/daily">▶ Play today's challenge</a><button class="morelink" data-more>↓ Or play more games below</button></div>`}
     </div>
+    <div id="homelive">${liveCardHTML()}</div>
     <div id="moregames" class="col" style="gap:14px">
     <div class="sechead"><b>🎮 More games</b><span class="small muted">Play anytime, as many times as you like. These don't use your daily try.</span></div>
     <div id="homechurch"></div>
@@ -273,6 +277,7 @@ async function home() {
   </div>`;
   $("#duelcta").onclick = () => { sfx.tap(); go("#/duel/new"); };
   homeChurchCard();
+  bindLiveCard();
   $("#tierchip").onclick = () => tierSheet(() => home());
   $$(".mode", h).forEach((m) => (m.onclick = () => { sfx.tap(); buzz(8); go("#/play/" + m.dataset.m); }));
   $$("[data-more]", h).forEach((b) => (b.onclick = () => { sfx.tap(); showMoreGames(); }));
@@ -416,6 +421,7 @@ function runRound(cfg) {
   const total = cfg.sudden ? null : items.length;
   const rid = ++ROUND_SEQ; const live = () => rid === ROUND_SEQ;
   onLeave(() => { clearTimeout(timerH); clearInterval(tickH); clearInterval(rivalH); });
+  if (window.BAS) { BAS.setBusy(true); onLeave(() => BAS.setBusy(false)); }
   if (cfg.duel) {
     const poll = async () => { if (!live()) return clearInterval(rivalH); try { const v = await api("/api/v3/duels/" + cfg.duel.code); const others = v.entries.filter((e) => !e.isMe); rival = others.find((e) => !e.finished && e.progress > 0 && Date.now() - new Date(e.updatedAt).getTime() < 60000) || others.find((e) => e.isCreator) || others[0] || null; drawRival(); } catch (e) {} };
     poll(); rivalH = setInterval(poll, 4000);
@@ -738,8 +744,9 @@ async function churchPage(id, q) {
     <div class="hero center"><div class="rays"></div>
       ${c.champion ? `<div class="chip on" style="margin-bottom:8px">🏆 Last week's champion</div>` : ""}
       <div style="font-size:40px;line-height:1">${c.kind === "campus" ? "🎓" : c.kind === "fellowship" ? "🙌" : "⛪"}</div>
-      <h2 style="font-family:var(--serif);margin:8px 0 2px">${esc(c.name)}</h2>
+      <h2 style="font-family:var(--serif);margin:8px 0 2px">${esc(c.name)}${c.verified ? ` <span class="vtick" title="Verified church">✅</span>` : ""}</h2>
       <div class="small muted">${placeLine(c)}</div>
+      ${c.verified ? `<div class="small" style="color:#3DDC97;margin-top:4px">✅ Verified church</div>` : ""}
       ${c.titles ? `<div class="small gold" style="margin-top:6px">🏆 ${c.titles}× weekly champion</div>` : ""}
     </div>
     <div class="stats3">
@@ -758,6 +765,7 @@ async function churchPage(id, q) {
       <div class="row between" style="margin-bottom:6px"><b>Top members</b><div class="row" style="gap:6px"><button class="chip ${per === "week" ? "on" : ""}" data-per="week">This week</button><button class="chip ${per === "all" ? "on" : ""}" data-per="all">All-time</button></div></div>
       <div id="mb">${board()}</div>
     </div>
+    ${d.isOwner ? `<div id="verbox"></div>` : ""}
     ${d.isMember ? `<button class="btn ghost block" id="cleave" style="color:#ff8a80">Leave this team</button>` : ""}
     <p class="small dim center" style="margin:0">Points = round scores members earn after joining. Switching churches never carries points across.</p>
   </div>`;
@@ -767,6 +775,7 @@ async function churchPage(id, q) {
     try { await api("/api/v3/churches/" + c.id + "/remove", { body: { member: m.idx } }); toast("Removed"); churchPage(id, q); } catch (e) { toast("Couldn't remove. Try again."); }
   }));
   bindRm();
+  if (d.isOwner) verifyBox(c);
   if (d.isMember) {
     $("#cwa").onclick = () => shareChurch(c);
     $("#ccopy").onclick = async () => { const u = churchLink(c.code); try { await navigator.clipboard.writeText(u); toast("Invite link copied ✓"); } catch (e) { prompt("Copy this link:", u); } };
@@ -790,7 +799,7 @@ async function joinByCode(code) {
     <div class="center"><div class="tiny gold">⛪ You're invited to the Church League</div></div>
     <div class="hero center"><div class="rays"></div>
       <div style="font-size:44px;line-height:1">${c.kind === "campus" ? "🎓" : c.kind === "fellowship" ? "🙌" : "⛪"}</div>
-      <h2 style="font-family:var(--serif);margin:10px 0 4px">${esc(c.name)}</h2>
+      <h2 style="font-family:var(--serif);margin:10px 0 4px">${esc(c.name)}${c.verified ? ` <span class="vtick" title="Verified church">✅</span>` : ""}</h2>
       <div class="small muted">${placeLine(c)}</div>
       <div class="small gold" style="margin-top:8px">${c.members} member${c.members === 1 ? "" : "s"} playing</div>
     </div>
@@ -818,7 +827,7 @@ async function leagueBoard(el, per) {
     ${champ && per === "week" ? `<a class="badge" href="#/church/${esc(champ.id)}" style="text-decoration:none;color:inherit;margin-bottom:10px"><div class="bi">🏆</div><div><b>Last week's champion</b><div class="small muted">${esc(champ.name)} · ${fmt(champ.points)} pts</div></div></a>` : ""}
     ${mine && mine.pos > 5 ? `<a class="lb me" href="#/church/${esc(mine.id)}" style="text-decoration:none;color:inherit;margin-bottom:6px"><div class="pos">${mine.pos}</div><div class="grow"><b>⛪ ${esc(mine.name)}</b> <span class="small gold">your church</span><div class="small muted">${mine.members} member${mine.members === 1 ? "" : "s"}</div></div><div class="gold serif" style="font-weight:800">${fmt(mine.points)}</div></a>`
       : mine ? "" : `<a class="card gold row" href="#/church" style="text-decoration:none;color:inherit;gap:12px;margin-bottom:10px"><div style="font-size:26px">⛪</div><div class="grow"><b>Play for your church</b><div class="small muted">Join with an invite code or create your church's team</div></div><div class="gold">›</div></a>`}
-    ${r.churches.length ? r.churches.map((c) => `<a class="lb ${c.isMine ? "me" : ""}" href="#/church/${esc(c.id)}" style="text-decoration:none;color:inherit"><div class="pos p${c.pos}">${medal(c.pos)}</div><div class="grow"><b>${esc(c.name)}</b>${c.titles ? ` <span class="small gold">🏆${c.titles > 1 ? "×" + c.titles : ""}</span>` : ""}<div class="small muted">${esc(c.city)}, ${esc(c.state)} · ${c.members} member${c.members === 1 ? "" : "s"}</div></div><div class="gold serif" style="font-weight:800">${fmt(c.points)}</div></a>`).join("")
+    ${r.churches.length ? r.churches.map((c) => `<a class="lb ${c.isMine ? "me" : ""}" href="#/church/${esc(c.id)}" style="text-decoration:none;color:inherit"><div class="pos p${c.pos}">${medal(c.pos)}</div><div class="grow"><b>${esc(c.name)}</b>${c.verified ? ` <span class="vtick" title="Verified church">✅</span>` : ""}${c.titles ? ` <span class="small gold">🏆${c.titles > 1 ? "×" + c.titles : ""}</span>` : ""}<div class="small muted">${esc(c.city)}, ${esc(c.state)} · ${c.members} member${c.members === 1 ? "" : "s"}</div></div><div class="gold serif" style="font-weight:800">${fmt(c.points)}</div></a>`).join("")
       : `<div class="muted">No church teams yet. Create the first one!</div>`}`;
   $$("[data-lp]", el).forEach((b) => (b.onclick = () => { sfx.chip(); history.replaceState(null, "", "#/ranks?tab=church&p=" + b.dataset.lp); leagueBoard(el, b.dataset.lp); }));
 }
@@ -829,7 +838,7 @@ async function homeChurchCard() {
   const b2 = $("#homechurch"); if (!b2) return;
   if (m && m.church) {
     const c = m.church; syncChurch(c);
-    b2.innerHTML = `<a class="card gold row" href="#/church/${esc(c.id)}" style="text-decoration:none;color:inherit;gap:14px"><div style="font-size:34px">⛪</div><div class="grow"><div class="tiny gold">${c.champion ? "🏆 Champions · " : ""}Church League</div><b style="font-size:17px">${esc(c.name)}</b><div class="small muted">#${c.rank || "–"} this week · ${fmt(c.weekPoints)} pts · you added ${fmt(c.myWeekPoints)}</div></div><div class="gold" style="font-size:22px">›</div></a>`;
+    b2.innerHTML = `<a class="card gold row" href="#/church/${esc(c.id)}" style="text-decoration:none;color:inherit;gap:14px"><div style="font-size:34px">⛪</div><div class="grow"><div class="tiny gold">${c.champion ? "🏆 Champions · " : ""}Church League</div><b style="font-size:17px">${esc(c.name)}${c.verified ? " ✅" : ""}</b><div class="small muted">#${c.rank || "–"} this week · ${fmt(c.weekPoints)} pts · you added ${fmt(c.myWeekPoints)}</div></div><div class="gold" style="font-size:22px">›</div></a>`;
   } else {
     b2.innerHTML = `<a class="card row" href="#/church" style="text-decoration:none;color:inherit;gap:14px;border-color:rgba(245,185,66,.35)"><div style="font-size:34px">⛪</div><div class="grow"><div class="tiny gold">New · Church League</div><b style="font-size:17px">Church vs Church</b><div class="small muted">Join your church's team and push it up the weekly league</div></div><div class="gold" style="font-size:22px">›</div></a>`;
   }
@@ -870,6 +879,195 @@ async function shareCard(o) {
   } catch (e) { if (e && e.name === "AbortError") return; }
   if (navigator.share) { try { await navigator.share({ text }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
   location.href = waLink(text);
+}
+
+// ---------- Verified churches (v3.5.0): proof-based request by the team lead, reviewed by the Bible Arena owner ----------
+async function verifyBox(c) {
+  const box = $("#verbox"); if (!box) return;
+  let d; try { d = await api("/api/v3/churches/" + encodeURIComponent(c.id) + "/verify"); } catch (e) { return; }
+  const b = $("#verbox"); if (!b) return;
+  const r = d.request;
+  const codeCard = (r) => `<div class="card gold col" style="gap:8px"><div class="row between"><b>🔎 Verification under review</b><span class="chip">Waiting</span></div>
+      <div class="tiny muted">Your verification code</div><div class="row" style="gap:10px"><div class="serif gold grow" style="font-size:24px;font-weight:800;letter-spacing:.06em" id="vcode">${esc(r.code)}</div><button class="chip" id="vcopy">Copy</button></div>
+      <div class="small">${esc(d.instructions)}</div>
+      <div class="small muted">Official page you gave: <a href="${esc(r.link)}" target="_blank" rel="noopener noreferrer" style="color:var(--gold);word-break:break-all">${esc(r.link)}</a></div>
+      <div class="small dim">Asked by ${esc(r.requester)} (${esc(r.role)}). A real person checks every request. Nothing is approved automatically.</div></div>`;
+  if (d.verified) { b.innerHTML = `<div class="card row" style="gap:12px"><div style="font-size:26px">✅</div><div class="grow"><b>Verified church</b><div class="small muted">The tick shows on your church page, the league and your invite link.</div></div></div>`; return; }
+  if (r && r.status === "pending") { b.innerHTML = codeCard(r); $("#vcopy").onclick = async () => { try { await navigator.clipboard.writeText(r.code); toast("Code copied ✓"); } catch (e) { prompt("Copy this code:", r.code); } }; return; }
+  const was = r && (r.status === "rejected" || r.status === "revoked") ? `<div class="small" style="color:#ff8a80;margin-top:6px">${r.status === "revoked" ? "Verification was removed" : "Last request was not approved"}${r.reason ? `: ${esc(r.reason)}` : ""}</div>` : "";
+  b.innerHTML = `<div class="card col" style="gap:8px"><div class="row" style="gap:12px"><div style="font-size:26px">✅</div><div class="grow"><b>Get the Verified tick</b><div class="small muted">Show members this is your church's official team. We check it against your church's official page.</div>${was}</div></div><button class="btn ghost block" id="vask">Request verification</button></div>`;
+  $("#vask").onclick = () => verifyForm(c, d);
+}
+function verifyForm(c, d) {
+  const b = $("#verbox"); if (!b) return;
+  b.innerHTML = `<div class="card gold col" style="gap:10px"><b>Request verification for ${esc(c.name)}</b>
+    <div class="small muted">Only the team lead can ask. After you send this you'll get a code to post on the church's official page (or email from the official church address).</div>
+    <div class="field"><label for="vrq">Your full name</label><input id="vrq" maxlength="60" placeholder="e.g. Pastor Ade Johnson" value="${esc(S.name || "")}"></div>
+    <div class="field"><label for="vrl">Your role in the church</label><select id="vrl">${d.roles.map((x) => `<option>${esc(x)}</option>`).join("")}<option value="">Other…</option></select><input id="vrl2" maxlength="40" placeholder="Your role" style="display:none;margin-top:6px"></div>
+    <div class="field"><label for="vlk">Church's official page <span class="gold">(required)</span></label><input id="vlk" inputmode="url" maxlength="200" placeholder="https://facebook.com/yourchurch or your website"></div>
+    <div class="field"><label for="vem">Official church email <span class="dim">(optional)</span></label><input id="vem" type="email" maxlength="120" placeholder="info@yourchurch.org"></div>
+    <div class="field"><label for="vph">Church's public phone <span class="dim">(optional)</span></label><input id="vph" inputmode="tel" maxlength="20" placeholder="+234…"></div>
+    <div class="small" id="verr" style="color:#ff8a80"></div>
+    <div class="row" style="gap:8px"><button class="btn ghost grow" id="vcancel">Cancel</button><button class="btn primary grow" id="vsend">Send request</button></div></div>`;
+  $("#vrl").onchange = () => { $("#vrl2").style.display = $("#vrl").value ? "none" : "block"; };
+  $("#vcancel").onclick = () => verifyBox(c);
+  $("#vsend").onclick = async () => {
+    const btn = $("#vsend"); btn.disabled = true; $("#verr").textContent = "";
+    const body = { requester: $("#vrq").value, role: $("#vrl").value || $("#vrl2").value, link: $("#vlk").value, email: $("#vem").value, phone: $("#vph").value };
+    try { await api("/api/v3/churches/" + encodeURIComponent(c.id) + "/verify", { body }); sfx.ok(); toast("Request sent ✓"); verifyBox(c); }
+    catch (e) { btn.disabled = false; $("#verr").textContent = (e.data && e.data.message) || "Couldn't send. Check your connection and try again."; }
+  };
+}
+
+// ---------- Live Multiplayer Social (v3.5.0): online now, Live now, Quick Match, Arena Bot ----------
+function onlineText() { const n = window.BAS && BAS.st.online; return n == null ? "online now" : `${fmt(n)} online now`; }
+function modeName(m) { return MODES[m] ? MODES[m].name : "Mixed Arena"; }
+function ago(s) { s = Math.max(0, s | 0); return s < 60 ? s + "s" : Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+function liveItem(x) {
+  if (x.t === "wait") {
+    const tag = x.kind === "champ" ? "🏆 Winner stays on" : x.kind === "challenge" ? (x.forMe ? "⚔️ Challenged you" : "⚔️ Challenge") : "⚡ Open challenge";
+    return `<div class="lnrow ${x.forMe ? "hot" : ""}"><div class="avatar">${esc((x.name || "?")[0].toUpperCase())}</div><div class="grow"><div class="tiny" style="color:#3DDC97">${tag}</div><b>${esc(x.mine ? "You're waiting for a challenger" : x.text)}</b><div class="small muted">${TIER[x.tier] ? TIER[x.tier].name : ""} · ${esc(modeName(x.mode))} · waiting ${ago(x.age)}</div></div>${x.mine ? `<a class="chip on" href="#/qm">Open</a>` : `<button class="btn primary sm" data-join="${esc(x.id)}">Join</button>`}</div>`;
+  }
+  if (x.t === "duel") return `<div class="lnrow"><div class="avatar">⚔️</div><div class="grow"><div class="tiny gold">● Playing now</div><b>${esc(x.names.join(" vs "))}</b><div class="small muted">${TIER[x.tier] ? TIER[x.tier].name : ""} · ${esc(modeName(x.mode))} · play the same questions</div></div><a class="btn ghost sm" href="#/d/${esc(x.code)}">Join</a></div>`;
+  if (x.t === "room") return `<div class="lnrow"><div class="avatar">⛪</div><div class="grow"><div class="tiny" style="color:#FF8A9A">● Live room</div><b>${esc(x.title)}</b><div class="small muted">${x.church ? esc(x.church) + " · " : ""}${x.phase === "lobby" ? "In the lobby" : `Question ${x.qi + 1}/${x.qn}`} · ${x.n} player${x.n === 1 ? "" : "s"}</div></div><a class="btn ghost sm" href="/j/${esc(x.code)}">Join</a></div>`;
+  return "";
+}
+function bindJoins(el) { $$("[data-join]", el).forEach((b) => (b.onclick = () => { sfx.tap(); go("#/qm?join=" + b.dataset.join); })); }
+function liveCardHTML() {
+  const st = (window.BAS && BAS.st) || {};
+  const list = (st.live || []).filter((x) => !x.mine);
+  return `<div class="card livenow">
+    <div class="row between"><b style="font-size:17px">⚡ Play someone now</b><a class="onlinepill" href="#/live"><i class="dot"></i><span data-online>${onlineText()}</span></a></div>
+    <div class="small muted" style="margin-top:2px">Quick Match pairs you with another player in seconds. Same questions, live scores.</div>
+    ${list.length ? `<div class="col" style="gap:8px;margin-top:10px">${list.slice(0, 2).map(liveItem).join("")}</div>` : ""}
+    <div class="row" style="gap:8px;margin-top:12px"><button class="btn primary grow" id="qmgo">⚡ Quick Match</button><a class="btn ghost grow" href="#/live">Live now${st.liveCount ? ` <span class="lnbadge">${st.liveCount}</span>` : ""}</a></div>
+  </div>`;
+}
+function bindLiveCard() {
+  const draw = () => { const box = $("#homelive"); if (!box) return; box.innerHTML = liveCardHTML(); const q = $("#qmgo"); if (q) q.onclick = () => { sfx.tap(); buzz(10); go("#/qm"); }; bindJoins(box); $$("[data-online]").forEach((e) => (e.textContent = onlineText())); };
+  draw();
+  if (window.BAS) { const off = BAS.on(draw); onLeave(off); }
+}
+async function pushCardHTML(where) {
+  if (!window.BAS) return "";
+  let s = "off"; try { s = await BAS.push.state(); } catch (e) {}
+  if (s === "on" || s === "unsupported" || s === "unavailable" || s === "denied") return "";
+  if (s === "ios-install") return `<div class="card small"><b>🔔 Get notified on iPhone</b><div class="muted" style="margin-top:4px">Tap Share ⬆️ then “Add to Home Screen”, open Bible Arena from there, and turn on notifications to hear when someone is waiting for a challenger.</div></div>`;
+  return `<div class="card row" style="gap:12px"><div style="font-size:26px">🔔</div><div class="grow"><b>Get a notification</b><div class="small muted">${where === "qm" ? "when someone is waiting, even when the app is closed." : "when someone opens a match. Max 3 a day, never 10 pm to 7 am."}</div></div><button class="chip on" data-push>Turn on</button></div>`;
+}
+function bindPush(el, redraw) {
+  $$("[data-push]", el).forEach((b) => (b.onclick = async () => {
+    b.disabled = true; b.textContent = "…";
+    let r = "off"; try { r = await BAS.push.enable(); } catch (e) {}
+    toast(r === "on" ? "Notifications on ✓" : r === "denied" ? "Notifications are blocked in your browser settings." : r === "ios-install" ? "On iPhone, add Bible Arena to your Home Screen first." : "Couldn't turn on notifications here.");
+    if (redraw) redraw();
+  }));
+}
+async function liveNow() {
+  render(`<div class="row between" style="margin-bottom:12px"><h2>Live now</h2><a class="onlinepill big" href="#/live"><i class="dot"></i><span data-online>${onlineText()}</span></a></div>
+    <div class="col" style="gap:12px">
+      <div class="hero center"><div class="rays"></div><div style="font-size:40px">⚡</div><h2 style="font-family:var(--serif);margin:6px 0">Quick Match</h2><p class="small muted" style="margin:0 0 12px">One tap. We pair you with another player: same questions, live scores, winner takes the glory.</p><button class="btn primary block" id="qmgo">⚡ Find me a challenger</button></div>
+      <div id="pushbox"></div>
+      <div class="sechead"><b>🟢 Games you can join</b><span class="small muted">Open challenges, duels being played and public quiz nights. Tap to jump in.</span></div>
+      <div id="lnl" class="col" style="gap:8px"><div class="muted small">Loading…</div></div>
+      <a class="card row" href="/live" style="text-decoration:none;color:inherit;gap:12px"><div style="font-size:26px">⛪</div><div class="grow"><b>Host a public quiz night</b><div class="small muted">Turn on “List in Live now” and anyone can join, up to 200.</div></div><div class="gold">›</div></a>
+    </div>${tabbar("duels")}`);
+  $("#qmgo").onclick = () => { sfx.tap(); buzz(10); go("#/qm"); };
+  await ensureSession();
+  const drawPush = async () => { const pb = $("#pushbox"); if (!pb) return; pb.innerHTML = await pushCardHTML("live"); bindPush(pb, drawPush); };
+  drawPush();
+  const draw = (live) => {
+    const el = $("#lnl"); if (!el) return;
+    $$("[data-online]").forEach((e) => (e.textContent = onlineText()));
+    el.innerHTML = live && live.length ? live.map(liveItem).join("") : `<div class="card center small muted">Nobody's waiting right now.<br>Tap Quick Match and you'll be first: everyone online gets a pop-up to come and play you.</div>`;
+    bindJoins(el);
+  };
+  const tick = async () => { try { const r = await api("/api/v3/social/live"); if (window.BAS) BAS.st.online = r.online; draw(r.live); } catch (e) { if ($("#lnl") && $("#lnl").textContent === "Loading…") draw([]); } };
+  tick(); const t = setInterval(() => { if (!document.hidden) tick(); }, 5000); onLeave(() => clearInterval(t));
+}
+function startMatch(r, creator) {
+  sfx.win(); buzz([30, 60, 30]); toast(`Matched with ${r.opp}! ⚔️`);
+  return loadBank().then(() => runRound({ ids: r.ids, tier: r.tier, mode: "duel", title: "Quick Match vs " + r.opp, duel: { code: r.code, creator: !!creator, mode: r.mode, quick: true, opp: r.opp } }));
+}
+async function playBot(mode, tier) {
+  render(`<div class="boot"><div class="boot-mark">🤖</div><div class="boot-sub">The Arena Bot is warming up…</div></div>`);
+  try {
+    const [r] = await Promise.all([api("/api/v3/social/bot", { body: { mode, tier, name: S.name } }), loadBank()]);
+    toast(`Beat the Arena Bot's ${fmt(r.bot.score)}! 🤖`);
+    runRound({ ids: r.ids, tier: r.tier, mode: "duel", title: "vs Arena Bot 🤖", duel: { code: r.code, creator: true, mode: r.mode, bot: true } });
+  } catch (e) { toast("Couldn't start the bot. Try again."); go("#/live"); }
+}
+async function quickMatch(q) {
+  const mode = MODES[q.get("mode")] && q.get("mode") !== "sudden" ? q.get("mode") : "mixed";
+  const tier = TIER[q.get("tier")] ? q.get("tier") : S.tier;
+  const seq = ROUND_SEQ;
+  const alive = () => seq === ROUND_SEQ;
+  render(`<div class="boot"><div class="boot-mark">⚔️</div><div class="boot-sub">Finding a challenger…</div></div>`);
+  await ensureSession();
+  if (!alive()) return;
+  const join = q.get("join");
+  const taken = (msg) => render(`<div class="col center" style="padding-top:16vh;gap:12px"><div style="font-size:48px">🕊️</div><h2>${msg}</h2><p class="muted">Someone got there first. Start your own and people online will get a pop-up.</p><button class="btn primary" id="qmgo">⚡ Quick Match</button><a class="btn ghost" href="#/live">See Live now</a></div>${tabbar("duels")}`) || ($("#qmgo").onclick = () => go("#/qm"));
+  let r;
+  try {
+    if (join) r = await api("/api/v3/social/match/" + encodeURIComponent(join) + "/join", { body: { name: S.name } });
+    else {
+      const body = { tier, mode, name: S.name, church: S.church, pid: window.BAS ? BAS.pid : "" };
+      if (q.get("duel")) body.duel = q.get("duel");
+      if (q.get("room")) { body.room = q.get("room"); body.lt = q.get("lt") || ""; }
+      r = await api("/api/v3/social/match", { body });
+    }
+  } catch (e) {
+    if (!alive()) return;
+    if (e.status === 410) return taken("That challenge was just taken");
+    if (e.status === 400 && e.message === "own_challenge") return go("#/qm");
+    if (e.status === 409) return taken("No winner to challenge yet");
+    toast("Couldn't reach the arena. Check your connection."); return go("#/live");
+  }
+  if (!alive()) return;
+  if (r.status === "matched") return startMatch(r, r.role === "creator");
+  // waiting: poll every 2.5 s; after 60 s offer the bot or solo
+  const id = r.id; const t0 = Date.now(); let done = false, fallback = false;
+  const cancel = () => { if (done) return; done = true; fetch("/api/v3/social/match/" + id + "/cancel", { method: "POST", credentials: "same-origin", keepalive: true, headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => {}); };
+  render(`<div class="row" style="margin-bottom:12px"><a class="iconbtn" href="#/live" aria-label="Back">‹</a><div class="grow tiny gold">⚡ Quick Match · ${TIER[tier].name} · ${esc(modeName(mode))}</div></div>
+    <div class="col" style="gap:14px">
+      <div class="hero center"><div class="rays"></div>
+        <div class="radar"><i></i><i></i><i></i><div class="rc">⚔️</div></div>
+        <h2 style="font-family:var(--serif);margin:10px 0 4px" id="qmh">Looking for a challenger…</h2>
+        <div class="small muted" id="qms">${q.get("duel") || q.get("room") ? esc((r.text || "").replace(S.name || "\u0000", "You")) : "You'll start the moment someone joins: same questions, live scores."}</div>
+        <div class="row" style="justify-content:center;gap:10px;margin-top:10px"><span class="onlinepill"><i class="dot"></i><span data-online>${onlineText()}</span></span><span class="chip" id="qmt">0:00</span></div>
+        <p class="small dim" style="margin:10px 0 0">Everyone online gets a pop-up, and you're listed in Live now.</p>
+      </div>
+      <div id="qmfb"></div>
+      <div id="pushbox"></div>
+      <button class="btn ghost block" id="qmx">Cancel</button>
+    </div>${tabbar("duels")}`);
+  onLeave(cancel);
+  $("#qmx").onclick = () => { cancel(); go("#/live"); };
+  const drawPush = async () => { const pb = $("#pushbox"); if (!pb) return; pb.innerHTML = await pushCardHTML("qm"); bindPush(pb, drawPush); };
+  drawPush();
+  const showFallback = () => {
+    fallback = true; const fb = $("#qmfb"); if (!fb) return;
+    fb.innerHTML = `<div class="card gold col" style="gap:10px"><b>No challenger yet</b><div class="small muted">You're still listed in Live now. Keep waiting, or play now:</div>
+      <button class="btn primary block" id="qmbot">🤖 Play the Arena Bot</button><div class="row" style="gap:8px"><button class="btn ghost grow" id="qmsolo">Play solo</button><button class="btn ghost grow" id="qmwait">Keep waiting</button></div></div>`;
+    $("#qmbot").onclick = () => { cancel(); playBot(mode, tier); };
+    $("#qmsolo").onclick = () => { cancel(); go("#/play/" + mode); };
+    $("#qmwait").onclick = () => { fb.innerHTML = ""; };
+    sfx.chip();
+  };
+  const tick = setInterval(() => { const el = $("#qmt"); if (!el) return clearInterval(tick); const s = Math.floor((Date.now() - t0) / 1000); el.textContent = ago(s); if (s >= 60 && !fallback) showFallback(); }, 500);
+  onLeave(() => clearInterval(tick));
+  const poll = async () => {
+    if (done || !alive()) return;
+    try {
+      const s = await api("/api/v3/social/match/" + id);
+      if (!alive() || done) return;
+      if (s.online != null && window.BAS) { BAS.st.online = s.online; $$("[data-online]").forEach((e) => (e.textContent = onlineText())); }
+      if (s.status === "matched") { done = true; return startMatch(s, true); }
+      if (s.status === "gone") { done = true; toast("Your challenge timed out."); return go("#/live"); }
+    } catch (e) {}
+    setTimeout(poll, 2500);
+  };
+  setTimeout(poll, 1500);
 }
 
 // ---------- duels ----------
@@ -966,7 +1164,12 @@ function duelResult(v, r, cfg) {
   if (cmp === 1) banner = `<h1 class="title-gold">${onTime ? "You win on time! ⏱️" : "You win! 🏆"}</h1>${onTime ? `<p class="muted" style="margin:4px 0 0">Same score. You were ${gap} faster.</p>` : ""}`;
   else if (cmp === -1) banner = `<h1 style="font-family:var(--serif)">${esc(opp.name)} wins${onTime ? " on time" : ""}</h1>${onTime ? `<p class="muted" style="margin:4px 0 0">Same score. ${esc(opp.name.split(" ")[0])} was ${gap} faster.</p>` : ""}`;
   else if (cmp === 0) banner = `<h1 class="title-gold">It's a draw 🤝</h1><p class="muted" style="margin:4px 0 0">Same score, same time. Honours shared.</p>`;
+  else if (me && cfg && cfg.duel && cfg.duel.quick) banner = `<h1 class="title-gold">Nice round!</h1><p class="muted" style="margin:4px 0 0">Your score: <b class="gold">${fmt(me.score)}</b>. Waiting for ${esc(cfg.duel.opp || "your opponent")} to finish…</p>`;
   else if (me && v.creator.isMe) banner = `<h1 class="title-gold">Now send it!</h1><p class="muted" style="margin:4px 0 0">Your score: <b class="gold">${fmt(me.score)}</b>. Waiting for a pastor to answer your challenge.</p>`;
+  const botDuel = v.entries.some((e) => e.name === "Arena Bot 🤖");
+  const fin = v.entries.filter((e) => e.finished).sort((a, b) => duelCmp(b, a));
+  const topWin = fin.length >= 2 && duelCmp(fin[0], fin[1]) !== 0 ? fin[0] : null;
+  const chw = !botDuel && topWin ? (topWin.isMe ? `<button class="btn ghost block" id="chw" style="border-color:rgba(245,185,66,.6)">🏆 Winner stays on: take on all comers</button>` : `<button class="btn ghost block" id="chw" style="border-color:rgba(245,185,66,.6)">⚔️ Challenge the winner (${esc(topWin.name)})</button>`) : "";
   const side = (e, win) => e ? `<div class="side ${win ? "win" : ""}"><div class="avatar">${esc(e.name[0].toUpperCase())}</div><b>${esc(e.name)}</b><div class="bigscore" style="font-size:30px;margin-top:4px">${fmt(e.score)}</div><div class="small muted">${e.correct}/${e.total} · ${secs(e.timeMs)}</div></div>` : `<div class="side"><div class="avatar">?</div><b>Waiting…</b><div class="small muted">Send the link</div></div>`;
   const n = v.ids.length;
   const grid = me && opp && me.answers.length ? `<div class="card"><b>Question by question</b><div class="grid-ans" style="--n:${n};margin-top:10px"><span class="small">You</span>${me.answers.map((a) => `<i class="${a ? "y" : "n"}"></i>`).join("")}<span class="small">${esc(opp.name.split(" ")[0])}</span>${opp.answers.map((a) => `<i class="${a ? "y" : "n"}"></i>`).join("")}</div></div>` : "";
@@ -979,7 +1182,9 @@ function duelResult(v, r, cfg) {
     ${r && r.xp ? `<div class="small muted center">+${fmt(r.xp)} XP · ${esc(r.player ? r.player.rank.name + " " + r.player.rank.division : "")}</div>` : ""}
     <a class="btn wa block" id="wa" href="${waLink(duelText(v.code, me ? me.score : null, v.tier, v.mode))}" target="_blank" rel="noopener">Send on WhatsApp</a>
     <div class="row"><button class="btn ghost grow" id="cp">Copy link</button><button class="btn ghost grow" id="sh">Share card</button></div>
-    ${me && opp ? `<button class="btn primary block" id="rm">🔄 Rematch (new questions)</button>` : ""}
+    ${me && opp && !botDuel ? `<button class="btn primary block" id="rm">🔄 Rematch (new questions)</button>` : ""}
+    ${botDuel && me && opp ? `<button class="btn primary block" id="qmreal">⚡ Quick Match a real player</button>` : ""}
+    ${chw}
     ${v.entries.filter((e) => e.finished).length ? `<div class="card"><b>Everyone on this challenge</b>${board(v)}</div>` : ""}
     <a class="btn ghost block" href="#/">Home</a>
   </div>${tabbar("duels")}`);
@@ -987,12 +1192,14 @@ function duelResult(v, r, cfg) {
   $("#rf").onclick = async () => { try { const nv = await api("/api/v3/duels/" + v.code); duelResult(nv, null, cfg); } catch (e) {} };
   $("#cp").onclick = async () => { try { await navigator.clipboard.writeText(url); toast("Link copied ✓"); } catch (e) { prompt("Copy this link:", url); } };
   $("#sh").onclick = () => shareCard({ score: me ? me.score : 0, correct: me ? me.correct : 0, total: n, tier: v.tier, title: "Pastor Duel", url, text: duelText(v.code, me ? me.score : null, v.tier, v.mode), cta: cmp === 1 ? "I won this duel. Your turn?" : cmp === 0 ? "We drew this duel. Can you break the tie?" : "Can you beat me?" });
+  const chb = $("#chw"); if (chb) chb.onclick = () => { sfx.tap(); go("#/qm?duel=" + v.code + "&tier=" + v.tier + "&mode=" + v.mode); };
+  const qr = $("#qmreal"); if (qr) qr.onclick = () => { sfx.tap(); go("#/qm?tier=" + v.tier + "&mode=" + v.mode); };
   const rm = $("#rm"); if (rm) rm.onclick = async () => {
     rm.disabled = true; rm.textContent = "Preparing the rematch…";
     try { await loadBank(); const d = await api("/api/v3/duels", { body: { mode: v.mode, tier: v.tier, name: S.name, parent: v.code } }); runRound({ ids: d.ids, tier: v.tier, mode: "duel", title: "Rematch · " + (MODES[v.mode] ? MODES[v.mode].name : ""), duel: { code: d.code, creator: true, mode: v.mode } }); }
     catch (e) { toast("Couldn't start the rematch."); rm.disabled = false; }
   };
-  if (!me || !opp) { const t = setInterval(async () => { try { const nv = await api("/api/v3/duels/" + v.code); if (nv.entries.filter((e) => e.finished).length !== v.entries.filter((e) => e.finished).length) { clearInterval(t); duelResult(nv, null, cfg); } } catch (e) {} }, 8000); onLeave(() => clearInterval(t)); }
+  if (!me || !opp) { const t = setInterval(async () => { try { const nv = await api("/api/v3/duels/" + v.code); if (nv.entries.filter((e) => e.finished).length !== v.entries.filter((e) => e.finished).length) { clearInterval(t); duelResult(nv, null, cfg); } } catch (e) {} }, cfg && cfg.duel && cfg.duel.quick ? 3000 : 8000); onLeave(() => clearInterval(t)); }
 }
 async function duelsScreen() {
   render(`<div class="row between" style="margin-bottom:14px"><h2>Pastor Duels</h2><a class="btn primary" href="#/duel/new" style="min-height:42px">+ New</a></div><div id="dl" class="col"><div class="muted small">Loading your duels…</div></div>${tabbar("duels")}`);
@@ -1049,6 +1256,8 @@ async function profile() {
       <div class="setrow"><div class="grow"><div>Level</div><div class="small muted">${TIER[S.tier].name}</div></div><button class="chip" id="etier">Change</button></div>
       <div class="setrow"><div>Sound</div><button class="switch ${S.sound ? "on" : ""}" id="snd" aria-label="Sound"></button></div>
       <div class="setrow"><div>Vibration</div><button class="switch ${S.haptics ? "on" : ""}" id="hap" aria-label="Vibration"></button></div>
+      <div class="setrow"><div class="grow"><div>Challenge pop-ups</div><div class="small muted">“Someone is waiting for a challenger” while you're in the app (max 1 every 2 min)</div></div><button class="switch ${window.BAS && !BAS.muted() ? "on" : ""}" id="pops" aria-label="Challenge pop-ups"></button></div>
+      <div class="setrow" id="pushrow"><div class="grow"><div>Phone notifications</div><div class="small muted" id="pushtxt">Checking…</div></div><span id="pushbtn"></span></div>
       <div class="setrow"><div class="grow"><div>Account</div><div class="small muted">${google ? "Signed in with Google ✓ (progress is safe across phones)" : "Guest on this phone. Sign in to keep your progress on any phone."}</div></div>${google ? `<button class="chip" id="out">Sign out</button>` : `<a class="chip on" href="/api/oauth/google/start">Google</a>`}</div>
       <div class="setrow"><div class="grow"><div>Privacy policy</div><div class="small muted">What we keep and why</div></div><a class="chip" href="/privacy">Read</a></div>
       <div class="setrow"><div class="grow"><div>Delete account</div><div class="small muted">Permanently erase your profile, scores and duels</div></div><button class="chip" id="delacct" style="color:#ff8a80">Delete</button></div>
@@ -1061,6 +1270,18 @@ async function profile() {
   $("#etier").onclick = () => tierSheet(() => profile());
   $("#snd").onclick = (e) => { S.sound = !S.sound; save(); e.target.classList.toggle("on", S.sound); sfx.ok(); };
   $("#hap").onclick = (e) => { S.haptics = !S.haptics; save(); e.target.classList.toggle("on", S.haptics); buzz(30); };
+  $("#pops").onclick = (e) => { if (!window.BAS) return; const on = BAS.muted(); BAS.mute(!on); e.target.classList.toggle("on", on); toast(on ? "Challenge pop-ups on" : "Challenge pop-ups muted"); };
+  const drawPushRow = async () => {
+    const tx = $("#pushtxt"), bt = $("#pushbtn"); if (!tx || !window.BAS) return;
+    const s = await BAS.push.state().catch(() => "off"); if (!$("#pushtxt")) return;
+    const T = { on: "On for this phone. Max 3 a day, never 10 pm to 7 am.", off: "When someone is waiting for a challenger and the app is closed", "ios-install": "iPhone: tap Share → “Add to Home Screen”, open it from there, then turn this on", denied: "Blocked in your browser settings for this site", unsupported: "This browser can't show notifications", unavailable: "Not available right now" };
+    tx.textContent = T[s] || T.off;
+    bt.innerHTML = s === "on" ? `<button class="chip" id="ptest">Test</button> <button class="chip" id="poff">Off</button>` : s === "off" ? `<button class="chip on" id="pon">Turn on</button>` : "";
+    const on = $("#pon"); if (on) on.onclick = async () => { on.disabled = true; const r = await BAS.push.enable().catch(() => "off"); toast(r === "on" ? "Notifications on ✓" : r === "denied" ? "Blocked in your browser settings." : "Couldn't turn on notifications here."); drawPushRow(); };
+    const off = $("#poff"); if (off) off.onclick = async () => { await BAS.push.disable().catch(() => {}); toast("Notifications off"); drawPushRow(); };
+    const te = $("#ptest"); if (te) te.onclick = async () => { try { const r = await BAS.push.test(); toast(r.sent ? "Test sent. Check your notifications 🔔" : "Couldn't send a test right now."); } catch (e) { toast(e.status === 429 ? "Wait a few minutes before another test." : "Couldn't send a test right now."); } };
+  };
+  drawPushRow();
   $("#delacct").onclick = async () => {
     if (!confirm("Delete your Bible Arena account? This permanently erases your profile, scores, rounds and the duels you created. It cannot be undone.")) return;
     try { await api("/api/v3/account/delete", { body: { confirm: "DELETE" } }); } catch (e) { toast("Couldn't delete right now. Try again, or use bible-arena.onrender.com/delete-account"); return; }
@@ -1073,6 +1294,7 @@ async function profile() {
 
 // ---------- boot ----------
 (async function boot() {
+  if (window.BAS) { BAS.toast = toast; BAS.onJoin = (inv) => go("#/qm?join=" + encodeURIComponent(inv.id)); BAS.on(() => $$("[data-online]").forEach((e) => (e.textContent = onlineText()))); }
   document.addEventListener("click", () => { const a = audio(); if (a && a.state === "suspended") a.resume(); }, { once: true });
   ensureSession().then(() => { if (ME.player) { if (!S.name && ME.player.name) S.name = ME.player.name; if (!S.church && ME.player.church) S.church = ME.player.church; save(); } });
   loadBank().catch(() => {});

@@ -110,6 +110,7 @@ function onState(s) {
   if (!s) return;
   if (s.me && s.me.kicked) { store.del("bal:p:" + code); conn && conn.stop(); return enterCode("The host removed you from this game."); }
   const prev = S; S = s;
+  if (window.BAS) window.BAS.setBusy(s.phase !== "final");
   if (typeof s.remain === "number" && s.remain > 0) deadline = performance.now() + s.remain;
   const key = s.phase + ":" + s.qi;
   if (key === scene) { const p = $("#pts"); if (p && s.me) p.textContent = fmt(s.me.score); if (s.phase === "lobby") lobbyUpdate(s); return; }
@@ -212,6 +213,7 @@ function final(s) {
     ${tw ? `<div class="tag" style="--tc:${tw.color}">${tw.emoji} ${esc(tw.name)} won the team battle${mine && mine.id === tw.id ? " — that's you! 🎉" : ""}</div>` : ""}
     <div class="podl">${(f.podium || []).map((p, i) => `<div>${["🥇", "🥈", "🥉"][i]} ${p.avatar} ${esc(p.name)}<b>${fmt(p.score)}</b></div>`).join("")}</div>
     <button class="btn primary" id="share" style="margin-top:6px">📲 Share my result</button>
+    ${f.podium && f.podium.length > 1 ? `<a class="btn ghost" id="chw" href="/#/qm?room=${encodeURIComponent(code)}&lt=${encodeURIComponent(sess && sess.token || "")}" style="text-decoration:none;border-color:rgba(245,185,66,.6)">${me.rank === 1 ? "🏆 Winner stays on: take on all comers" : `⚔️ Challenge the winner (${esc(f.podium[0].name)})`}</a>` : ""}
     <a class="btn ghost" href="/" style="text-decoration:none">Keep playing Bible Arena</a>
     <p class="foot"><a href="/live">Host your own quiz night</a></p></div>`;
   $("#share").onclick = () => L.shareCard(f, { name: me.name, rank: me.rank, score: me.score });

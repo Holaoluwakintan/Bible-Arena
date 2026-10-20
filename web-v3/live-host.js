@@ -13,7 +13,7 @@ snd.on = store.get("bal:sound", true);
 const joinHost = location.host.replace(/^www\./, "");
 
 /* ================= SETUP ================= */
-const defaults = { title: "", church: "", teams: "none", teamNames: ["Ushers", "Choir", "Youth"], tab: "bank", cats: ["people", "events", "places", "who", "myth", "verse", "said"], tiers: ["b", "s"], testament: "", books: [], count: 15, timer: 20, instant: true, auto: false, quick: "", topup: false };
+const defaults = { title: "", church: "", teams: "none", teamNames: ["Ushers", "Choir", "Youth"], tab: "bank", cats: ["people", "events", "places", "who", "myth", "verse", "said"], tiers: ["b", "s"], testament: "", books: [], count: 15, timer: 20, instant: true, auto: false, quick: "", topup: false, public: false };
 let cfg = Object.assign({}, defaults, store.get(CFG, {}));
 cfg.quick = store.get(DRAFT, "") || cfg.quick || "";
 
@@ -52,6 +52,7 @@ function drawSetup() {
       <div style="margin-top:12px">
       <div class="switchrow"><div><b>Instant feedback on phones</b><span>Right or wrong shows the moment they tap. Turn off for strict competitions.</span></div><button class="sw ${cfg.instant ? "on" : ""}" id="sw-instant" aria-label="Instant feedback"></button></div>
       <div class="switchrow"><div><b>Auto-play</b><span>Moves from answer to leaderboard to next question by itself. Off means you press Next (or Space).</span></div><button class="sw ${cfg.auto ? "on" : ""}" id="sw-auto" aria-label="Auto-play"></button></div>
+      <div class="switchrow"><div><b>List in "Live now" 🌍</b><span>Anyone in the Bible Arena app can see this game and jump in, even mid-game (up to 200). Off keeps it to people with the code.</span></div><button class="sw ${cfg.public ? "on" : ""}" id="sw-public" aria-label="List in Live now"></button></div>
       </div></section>
     <section class="panel"><h3>📽️ On the night</h3><div class="howto">
       <div><i>1</i><span>Connect this laptop to the projector or TV and open the lobby.</span></div>
@@ -74,6 +75,7 @@ function drawSetup() {
   $$("#tmr .chip").forEach((b) => (b.onclick = () => { cfg.timer = +b.dataset.n; save(); drawSetup(); }));
   $("#sw-instant").onclick = () => { cfg.instant = !cfg.instant; save(); drawSetup(); };
   $("#sw-auto").onclick = () => { cfg.auto = !cfg.auto; save(); drawSetup(); };
+  $("#sw-public").onclick = () => { cfg.public = !cfg.public; save(); drawSetup(); };
   $("#go").onclick = launch;
 }
 function save() { const c = Object.assign({}, cfg); delete c.quick; store.set(CFG, c); store.set(DRAFT, cfg.quick); }
@@ -150,7 +152,7 @@ async function recount() {
 async function launch() {
   const go = $("#go"); go.disabled = true; go.textContent = "Opening…";
   snd.init();
-  const body = { title: cfg.title || "Bible Quiz Night", church: cfg.church, timer: cfg.timer, instant: cfg.instant, auto: cfg.auto,
+  const body = { title: cfg.title || "Bible Quiz Night", church: cfg.church, timer: cfg.timer, instant: cfg.instant, auto: cfg.auto, public: !!cfg.public,
     teams: cfg.teams === "none" ? null : cfg.teams, teamNames: cfg.teamNames, bank: bankPick(), custom: cfg.tab === "custom" ? parsed().questions : [] };
   if (cfg.tab === "custom" && body.bank && !body.bank.count) body.bank = null;
   try {
@@ -197,6 +199,7 @@ function menu() {
     <div class="switchrow"><div><b>Instant feedback on phones</b><span>Players see right/wrong the moment they tap</span></div><button class="sw ${S && S.instant ? "on" : ""}" data-a="instant"></button></div>
     <div class="switchrow"><div><b>Auto-play</b><span>Advance automatically after each reveal</span></div><button class="sw ${S && S.auto ? "on" : ""}" data-a="auto"></button></div>
     <div class="switchrow"><div><b>Lock the room</b><span>No new players can join</span></div><button class="sw ${S && S.locked ? "on" : ""}" data-a="lock"></button></div>
+    <div class="switchrow"><div><b>List in "Live now" 🌍</b><span>Anyone in the app can find this game and join</span></div><button class="sw ${S && S.public ? "on" : ""}" data-a="public"></button></div>
     ${S && S.phase === "question" ? `<div class="switchrow"><div><b>+10 seconds</b><span>Give everyone a little more time</span></div><button class="btn ghost" data-x="extend">+10 s</button></div>` : ""}
     <div class="sub">Remove a player</div><div class="plist" id="plist">${(S && S.players ? S.players : []).map((p) => `<button data-pid="${p.id}">${p.avatar} ${esc(p.name)} ✕</button>`).join("") || `<span class="hint">Open on the lobby or leaderboard to see players.</span>`}</div>
     <div class="acts"><button class="btn ghost" data-x="close">Close</button>${S && S.phase !== "final" ? `<button class="btn ghost" data-x="end" style="border-color:rgba(255,93,115,.5)">End game now</button>` : ""}<button class="btn ghost" data-x="new">New game</button></div></div>`;

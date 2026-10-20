@@ -20,6 +20,32 @@ const waiters = new Map<string, Set<Waiter>>();
 const lastHostPush = new Map<string, number>();
 const lastPlayerPush = new Map<string, { v: number; at: number }>();
 const ROOM_TTL_MS = 12 * 3600_000;
+const hostSeen = new Map<string, number>(); // last time the host's screen was connected or acted (v3.5.0 Live now)
+const seenHost = (code: string) => hostSeen.set(code, Date.now());
+
+/** Live rooms whose host listed them as public and that anyone can join right now (v3.5.0 "Live now"). */
+export function publicRooms(now = Date.now()) {
+  const out: Array<{ code: string; title: string; church: string; phase: string; qi: number; qn: number; n: number; max: number }> = [];
+  for (const room of rooms.values()) {
+    if (!room.public || room.locked || room.phase === "final") continue;
+    const set = conns.get(room.code);
+    let hostOn = now - (hostSeen.get(room.code) || 0) < 90_000;
+    if (!hostOn && set) for (const c of set) if (c.role === "host") { hostOn = true; break; }
+    if (!hostOn) continue;
+    const n = E.activePlayers(room).length;
+    if (n >= room.maxPlayers) continue;
+    out.push({ code: room.code, title: room.title, church: room.church, phase: room.phase, qi: room.qi, qn: room.questions.length, n, max: room.maxPlayers });
+  }
+  return out.sort((a, b) => b.n - a.n).slice(0, 20);
+}
+/** Winner of a finished room (in memory), and whether this player token is the winner (v3.5.0 "Challenge the winner"). */
+export function liveWinner(code: string, token: string): { title: string; name: string; isMe: boolean } | null {
+  const room = rooms.get(code);
+  if (!room || room.phase !== "final") return null;
+  const top = E.ranks(room)[0];
+  if (!top) return null;
+  return { title: room.title, name: top.name, isMe: !!token && top.token === token };
+}
 
 // ---------- tiny per-key limiter (keyed by token or IP; a whole church can share one IP) ----------
 const buckets = new Map<string, { n: number; reset: number }>();
@@ -131,7 +157,7 @@ export function hostView(room: E.LRoom, now = Date.now()) {
   const v: any = {
     v: room.version, code: room.code, title: room.title, church: room.church, phase: room.phase, qi: room.qi, qn: room.questions.length,
     timer: room.timer, remain: isOpen(room) ? Math.max(0, room.endsAt - now) : 0, intro: room.intro,
-    auto: room.auto, instant: room.instant, locked: room.locked, max: room.maxPlayers, n: live.length,
+    auto: room.auto, instant: room.instant, locked: room.locked, public: !!room.public, max: room.maxPlayers, n: live.length,
     teams: room.teams ? E.teamTotals(room) : null,
     answered: room.qi >= 0 ? E.answeredCount(room) : 0,
   };
@@ -227,7 +253,9 @@ function genCode(): string {
 
 function hostOk(room: E.LRoom, key: unknown) {
   const k = String(key || "");
-  return k.length > 0 && k.length === room.hostKey.length && crypto.timingSafeEqual(Buffer.from(k), Buffer.from(room.hostKey));
+  const ok = k.length > 0 && k.length === room.hostKey.length && crypto.timingSafeEqual(Buffer.from(k), Buffer.from(room.hostKey));
+  if (ok) seenHost(room.code);
+  return ok;
 }
 
 // ---------- routes ----------
@@ -245,8 +273,9 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
     const questions = [...custom, ...fromBank].slice(0, 50);
     if (!questions.length) return json(res, 400, { error: "No questions match. Pick more categories or add your own." });
     const teams = E.makeTeams(b.teams, b.teamNames);
-    const room = E.createRoom({ code: genCode(), title: b.title, church: b.church, teams, questions, timer: b.timer, auto: b.auto, instant: b.instant, now: Date.now() });
+    const room = E.createRoom({ code: genCode(), title: b.title, church: b.church, teams, questions, timer: b.timer, auto: b.auto, instant: b.instant, public: b.public === true, now: Date.now() });
     rooms.set(room.code, room);
+    seenHost(room.code);
     touch(room);
     void flushLive();
     logger.info("live_room_created", { code: room.code, questions: questions.length, teams: !!teams });
@@ -343,6 +372,7 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
       case "end": E.finish(room, now); break;
       case "kick": E.kick(room, String(b.pid || "")); break;
       case "lock": room.locked = !!b.on; room.version++; break;
+      case "public": room.public = !!b.on; room.version++; break;
       case "auto": room.auto = !!b.on; room.version++; break;
       case "instant": room.instant = !!b.on; room.version++; room.pversion++; break;
       case "extend": if (room.phase === "question") { room.endsAt += 10_000; room.version++; room.pversion++; } break;
