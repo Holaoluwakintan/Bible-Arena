@@ -29,7 +29,10 @@ export interface SocialDeps {
   liveWinner(code: string, token: string): { title: string; name: string; isMe: boolean } | null;
   /** Public Live rooms anyone can join now. */
   publicRooms(): Array<{ code: string; title: string; church: string; phase: string; qi: number; qn: number; n: number; max: number }>;
+  /** v3.7.0: public knockout rooms with someone in them now (lobbies first). */
+  publicKo?(): KoInfo[];
 }
+export interface KoInfo { code: string; host: string; auto: boolean; n: number; here: number; left: number; phase: string; round: number; final: boolean; game: number; startsIn: number | null; openedAt: number; max: number }
 
 // ---------- clock (injectable for tests) ----------
 let nowFn = () => Date.now();
@@ -37,6 +40,7 @@ export function _setNow(fn: () => number) { nowFn = fn; }
 export const CFG = {
   onlineMs: 75_000, popupGapMs: 120_000, waitFreshMs: 25_000, waitMaxMs: 15 * 60_000, matchKeepMs: 5 * 60_000,
   runningMs: 10 * 60_000, inviteMaxAgeMs: 3 * 60_000, pushDelayMs: 15_000, pushPerDay: 3, pushGapMs: 60 * 60_000,
+  koPushDelayMs: 20_000, koPushGapMs: 30 * 60_000, koInviteMaxAgeMs: 4 * 60_000,
 };
 const MODES = ["mixed", "arena", "gap", "who", "myth"];
 const TIERS: Tier[] = ["b", "s", "t"];
@@ -49,7 +53,7 @@ const lagosDay = (t: number) => new Date(t + 3600_000).toISOString().slice(0, 10
 export const quietHours = (t: number) => { const h = lagosHour(t); return h >= 22 || h < 7; };
 
 // ---------- presence ----------
-interface Pres { key: string; openId: string; at: number; busy: boolean; mute: boolean; lastPopup: number; seen: Set<string> }
+interface Pres { key: string; openId: string; at: number; busy: boolean; mute: boolean; lastPopup: number; seen: Set<string>; name?: string }
 const pres = new Map<string, Pres>();
 const byOpen = new Map<string, Pres>();
 export function onlineCount(now = nowFn()): number { let n = 0; for (const p of pres.values()) if (now - p.at < CFG.onlineMs) n++; return n; }
@@ -96,7 +100,25 @@ export function liveList(me: string | undefined, now = nowFn()) {
   for (const r of [...running.values()].sort((a, b) => b.startedAt - a.startedAt)) out.push({ t: "duel", code: r.code, names: r.names, tier: r.tier, mode: r.mode, age: Math.round((now - r.startedAt) / 1000) });
   if (now - roomCache.at > 3000) { try { roomCache = { at: now, rows: deps.publicRooms() }; } catch { roomCache = { at: now, rows: [] }; } }
   for (const r of roomCache.rows) out.push({ t: "room", ...r });
-  return out.slice(0, 40);
+  // v3.7.0: group knockouts come first: they are the main way to play online
+  return [...koRows(now).map((r) => ({ t: "ko", ...r })), ...out].slice(0, 40);
+}
+let koCache: { at: number; rows: KoInfo[] } = { at: 0, rows: [] };
+export function koRows(now = nowFn()): KoInfo[] {
+  if (now - koCache.at > 1500 || koCache.at > now) { try { koCache = { at: now, rows: deps?.publicKo ? deps.publicKo() : [] }; } catch { koCache = { at: now, rows: [] }; } }
+  return koCache.rows;
+}
+export const koInviteText = (r: KoInfo) => `${r.host}'s knockout · ${r.here} player${r.here === 1 ? "" : "s"} · ${r.startsIn != null ? "starting soon" : "join now"}`;
+/** v3.7.0: who is online (names only), for the online counter. */
+export function peopleOnline(now = nowFn(), meKey = "") {
+  const out: Array<{ name: string; busy: boolean; me: boolean }> = []; let anon = 0;
+  for (const p of pres.values()) {
+    if (now - p.at >= CFG.onlineMs) continue;
+    if (!p.name) { anon++; continue; }
+    out.push({ name: p.name, busy: p.busy, me: !!meKey && p.key === meKey });
+  }
+  out.sort((a, b) => Number(b.me) - Number(a.me) || Number(a.busy) - Number(b.busy) || a.name.localeCompare(b.name));
+  return { people: out.slice(0, 80), more: Math.max(0, out.length - 80) + anon };
 }
 
 /** The pop-up this person should see now, if any (and records that it was shown). */
@@ -105,14 +127,31 @@ export function inviteFor(p: Pres, now = nowFn()) {
   const list = [...waits.values()].filter((w) => fresh(w, now) && now - w.createdAt < CFG.inviteMaxAgeMs && w.openId !== p.openId && w.pid !== p.key && !p.seen.has(w.id));
   // a challenge aimed at this person comes first and is not held back by the 2-minute gap
   list.sort((a, b) => Number(!!(b.vs?.openId && b.vs.openId === p.openId)) - Number(!!(a.vs?.openId && a.vs.openId === p.openId)) || b.createdAt - a.createdAt);
+  let koTried = false;
+  const koInvite = () => {
+    koTried = true;
+    if (now - p.lastPopup < CFG.popupGapMs) return null;
+    // a public knockout lobby that just opened or is about to start
+    for (const r of koRows(now)) {
+      if (r.phase !== "lobby" || r.n >= r.max) continue;
+      if (r.startsIn == null && now - r.openedAt > CFG.koInviteMaxAgeMs) continue;
+      const id = `ko:${r.code}:${r.game}`;
+      if (p.seen.has(id)) continue;
+      p.seen.add(id); if (p.seen.size > 200) p.seen = new Set([...p.seen].slice(-100));
+      p.lastPopup = now;
+      return { id, t: "ko", room: r.code, name: r.host, text: koInviteText(r), kind: "ko", here: r.here, targeted: false };
+    }
+    return null;
+  };
   for (const w of list) {
     const targeted = !!(w.vs?.openId && p.openId && w.vs.openId === p.openId);
+    if (!targeted && !koTried) { const k = koInvite(); if (k) return k; }
     if (!targeted && now - p.lastPopup < CFG.popupGapMs) continue;
     p.seen.add(w.id); if (p.seen.size > 200) p.seen = new Set([...p.seen].slice(-100));
     p.lastPopup = now;
     return { id: w.id, name: w.name, text: inviteText(w, p.openId), tier: w.tier, mode: w.mode, kind: w.kind, targeted };
   }
-  return null;
+  return koTried ? null : koInvite();
 }
 
 async function pair(w: Wait, joiner: Me, joinerName: string, now: number) {
@@ -202,6 +241,33 @@ export async function pushForWait(w: Wait) {
   return pick.length;
 }
 
+/** v3.7.0: "<host> is looking for players" phone notification when a public knockout lobby opens. Goes to opted-in
+ * players who are not in the app now; quiet hours, 3 a day and 1 an hour as before, plus at most 1 of these per player
+ * per 30 min (in memory). Sent ~20 s after the lobby opens, only if it is still an open public lobby. */
+const koPushAt = new Map<string, number>();
+const koPushedRooms = new Map<string, number>();
+export function scheduleKoPush(code: string) {
+  if (!vapidPublicKey() || koPushedRooms.has(code)) return;
+  koPushedRooms.set(code, nowFn());
+  if (koPushedRooms.size > 2000) for (const [c, t] of koPushedRooms) if (nowFn() - t > 6 * 3600_000) koPushedRooms.delete(c);
+  setTimeout(() => { void pushForKo(code).catch((e) => logger.warn("social_ko_push_failed", { error: e instanceof Error ? e.message : String(e) })); }, CFG.koPushDelayMs).unref?.();
+}
+export async function pushForKo(code: string) {
+  if (!vapidPublicKey()) return 0;
+  koCache.at = 0;
+  const r = koRows().find((x) => x.code === code);
+  if (!r || r.phase !== "lobby" || r.n >= r.max) return 0;
+  const now = nowFn();
+  const rows = (db().prepare("SELECT * FROM v3_push_subs ORDER BY last_at ASC LIMIT 1000").all() as unknown as SubRow[])
+    .filter((s) => !isOnline(s.open_id, now) && pushAllowed(s, now) && now - (koPushAt.get(s.open_id) || 0) >= CFG.koPushGapMs);
+  if (!rows.length) return 0;
+  for (const s of rows) koPushAt.set(s.open_id, now);
+  if (koPushAt.size > 20_000) for (const [k, t] of koPushAt) if (now - t > CFG.koPushGapMs) koPushAt.delete(k);
+  await deliver(rows, { title: "⚔️ Players wanted", body: `${r.host} is looking for players on Bible Arena. Join now!`, url: "/j/" + code, tag: "ba-ko" });
+  logger.info("social_ko_push", { devices: rows.length, sent: stats.pushSent });
+  return rows.length;
+}
+
 // ---------- rate limit ----------
 const buckets = new Map<string, { n: number; reset: number }>();
 function allow(key: string, max: number, windowMs: number): boolean {
@@ -215,8 +281,8 @@ const ipOf = (req: Request) => { const f = req.headers["x-forwarded-for"]; retur
 /** Ends a player's waiting entry (used when they start something else). */
 function cancelMine(openId: string) { const w = mineWaiting(openId); if (w && w.status === "waiting") { w.status = "gone"; w.endedAt = nowFn(); } }
 
-export function socialStatus() { return { online: onlineCount(), waiting: [...waits.values()].filter((w) => w.status === "waiting").length, running: running.size, push: !!vapidPublicKey(), ...stats }; }
-export function _reset() { pres.clear(); byOpen.clear(); waits.clear(); running.clear(); buckets.clear(); roomCache = { at: 0, rows: [] }; }
+export function socialStatus() { return { online: onlineCount(), ko: koRows().length, waiting: [...waits.values()].filter((w) => w.status === "waiting").length, running: running.size, push: !!vapidPublicKey(), ...stats }; }
+export function _reset() { pres.clear(); byOpen.clear(); waits.clear(); running.clear(); buckets.clear(); roomCache = { at: 0, rows: [] }; koCache = { at: 0, rows: [] }; koPushAt.clear(); koPushedRooms.clear(); }
 
 export function registerSocial(app: Express, guard: Guard, send: Send, d: SocialDeps): void {
   deps = d;
@@ -232,6 +298,7 @@ export function registerSocial(app: Express, guard: Guard, send: Send, d: Social
     let p = pres.get(key);
     if (!p) { if (pres.size > 50_000) prune(now); p = { key, openId: "", at: now, busy: false, mute: false, lastPopup: 0, seen: new Set() }; pres.set(key, p); }
     p.at = now; p.busy = !!b.busy; p.mute = !!b.mute;
+    if (typeof b.name === "string") p.name = clean(b.name, 18) || undefined;
     if (me && p.openId !== me.openId) { p.openId = me.openId; }
     if (me) byOpen.set(me.openId, p);
     const out: any = { online: onlineCount(now), invite: inviteFor(p, now) };
@@ -244,7 +311,9 @@ export function registerSocial(app: Express, guard: Guard, send: Send, d: Social
 
   app.get("/api/v3/social/live", guard(async (req, res, me) => {
     if (!allow("live:" + ipOf(req), 600, 60_000)) return send(res, 429, { error: "slow_down" });
-    send(res, 200, { online: onlineCount(), live: liveList(me?.openId) });
+    const out: any = { online: onlineCount(), live: liveList(me?.openId) };
+    if (req.query.people) Object.assign(out, peopleOnline(nowFn(), pidOk(req.query.pid)));
+    send(res, 200, out);
   }, false));
 
   // Quick Match / open a challenge. body: { tier, mode, name, church, kind?: "quick"|"champ"|"challenge", duel?: CODE, room?: CODE, lt?: token }

@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.6.1";
+window.BA_V = "3.7.0";
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
 const app = $("#app");
@@ -147,13 +147,15 @@ async function route() {
   if (pathDuel && !parts.length) { history.replaceState(null, "", "/#/d/" + pathDuel[1].toUpperCase()); return route(); }
   const pathChurch = location.pathname.match(/^\/c\/([A-Za-z0-9]{4,8})/);
   if (pathChurch && !parts.length) { history.replaceState(null, "", "/#/c/" + pathChurch[1].toUpperCase()); return route(); }
-  if (!S.onboarded && parts[0] !== "d" && parts[0] !== "c") return parts[0] === "qm" || parts[0] === "live" || parts[0] === "ko" ? onboarding(() => route()) : onboarding();
+  if (!S.onboarded && parts[0] !== "d" && parts[0] !== "c") return ["qm", "live", "ko", "online", "bot"].includes(parts[0]) ? onboarding(() => route()) : onboarding();
   const [a, b] = parts;
-  if (window.BAS) { BAS.setBusy(false); BAS.watchLive(!a || a === "live"); }
+  if (window.BAS) { BAS.setBusy(false); BAS.watchLive(!a || a === "live" || a === "online"); }
   if (!a) return home();
   if (a === "live") return liveNow();
   if (a === "qm") return quickMatch(q);
-  if (a === "ko") return newKo();
+  if (a === "ko") return b === "quick" ? quickKo() : newKo();
+  if (a === "online") return onlineNow();
+  if (a === "bot") return playBot(MODES[q.get("mode")] ? q.get("mode") : "mixed", TIER[q.get("tier")] ? q.get("tier") : S.tier);
   if (a === "play") return startMode(b || q.get("mode") || "arena", q.get("tier") || S.tier);
   if (a === "duels") return duelsScreen();
   if (a === "duel" && b === "new") return newDuel(q.get("from"));
@@ -229,6 +231,28 @@ async function newKo() {
   } catch (e) { toast(e.message || "Couldn't create the challenge. Try again."); go("#/"); }
 }
 
+// v3.7.0 "Join a live game": the busiest open public knockout lobby, or a new one that starts itself.
+function koMine() { const out = []; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (/^bal:p:\d{6}$/.test(k)) { const v = JSON.parse(localStorage.getItem(k) || "{}"); if (v && v.token) out.push({ code: k.slice(6), t: v.token }); } } } catch (e) {} return out.slice(-10); }
+function koKeep(r) { try { localStorage.setItem("bal:p:" + r.code, JSON.stringify({ token: r.token, id: r.id })); const me = JSON.parse(localStorage.getItem("bal:me") || "{}") || {}; if (!me.name) localStorage.setItem("bal:me", JSON.stringify({ name: (S.name || "Player").slice(0, 18), avatar: me.avatar })); } catch (e) {} }
+function koAvatar() { try { return (JSON.parse(localStorage.getItem("bal:me") || "{}") || {}).avatar; } catch (e) { return undefined; } }
+async function quickKo() {
+  render(`<div class="boot"><div class="boot-mark">🎮</div><div class="boot-sub">Finding a live game…</div></div>`);
+  try {
+    const r = await api("/lv/ko/quick", { body: { name: (S.name || "Player").slice(0, 18), tier: S.tier, avatar: koAvatar(), mine: koMine() } });
+    koKeep(r);
+    location.href = "/j/" + r.code;
+  } catch (e) { toast(e.message || "Couldn't find a game. Try again."); go("#/"); }
+}
+/** One tap from Live now / a pop-up: join that knockout room with my name (players in a running game watch until the next one). */
+async function joinKo(code) {
+  code = String(code || "").replace(/\D/g, "").slice(0, 6);
+  try { const had = JSON.parse(localStorage.getItem("bal:p:" + code) || "null"); if (had && had.token) { location.href = "/j/" + code; return; } } catch (e) {}
+  if (!S.name) { location.href = "/j/" + code; return; }
+  try { const r = await api("/lv/r/" + code + "/join", { body: { name: S.name.slice(0, 18), avatar: koAvatar() } }); koKeep({ code, token: r.token, id: r.id }); }
+  catch (e) { if (e.status === 404) { toast("That game has ended."); return; } }
+  location.href = "/j/" + code;
+}
+
 // ---------- home ----------
 const VOD = [
   ["Thy word is a lamp unto my feet, and a light unto my path.", "Psalm 119:105"],
@@ -261,7 +285,7 @@ async function home() {
   const h = $("#h"); if (!h) return;
   h.innerHTML = `
   <div class="col" style="gap:14px">
-    <div class="row between"><div><div class="small muted">${hello},</div><h2>${esc(S.name || "friend")}</h2><a class="onlinepill" href="#/live" id="onlpill"><i class="dot"></i><span data-online>${onlineText()}</span></a></div>
+    <div class="row between"><div><div class="small muted">${hello},</div><h2>${esc(S.name || "friend")}</h2><a class="onlinepill" href="#/online" id="onlpill"><i class="dot"></i><span data-online>${onlineText()}</span></a></div>
       <button class="chip on" id="tierchip">${TIER[S.tier].icon} ${TIER[S.tier].name}</button></div>
     <div class="sechead"><b>How do you want to play?</b></div>
     <div class="card way">
@@ -621,6 +645,7 @@ async function results(cfg, answers, local) {
       <div class="bigscore" id="big">0</div>
       <div class="muted">${perfect ? "A perfect round. Rightly dividing the word of truth! 👑" : correct / Math.max(1, total) >= 0.7 ? "Strong round. The Word is in you." : correct / Math.max(1, total) >= 0.4 ? "Good effort. Every verse you missed is now one you know." : "Tough set! Read the references and come back stronger."}</div>
     </div>
+    <div id="pushask"></div>
     <div class="stats3"><div class="stat"><b>${correct}/${total}</b><span>Correct</span></div><div class="stat"><b>x${local.bestCombo}</b><span>Best streak</span></div><div class="stat"><b class="gold">+${fmt(r ? r.xp : 0)}</b><span>XP</span></div></div>
     ${r && r.player ? `<div class="card"><div class="row between"><b>${esc(r.player.rank.name)} ${r.player.rank.division}</b><span class="small muted">${fmt(r.player.xp)} XP</span></div><div class="xpbar" style="margin-top:8px"><i id="xpb" style="width:${Math.round((r.rankBefore ? r.rankBefore.progress : 0) * 100)}%"></i></div><div class="small dim" style="margin-top:6px">${r.player.rank.next ? `${fmt(r.player.rank.nextXp - r.player.xp)} XP to ${r.player.rank.next}` : "You've reached Apostle"} · 🔥 ${r.player.streak}-day streak</div></div>` : ""}
     ${r && !cfg.duel ? `<div id="reschurch"></div>` : ""}
@@ -634,6 +659,7 @@ async function results(cfg, answers, local) {
   </div>`);
   countUp($("#big"), score);
   if (r && !cfg.duel) resultsChurchLine(score);
+  pushAsk("#pushask");
   setTimeout(() => { const b = $("#xpb"); if (b && r && r.player) b.style.width = Math.round((r.rankAfter && r.rankAfter.index > r.rankBefore.index ? 1 : r.player.rank.progress) * 100) + "%"; }, 300);
   if (perfect) { confetti(80); sfx.win(); } else sfx.ok();
   if (r && r.rankAfter && r.rankBefore && r.rankAfter.index > r.rankBefore.index) setTimeout(() => rankUp(r.rankAfter), 900);
@@ -653,6 +679,7 @@ function practiceResults(cfg, answers, local) {
       <div class="bigscore" id="big">0</div>
       <div class="muted">${correct === total ? "All ten! You know today's set by heart. 👑" : `You got ${correct}/${total} this time. Every answer is below.`}</div>
     </div>
+    <div id="pushask"></div>
     <div class="stats3"><div class="stat"><b>${correct}/${total}</b><span>Correct</span></div><div class="stat"><b>x${local.bestCombo}</b><span>Best streak</span></div><div class="stat"><b class="dim">0</b><span>XP · practice</span></div></div>
     <div class="card small muted">Your board place, 🔥 streak, XP and league stay exactly as they were. Only your official try counts.</div>
     <div class="card"><b>The answers</b>${answers.map((a) => { const it = BY[a.id]; return `<div class="review"><div>${a.correct ? "✅" : a.partial > 0 ? "🟨" : "❌"}</div><div class="grow"><div>${esc(practiceQ(it))}</div><div class="answer">${esc(answerText(it))}</div><div class="small gold">${esc(it.r || "")}</div></div></div>`; }).join("")}</div>
@@ -956,7 +983,13 @@ function verifyForm(c, d) {
 function onlineText() { const n = window.BAS && BAS.st.online; return n == null ? "online now" : `${fmt(n)} online now`; }
 function modeName(m) { return MODES[m] ? MODES[m].name : "Mixed Arena"; }
 function ago(s) { s = Math.max(0, s | 0); return s < 60 ? s + "s" : Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+function koStatus(x) {
+  if (x.phase === "lobby") return x.startsIn != null ? `Starting in ${ago(Math.ceil(x.startsIn / 1000))} · join now` : "In the lobby · join now";
+  if (x.phase === "final") return "Winner crowned · join the next game";
+  return `${x.final ? "🏆 Final" : "Round " + x.round} · ${x.left} still in · watch & join next game`;
+}
 function liveItem(x) {
+  if (x.t === "ko") return `<div class="lnrow ${x.phase === "lobby" ? "hot" : ""}"><div class="avatar">⚔️</div><div class="grow"><div class="tiny" style="color:#3DDC97">● ${x.phase === "lobby" ? "Knockout lobby" : "Knockout playing"}</div><b>${esc(x.host)}'s knockout · ${x.here} player${x.here === 1 ? "" : "s"}</b><div class="small muted">${esc(koStatus(x))}</div></div><button class="btn ${x.phase === "lobby" ? "primary" : "ghost"} sm" data-ko="${esc(x.code)}">${x.phase === "lobby" ? "Join" : "Watch"}</button></div>`;
   if (x.t === "wait") {
     const tag = x.kind === "champ" ? "🏆 Winner stays on" : x.kind === "challenge" ? (x.forMe ? "⚔️ Challenged you" : "⚔️ Challenge") : "⚡ Open challenge";
     return `<div class="lnrow ${x.forMe ? "hot" : ""}"><div class="avatar">${esc((x.name || "?")[0].toUpperCase())}</div><div class="grow"><div class="tiny" style="color:#3DDC97">${tag}</div><b>${esc(x.mine ? "You're waiting for a challenger" : x.text)}</b><div class="small muted">${TIER[x.tier] ? TIER[x.tier].name : ""} · ${esc(modeName(x.mode))} · waiting ${ago(x.age)}</div></div>${x.mine ? `<a class="chip on" href="#/qm">Open</a>` : `<button class="btn primary sm" data-join="${esc(x.id)}">Join</button>`}</div>`;
@@ -965,19 +998,23 @@ function liveItem(x) {
   if (x.t === "room") return `<div class="lnrow"><div class="avatar">📺</div><div class="grow"><div class="tiny" style="color:#FF8A9A">● Live room</div><b>${esc(x.title)}</b><div class="small muted">${x.church ? esc(x.church) + " · " : ""}${x.phase === "lobby" ? "In the lobby" : `Question ${x.qi + 1}/${x.qn}`} · ${x.n} player${x.n === 1 ? "" : "s"}</div></div><a class="btn ghost sm" href="/j/${esc(x.code)}">Join</a></div>`;
   return "";
 }
-function bindJoins(el) { $$("[data-join]", el).forEach((b) => (b.onclick = () => { sfx.tap(); go("#/qm?join=" + b.dataset.join); })); }
+function bindJoins(el) {
+  $$("[data-join]", el).forEach((b) => (b.onclick = () => { sfx.tap(); go("#/qm?join=" + b.dataset.join); }));
+  $$("[data-ko]", el).forEach((b) => (b.onclick = () => { sfx.tap(); buzz(10); b.disabled = true; joinKo(b.dataset.ko); }));
+}
 function liveCardHTML() {
   const st = (window.BAS && BAS.st) || {};
   const list = (st.live || []).filter((x) => !x.mine);
   return `<div class="card livenow way">
-    <div class="row between"><div class="row" style="gap:12px"><div class="wayico">🌍</div><b class="wayt">Play online</b></div><a class="onlinepill" href="#/live"><i class="dot"></i><span data-online>${onlineText()}</span></a></div>
-    <div class="small muted" style="margin-top:6px">Quick Match pairs you with a real player in seconds. Same questions, live scores.</div>
-    ${list.length ? `<div class="col" style="gap:8px;margin-top:10px">${list.slice(0, 2).map(liveItem).join("")}</div>` : ""}
-    <div class="row" style="gap:8px;margin-top:12px"><button class="btn primary grow" id="qmgo">⚡ Quick Match</button><a class="btn ghost grow" href="#/live">Live now${st.liveCount ? ` <span class="lnbadge">${st.liveCount}</span>` : ""}</a></div>
+    <div class="row between"><div class="row" style="gap:12px"><div class="wayico">🌍</div><b class="wayt">Play online</b></div><a class="onlinepill" href="#/online"><i class="dot"></i><span data-online>${onlineText()}</span></a></div>
+    <div class="small muted" style="margin-top:6px">Play a live group game with people online now. Lose a round and you watch; last one standing wins.</div>
+    <button class="btn primary block" id="kojoin" style="margin-top:12px">🎮 Join a live game</button>
+    ${list.length ? `<div class="col" style="gap:8px;margin-top:10px">${list.slice(0, 3).map(liveItem).join("")}</div>` : ""}
+    <div class="row" style="gap:8px;margin-top:10px"><button class="btn ghost grow sm" id="qmgo">⚡ 1v1 Quick Match</button><a class="btn ghost grow sm" href="#/live">Live now${st.liveCount ? ` <span class="lnbadge">${st.liveCount}</span>` : ""}</a></div>
   </div>`;
 }
 function bindLiveCard() {
-  const draw = () => { const box = $("#homelive"); if (!box) return; box.innerHTML = liveCardHTML(); const q = $("#qmgo"); if (q) q.onclick = () => { sfx.tap(); buzz(10); go("#/qm"); }; bindJoins(box); $$("[data-online]").forEach((e) => (e.textContent = onlineText())); };
+  const draw = () => { const box = $("#homelive"); if (!box) return; box.innerHTML = liveCardHTML(); const q = $("#qmgo"); if (q) q.onclick = () => { sfx.tap(); buzz(10); go("#/qm"); }; const kj = $("#kojoin"); if (kj) kj.onclick = () => { sfx.tap(); buzz(12); go("#/ko/quick"); }; bindJoins(box); $$("[data-online]").forEach((e) => (e.textContent = onlineText())); };
   draw();
   if (window.BAS) { const off = BAS.on(draw); onLeave(off); }
 }
@@ -986,7 +1023,18 @@ async function pushCardHTML(where) {
   let s = "off"; try { s = await BAS.push.state(); } catch (e) {}
   if (s === "on" || s === "unsupported" || s === "unavailable" || s === "denied") return "";
   if (s === "ios-install") return `<div class="card small"><b>🔔 Get notified on iPhone</b><div class="muted" style="margin-top:4px">Tap Share ⬆️ then “Add to Home Screen”, open Bible Arena from there, and turn on notifications to hear when someone is waiting for a challenger.</div></div>`;
-  return `<div class="card row" style="gap:12px"><div style="font-size:26px">🔔</div><div class="grow"><b>Get a notification</b><div class="small muted">${where === "qm" ? "when someone is waiting, even when the app is closed." : "when someone opens a match. Max 3 a day, never 10 pm to 7 am."}</div></div><button class="chip on" data-push>Turn on</button></div>`;
+  return `<div class="card row" style="gap:12px"><div style="font-size:26px">🔔</div><div class="grow"><b>Get a notification</b><div class="small muted">${where === "qm" ? "when someone is waiting, even when the app is closed." : "when people are looking for players. Max 3 a day, never 10 pm to 7 am."}</div></div><button class="chip on" data-push>Turn on</button></div>`;
+}
+/** v3.7.0: after a player's first finished game, one card: "Get notified when people are looking for players?" (asked once). */
+async function pushAsk(sel) {
+  const box = $(sel); if (!box || !window.BAS) return;
+  try { if (localStorage.getItem("ba3:pushask")) return; } catch (e) { return; }
+  let s = "off"; try { s = await BAS.push.state(); } catch (e) {}
+  if ((s !== "off" && s !== "ios-install") || !$(sel)) return;
+  try { localStorage.setItem("ba3:pushask", String(Date.now())); } catch (e) {}
+  box.innerHTML = s === "ios-install" ? `<div class="card small"><b>🔔 Get notified when people are looking for players</b><div class="muted" style="margin-top:4px">On iPhone: tap Share ⬆️ then “Add to Home Screen”, open Bible Arena from there and turn on notifications in Me → Settings.</div></div>`
+    : `<div class="card gold row" style="gap:12px"><div style="font-size:26px">🔔</div><div class="grow"><b>Get notified when people are looking for players?</b><div class="small muted">One tap. Max 3 a day, never 10 pm to 7 am.</div></div><button class="chip on" data-push>Yes</button></div>`;
+  bindPush(box, () => { box.innerHTML = ""; });
 }
 function bindPush(el, redraw) {
   $$("[data-push]", el).forEach((b) => (b.onclick = async () => {
@@ -997,25 +1045,53 @@ function bindPush(el, redraw) {
   }));
 }
 async function liveNow() {
-  render(`<div class="row between" style="margin-bottom:12px"><h2>Live now</h2><a class="onlinepill big" href="#/live"><i class="dot"></i><span data-online>${onlineText()}</span></a></div>
+  render(`<div class="row between" style="margin-bottom:12px"><h2>Live now</h2><a class="onlinepill big" href="#/online"><i class="dot"></i><span data-online>${onlineText()}</span></a></div>
     <div class="col" style="gap:12px">
-      <div class="hero center"><div class="rays"></div><div style="font-size:40px">⚡</div><h2 style="font-family:var(--serif);margin:6px 0">Quick Match</h2><p class="small muted" style="margin:0 0 12px">One tap. We pair you with another player: same questions, live scores, winner takes the glory.</p><button class="btn primary block" id="qmgo">⚡ Find me a challenger</button></div>
+      <div class="hero center"><div class="rays"></div><div style="font-size:40px">🎮</div><h2 style="font-family:var(--serif);margin:6px 0">Join a live game</h2><p class="small muted" style="margin:0 0 12px">Play a group knockout with people online now. It starts by itself when 3 are in. Lose a round and you watch; last one standing wins.</p><button class="btn primary block" id="kojoin">🎮 Join a live game</button><button class="btn ghost block sm" id="qmgo" style="margin-top:8px">⚡ 1v1 Quick Match</button></div>
       <div id="pushbox"></div>
-      <div class="sechead"><b>🟢 Games you can join</b><span class="small muted">Open challenges, duels being played and public quiz nights. Tap to jump in.</span></div>
+      <div class="sechead"><b>🟢 Games you can join</b><span class="small muted">Group knockouts, open challenges, duels and public quiz nights. Tap to jump in.</span></div>
       <div id="lnl" class="col" style="gap:8px"><div class="muted small">Loading…</div></div>
       <a class="card row" href="/live" style="text-decoration:none;color:inherit;gap:12px"><div style="font-size:26px">📺</div><div class="grow"><b>Host a public quiz night</b><div class="small muted">Turn on “List in Live now” and anyone can join, up to 200.</div></div><div class="gold">›</div></a>
     </div>${tabbar("duels")}`);
   $("#qmgo").onclick = () => { sfx.tap(); buzz(10); go("#/qm"); };
+  $("#kojoin").onclick = () => { sfx.tap(); buzz(12); go("#/ko/quick"); };
   await ensureSession();
   const drawPush = async () => { const pb = $("#pushbox"); if (!pb) return; pb.innerHTML = await pushCardHTML("live"); bindPush(pb, drawPush); };
   drawPush();
   const draw = (live) => {
     const el = $("#lnl"); if (!el) return;
     $$("[data-online]").forEach((e) => (e.textContent = onlineText()));
-    el.innerHTML = live && live.length ? live.map(liveItem).join("") : `<div class="card center small muted">Nobody's waiting right now.<br>Tap Quick Match and you'll be first: everyone online gets a pop-up to come and play you.</div>`;
+    el.innerHTML = live && live.length ? live.map(liveItem).join("") : `<div class="card center small muted">No live games right now.<br>Tap “Join a live game” and you'll open one: everyone online gets a pop-up to come and play.</div>`;
     bindJoins(el);
   };
   const tick = async () => { try { const r = await api("/api/v3/social/live"); if (window.BAS) BAS.st.online = r.online; draw(r.live); } catch (e) { if ($("#lnl") && $("#lnl").textContent === "Loading…") draw([]); } };
+  tick(); const t = setInterval(() => { if (!document.hidden) tick(); }, 5000); onLeave(() => clearInterval(t));
+}
+// v3.7.0: tap on "🟢 N online" → who's online and which games are live
+async function onlineNow() {
+  render(`<div class="row between" style="margin-bottom:12px"><h2>Online now</h2><span class="onlinepill big"><i class="dot"></i><span data-online>${onlineText()}</span></span></div>
+    <div class="col" style="gap:12px">
+      <button class="btn primary block" id="kojoin">🎮 Join a live game</button>
+      <div class="sechead"><b>🎮 Live games</b><span class="small muted">Tap to join. If a game is already playing, you watch and play the next one.</span></div>
+      <div id="olg" class="col" style="gap:8px"><div class="muted small">Loading…</div></div>
+      <div class="sechead"><b>🟢 Who's online</b><span class="small muted" id="olc"></span></div>
+      <div id="olp" class="card"><div class="muted small">Loading…</div></div>
+      <a class="btn ghost block sm" href="#/qm">⚡ 1v1 Quick Match</a>
+    </div>${tabbar("duels")}`);
+  $("#kojoin").onclick = () => { sfx.tap(); buzz(12); go("#/ko/quick"); };
+  await ensureSession();
+  const draw = (r) => {
+    const g = $("#olg"), p = $("#olp"); if (!g || !p) return;
+    if (window.BAS && r.online != null) BAS.st.online = r.online;
+    $$("[data-online]").forEach((e) => (e.textContent = onlineText()));
+    const live = (r.live || []).filter((x) => !x.mine);
+    g.innerHTML = live.length ? live.map(liveItem).join("") : `<div class="card center small muted">No live games right now. Tap “Join a live game” to open one: everyone online gets a pop-up.</div>`;
+    bindJoins(g);
+    const ppl = r.people || [];
+    $("#olc").textContent = `${fmt(r.online || 0)} online${ppl.filter((x) => x.busy).length ? ` · ${ppl.filter((x) => x.busy).length} playing` : ""}`;
+    p.innerHTML = ppl.length || r.more ? `<div class="olppl">${ppl.map((x) => `<span class="olp ${x.busy ? "busy" : ""}"><i></i>${esc(x.name)}${x.me ? " (you)" : ""}${x.busy ? ` <em>playing</em>` : ""}</span>`).join("")}${r.more ? `<span class="olp more">+${fmt(r.more)} more</span>` : ""}</div>` : `<div class="small muted">Just you right now.</div>`;
+  };
+  const tick = async () => { try { draw(await api("/api/v3/social/live?people=1&pid=" + encodeURIComponent(window.BAS ? BAS.pid : ""))); } catch (e) { if ($("#olg") && $("#olg").textContent === "Loading…") draw({ live: [], people: [] }); } };
   tick(); const t = setInterval(() => { if (!document.hidden) tick(); }, 5000); onLeave(() => clearInterval(t));
 }
 function startMatch(r, creator) {
@@ -1292,7 +1368,7 @@ async function profile() {
       <div class="setrow"><div class="grow"><div>Level</div><div class="small muted">${TIER[S.tier].name}</div></div><button class="chip" id="etier">Change</button></div>
       <div class="setrow"><div>Sound</div><button class="switch ${S.sound ? "on" : ""}" id="snd" aria-label="Sound"></button></div>
       <div class="setrow"><div>Vibration</div><button class="switch ${S.haptics ? "on" : ""}" id="hap" aria-label="Vibration"></button></div>
-      <div class="setrow"><div class="grow"><div>Challenge pop-ups</div><div class="small muted">“Someone is waiting for a challenger” while you're in the app (max 1 every 2 min)</div></div><button class="switch ${window.BAS && !BAS.muted() ? "on" : ""}" id="pops" aria-label="Challenge pop-ups"></button></div>
+      <div class="setrow"><div class="grow"><div>Game pop-ups</div><div class="small muted">“A live game is starting” or “someone is waiting for a challenger” while you're in the app (max 1 every 2 min)</div></div><button class="switch ${window.BAS && !BAS.muted() ? "on" : ""}" id="pops" aria-label="Challenge pop-ups"></button></div>
       <div class="setrow" id="pushrow"><div class="grow"><div>Phone notifications</div><div class="small muted" id="pushtxt">Checking…</div></div><span id="pushbtn"></span></div>
       <div class="setrow"><div class="grow"><div>Account</div><div class="small muted">${google ? "Signed in with Google ✓ (progress is safe across phones)" : "Guest on this phone. Sign in to keep your progress on any phone."}</div></div>${google ? `<button class="chip" id="out">Sign out</button>` : `<a class="chip on" href="/api/oauth/google/start">Google</a>`}</div>
       <div class="setrow"><div class="grow"><div>Privacy policy</div><div class="small muted">What we keep and why</div></div><a class="chip" href="/privacy">Read</a></div>
@@ -1330,7 +1406,7 @@ async function profile() {
 
 // ---------- boot ----------
 (async function boot() {
-  if (window.BAS) { BAS.toast = toast; BAS.onJoin = (inv) => go("#/qm?join=" + encodeURIComponent(inv.id)); BAS.on(() => $$("[data-online]").forEach((e) => (e.textContent = onlineText()))); }
+  if (window.BAS) { BAS.toast = toast; BAS.onJoin = (inv) => go("#/qm?join=" + encodeURIComponent(inv.id)); BAS.onJoinKo = (code) => joinKo(code); BAS.on(() => $$("[data-online]").forEach((e) => (e.textContent = onlineText()))); }
   document.addEventListener("click", () => { const a = audio(); if (a && a.state === "suspended") a.resume(); }, { once: true });
   ensureSession().then(() => { if (ME.player) { if (!S.name && ME.player.name) S.name = ME.player.name; if (!S.church && ME.player.church) S.church = ME.player.church; save(); } });
   loadBank().catch(() => {});

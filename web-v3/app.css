@@ -224,3 +224,10 @@ a.badge,a.lb{cursor:pointer}
 .codebox input:focus{outline:none;border-color:var(--gold)}
 .bigcode{font-size:40px;font-weight:900;letter-spacing:.16em;color:var(--gold2);margin:4px 0;font-variant-numeric:tabular-nums}
 .way .btn{white-space:nowrap;font-size:15px;padding:0 12px}
+
+/* v3.7.0 online now */
+.olppl{display:flex;flex-wrap:wrap;gap:8px}
+.olp{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:99px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);font-size:13.5px;font-weight:700}
+.olp i{width:8px;height:8px;border-radius:50%;background:#3DDC97;flex:none}
+.olp.busy i{background:#F5B942}.olp em{font-style:normal;font-weight:600;color:#aab3c8;font-size:12px}
+.olp.more{color:#aab3c8}

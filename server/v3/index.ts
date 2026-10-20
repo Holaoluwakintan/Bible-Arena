@@ -16,8 +16,8 @@ import { shutdownHooks } from "../persist";
 import { registerLegal } from "./legal";
 import { sentryBrowserTags } from "../_core/sentry-lite";
 import { registerChurches, registerVerify, teamNameFor, mergeChurchMembership, previewForOg } from "./churches";
-import { registerSocial, mergeSocial } from "./social";
-import { publicRooms, liveWinner } from "./live";
+import { registerSocial, mergeSocial, scheduleKoPush } from "./social";
+import { publicRooms, liveWinner, publicKo, onKoOpen } from "./live";
 
 type Tier = "b" | "s" | "t";
 type Mode = "arena" | "myth" | "who" | "gap";
@@ -561,8 +561,9 @@ export function registerV3(app: Express): void {
   registerVerify(app, guard as any, send);
   registerSocial(app, guard as any, send, {
     createDuel: async (creatorOpenId, creatorName, mode, tier) => { const ids = buildSet(mode, tier, code() + Date.now()); return { code: await insertDuel(creatorOpenId, creatorName, mode, tier, ids), ids }; },
-    createBotDuel, duelWinner, liveWinner, publicRooms,
+    createBotDuel, duelWinner, liveWinner, publicRooms, publicKo: () => publicKo(),
   });
+  onKoOpen((code) => scheduleKoPush(code)); // v3.7.0: "<host> is looking for players" notifications
 
   // ---- share pages: WhatsApp/OG previews for challenge links ----
   const indexFile = path.join(WEB_DIR, "index.html");

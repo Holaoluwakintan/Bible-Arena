@@ -106,3 +106,11 @@ a.btn{color:var(--ivory)}a.btn.primary{color:#1A1203}
 .koout span{padding:6px 12px;border-radius:99px;background:rgba(255,93,115,.16);font-weight:700}
 .kowin{font-size:34px;color:var(--gold2)}
 .perpick{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}.perpick button{padding:12px 0;border-radius:14px;background:rgba(255,255,255,.06);border:2px solid transparent;font-weight:900;font-size:20px}.perpick button.on{border-color:var(--gold);background:rgba(245,185,66,.16);color:var(--gold2)}
+
+/* v3.7.0 live game lobby: countdown, public toggle */
+.kocd{width:100%}.kocd .kc{font-size:46px;font-weight:900;color:var(--gold2);font-variant-numeric:tabular-nums;margin:4px 0}
+.kopubrow{width:100%;display:flex;align-items:center;gap:12px}
+.kosw{position:relative;width:52px;height:30px;border-radius:99px;background:rgba(255,255,255,.14);flex:none;border:0;padding:0;transition:background .2s}
+.kosw::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:transform .2s}
+.kosw.on{background:#3DDC97}.kosw.on::after{transform:translateX(22px)}
+.kopubrow .grow{flex:1;min-width:0}

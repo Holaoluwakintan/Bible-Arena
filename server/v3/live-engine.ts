@@ -37,6 +37,12 @@ export interface LKo {
   out: Record<string, number>;
   lastOut: string[]; winner?: string;
   history: Array<{ round: number; out: string[]; left: number }>;
+  /** v3.7.0: listed in "Live now" for everyone online (default on; the host can turn it off). undefined = public */
+  pub?: boolean;
+  /** v3.7.0 "Join a live game": an open public lobby that starts itself (countdown once 3+ are in, or 2 after a minute) */
+  auto?: boolean;
+  /** v3.7.0: when the auto-start countdown ends (ms epoch); when this game's lobby opened */
+  startAt?: number; openedAt?: number;
 }
 export const KO_MAX = 50;
 export const KO_ROUND_LEN = 5;
@@ -46,6 +52,13 @@ export const koFinalLen = (ko: LKo) => Math.min(15, koPer(ko) * 2);
 export const KO_TIMER = 15;
 export const KO_REVEAL_MS = 5000;
 export const KO_BOARD_MS = 8000;
+/** v3.7.0 auto lobbies: 30 s countdown once 3+ players are here; with only 2, start a minute after the lobby opened
+ * (at least 20 s after the second arrived); a finished auto game goes back to the lobby by itself after 25 s */
+export const KO_AUTO_COUNTDOWN_MS = 30_000;
+export const KO_AUTO_TWO_MS = 60_000;
+export const KO_AUTO_TWO_MIN_MS = 20_000;
+export const KO_AUTO_AGAIN_MS = 25_000;
+export const koPublic = (ko: LKo) => ko.pub !== false;
 export function koRule(ko: LKo): string {
   return `${koPer(ko)} questions a round. After each round the bottom half (fewest points that round) is knocked out and watches. The last two play a ${koFinalLen(ko)}-question final.`;
 }
@@ -426,6 +439,18 @@ export function koAdvance(room: LRoom, now: number): void {
     default: break;
   }
 }
+/** v3.7.0 auto lobby clock. Returns "start" when the countdown is over, "changed" when the countdown moved, else "". */
+export function koAutoLobby(room: LRoom, now: number, here: number): "" | "start" | "changed" {
+  const ko = room.ko;
+  if (!ko || !ko.auto || room.phase !== "lobby") return "";
+  const was = ko.startAt;
+  if (here < 2) delete ko.startAt;
+  else if (here >= 3) ko.startAt = Math.min(ko.startAt || Infinity, now + KO_AUTO_COUNTDOWN_MS);
+  else if (!ko.startAt) ko.startAt = Math.max((ko.openedAt || room.createdAt) + KO_AUTO_TWO_MS, now + KO_AUTO_TWO_MIN_MS);
+  if (ko.startAt && now >= ko.startAt) return "start";
+  if (ko.startAt !== was) { room.version++; room.pversion++; return "changed"; }
+  return "";
+}
 /** "Play again": everyone (knocked out or not, plus anyone who joined meanwhile) back in the lobby with a new set. */
 export function koAgain(room: LRoom, questions: LQ[], now: number): void {
   const ko = room.ko!;
@@ -433,6 +458,7 @@ export function koAgain(room: LRoom, questions: LQ[], now: number): void {
   room.phase = "lobby"; room.qi = -1; room.phaseAt = now; room.endsAt = 0; delete room.endedAt;
   room.createdAt = now; // a room that keeps being played stays alive
   ko.game++; ko.round = 0; ko.roundStart = 0; ko.roundLen = koPer(ko); ko.out = {}; ko.lastOut = []; ko.history = []; delete ko.winner;
+  delete ko.startAt; ko.openedAt = now;
   for (const p of Object.values(room.players)) {
     p.score = 0; p.streak = 0; p.best = 0; p.correct = 0; p.timeMs = 0; p.answers = {}; delete p.rank; delete p.prevRank;
   }

@@ -47,6 +47,32 @@ export function liveWinner(code: string, token: string): { title: string; name: 
   return { title: room.title, name: top.name, isMe: !!token && top.token === token };
 }
 
+/** v3.7.0: public knockout rooms with someone in them right now, for "Live now", pop-ups and "Join a live game". */
+export interface KoRow { code: string; host: string; auto: boolean; n: number; here: number; left: number; phase: string; round: number; final: boolean; game: number; startsIn: number | null; openedAt: number; max: number }
+export function publicKo(now = Date.now()): KoRow[] {
+  const out: KoRow[] = [];
+  for (const room of rooms.values()) {
+    const ko = room.ko;
+    if (!ko || !E.koPublic(ko) || room.locked) continue;
+    const act = E.activePlayers(room);
+    const here = act.filter((p) => online(room.code, p, now)).length;
+    if (!here || act.length >= room.maxPlayers) continue;
+    const alive = room.phase === "lobby" ? act.length : E.alivePlayers(room).length;
+    out.push({ code: room.code, host: room.players[ko.hostId]?.name || "Someone", auto: !!ko.auto, n: act.length, here, left: alive,
+      phase: room.phase, round: ko.round, final: room.phase !== "lobby" && room.phase !== "final" && alive <= 2 && ko.roundLen === E.koFinalLen(ko),
+      game: ko.game, startsIn: room.phase === "lobby" && ko.startAt ? Math.max(0, ko.startAt - now) : null, openedAt: ko.openedAt || room.createdAt, max: room.maxPlayers });
+  }
+  // open lobbies first (busiest first), then games being played
+  return out.sort((a, b) => Number(b.phase === "lobby") - Number(a.phase === "lobby") || b.here - a.here || b.openedAt - a.openedAt).slice(0, 20);
+}
+/** v3.7.0: called (once) when a public knockout lobby opens, so people who are not in the app can get a phone notification. */
+let koOpenHook: ((code: string) => void) | null = null;
+export function onKoOpen(fn: (code: string) => void) { koOpenHook = fn; }
+function koOpened(room: E.LRoom) {
+  if (!room.ko || !E.koPublic(room.ko) || !koOpenHook) return;
+  try { koOpenHook(room.code); } catch {}
+}
+
 // ---------- tiny per-key limiter (keyed by token or IP; a whole church can share one IP) ----------
 const buckets = new Map<string, { n: number; reset: number }>();
 function allow(key: string, max: number, windowMs: number): boolean {
@@ -167,6 +193,9 @@ function koView(room: E.LRoom, p: E.LPlayer | undefined, now: number) {
     game: ko.game, round: ko.round, rq: room.qi >= 0 ? room.qi - ko.roundStart + 1 : 0, rlen: ko.roundLen,
     final: room.phase !== "lobby" && alive.length <= 2 && ko.roundLen === E.koFinalLen(ko),
     per: E.koPer(ko), finalLen: E.koFinalLen(ko), choices: E.KO_PER_CHOICES,
+    pub: E.koPublic(ko), auto: !!ko.auto, startsIn: room.phase === "lobby" && ko.startAt ? Math.max(0, ko.startAt - now) : null,
+    here: all.filter((x) => online(room.code, x, now)).length,
+    again: ko.auto && room.phase === "final" ? Math.max(0, room.phaseAt + E.KO_AUTO_AGAIN_MS - now) : null,
     left: room.phase === "lobby" ? all.length : alive.length, rule: E.koRule(ko), max: room.maxPlayers,
     host: host ? { id: host.id, name: host.name, avatar: host.avatar, on: online(room.code, host, now) } : null,
     isHost: !!p && p.id === ko.hostId,
@@ -254,6 +283,7 @@ function ensureLoops() {
       const now = Date.now();
       for (const room of rooms.values()) {
         if (room.ko && room.phase === "board" && room.questions.length < room.qi + 1 + E.koFinalLen(room.ko)) koTopUp(room);
+        if (room.ko?.auto && (room.phase === "lobby" || room.phase === "final")) { try { if (koAuto(room, now)) { touch(room); pushRoom(room, true); } } catch {} }
         const before = room.phase;
         if (E.tick(room, now)) {
           touch(room);
@@ -280,6 +310,29 @@ function koTopUp(room: E.LRoom) {
   const more = pickSet(bankRef(), { tiers: [room.ko.tier], count: 30 }).filter((q) => !used.has(q.id));
   room.questions.push(...more);
   touch(room);
+}
+
+/** v3.7.0 auto lobbies ("Join a live game"): start on the countdown; after a finished game, back to the lobby by itself. */
+function koAuto(room: E.LRoom, now: number): boolean {
+  const ko = room.ko!;
+  const isOn = (p: E.LPlayer) => online(room.code, p, now);
+  const here = E.activePlayers(room).filter(isOn);
+  if (room.phase === "final") {
+    if (now - room.phaseAt < E.KO_AUTO_AGAIN_MS || !here.length || !bankRef) return false;
+    E.koAgain(room, pickSet(bankRef(), { tiers: [ko.tier], count: 45 }), now);
+    return true;
+  }
+  const r = E.koAutoLobby(room, now, here.length);
+  if (r === "start") {
+    const host = room.players[ko.hostId];
+    if (!host || host.kicked || !isOn(host)) ko.hostId = here[0].id; // the host left: the longest-waiting player takes over
+    delete ko.startAt;
+    const s = E.koStart(room, now, isOn);
+    if (!s.ok) { room.version++; room.pversion++; }
+    logger.info("ko_auto_start", { code: room.code, players: here.length, ok: s.ok });
+    return true;
+  }
+  return r === "changed";
 }
 
 function genCode(): string {
@@ -335,11 +388,55 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
     const j = E.joinRoom(room, { name, avatar: b.avatar }, Date.now());
     if (!j.ok) return json(res, 400, { error: j.error });
     room.ko = E.makeKo(j.player.id, tier, Number(b.per) || E.KO_ROUND_LEN);
+    room.ko.pub = b.pub !== false; room.ko.openedAt = Date.now(); // v3.7.0: listed in Live now unless the host turns it off
     rooms.set(room.code, room);
     touch(room);
     void flushLive();
+    koOpened(room);
     logger.info("ko_room_created", { code: room.code, questions: questions.length });
     json(res, 200, { code: room.code, token: j.player.token, id: j.player.id, state: playerView(room, j.player) });
+  });
+
+  // v3.7.0 "Join a live game": join the busiest open public lobby, or open a new one that starts itself.
+  app.post("/lv/ko/quick", async (req, res) => {
+    if (!allow("koquick:" + ipOf(req), 30, 600_000)) return json(res, 429, { error: "Too many tries from this network. Wait a few minutes." });
+    const b = req.body || {};
+    const name = E.cleanName(b.name) || "Player";
+    const now = Date.now();
+    // already waiting in an open lobby (tapped twice, came back)? go back to it
+    const mine = Array.isArray(b.mine) ? b.mine.slice(0, 10) : [];
+    for (const m of mine) {
+      const room = rooms.get(cleanCode(m && m.code));
+      const p = room?.ko && room.phase === "lobby" ? Object.values(room.players).find((x) => x.token === String(m.t || "") && !x.kicked) : undefined;
+      if (room && p) { p.lastSeen = now; room.version++; room.pversion++; return json(res, 200, { code: room.code, token: p.token, id: p.id, joined: true, back: true, state: playerView(room, p) }); }
+    }
+    // busiest open public lobby with someone in it right now (one with a countdown running wins ties)
+    const pick = publicKo(now).filter((r) => r.phase === "lobby" && r.n < r.max)
+      .sort((x, y) => y.here - x.here || Number(y.startsIn != null) - Number(x.startsIn != null) || x.openedAt - y.openedAt)[0];
+    if (pick) {
+      const room = rooms.get(pick.code)!;
+      const j = E.joinRoom(room, { name, avatar: b.avatar }, now);
+      if (j.ok) {
+        touch(room); pushRoom(room, true);
+        logger.info("ko_quick_joined", { code: room.code, players: E.activePlayers(room).length });
+        return json(res, 200, { code: room.code, token: j.player.token, id: j.player.id, joined: true, state: playerView(room, j.player) });
+      }
+    }
+    const tier = ["b", "s", "t"].includes(b.tier) ? String(b.tier) : "s";
+    const questions = pickSet(bank(), { tiers: [tier], count: 45 });
+    if (questions.length < 10) return json(res, 503, { error: "Questions are loading. Try again in a moment." });
+    const room = E.createRoom({ code: genCode(), title: "Live knockout", questions, timer: E.KO_TIMER, auto: true, instant: true, now });
+    room.maxPlayers = E.KO_MAX;
+    const j = E.joinRoom(room, { name, avatar: b.avatar }, now);
+    if (!j.ok) return json(res, 400, { error: j.error });
+    room.ko = E.makeKo(j.player.id, tier, E.KO_ROUND_LEN);
+    room.ko.pub = true; room.ko.auto = true; room.ko.openedAt = now;
+    rooms.set(room.code, room);
+    touch(room);
+    void flushLive();
+    koOpened(room);
+    logger.info("ko_quick_created", { code: room.code });
+    json(res, 200, { code: room.code, token: j.player.token, id: j.player.id, joined: false, state: playerView(room, j.player) });
   });
 
   app.post("/lv/r/:code/ko", async (req, res) => {
@@ -362,6 +459,9 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
     if (action === "start") {
       const r = E.koStart(room, now, (x) => online(room.code, x, now));
       if (!r.ok) return json(res, 400, { error: r.error });
+    } else if (action === "pub") {
+      room.ko.pub = !!b.on; room.version++; room.pversion++;
+      if (room.ko.pub && room.phase === "lobby") koOpened(room);
     } else if (action === "per") {
       if (room.phase !== "lobby") return json(res, 400, { error: "Pick this before the game starts." });
       if (!E.KO_PER_CHOICES.includes(Number(b.n))) return json(res, 400, { error: "Pick 5, 7 or 10." });

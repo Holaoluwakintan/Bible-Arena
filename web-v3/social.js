@@ -14,6 +14,7 @@
   var subs = [];
   var lastAct = Date.now(), timer = null, inflight = false, lastHb = 0;
   ["pointerdown", "keydown", "touchstart", "scroll"].forEach(function (ev) { addEventListener(ev, function () { var idle = Date.now() - lastAct > 5 * 60e3; lastAct = Date.now(); if (idle) hb(true); }, { passive: true }); });
+  function myName() { var a = lsGet("ba3:v1", {}) || {}, b = lsGet("bal:me", {}) || {}; return String(a.name || b.name || "").slice(0, 18); }
   function emit() { subs.slice().forEach(function (f) { try { f(st); } catch (e) {} }); }
   function post(path, body) {
     return fetch(path, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "x-client-platform": "web" }, body: JSON.stringify(body || {}) })
@@ -25,7 +26,7 @@
     if (!force && Date.now() - lastHb < 4000) return;
     inflight = true; lastHb = Date.now();
     var busy = st.busy || !!(window.BA_BUSY && window.BA_BUSY());
-    post("/api/v3/social/hb", { pid: pid, busy: busy, mute: !!cfg.mute, live: st.wantLive, wantKey: st.pushKey === undefined })
+    post("/api/v3/social/hb", { pid: pid, busy: busy, mute: !!cfg.mute, live: st.wantLive, wantKey: st.pushKey === undefined, name: myName() })
       .then(function (d) {
         st.online = d.online; st.liveCount = d.liveCount || 0; if (d.live) st.live = d.live; if (d.pushKey !== undefined) st.pushKey = d.pushKey;
         emit();
@@ -54,14 +55,15 @@
     var el = document.createElement("div"); el.className = "bas-pop"; el.setAttribute("role", "alertdialog");
     var who = esc(inv.name || "Someone");
     var text = esc(inv.text || (inv.name + " is waiting for a challenger")).replace(who, "<b>" + who + "</b>");
-    el.innerHTML = '<div class="r"><div class="av">' + esc((inv.name || "?")[0].toUpperCase()) + '</div><div style="flex:1"><div class="live">● LIVE NOW</div><div class="t">' + text + '</div><div class="s">' + esc(TN[inv.tier] || "") + " · " + esc(MN[inv.mode] || "Duel") + ' · same questions, live scores</div></div></div>' +
+    var sub = inv.t === "ko" ? "⚔️ Live group knockout · lose a round and you watch" : esc(TN[inv.tier] || "") + " · " + esc(MN[inv.mode] || "Duel") + " · same questions, live scores";
+    el.innerHTML = '<div class="r"><div class="av">' + esc((inv.name || "?")[0].toUpperCase()) + '</div><div style="flex:1"><div class="live">● LIVE NOW</div><div class="t">' + text + (inv.t === "ko" ? " — Join?" : "") + '</div><div class="s">' + sub + '</div></div></div>' +
       '<div class="b"><button class="n" data-x>Not now</button><button class="y" data-j>Join ⚔️</button></div><button class="m" data-m>🔕 Mute these pop-ups</button>';
     document.body.appendChild(el); popEl = el;
     requestAnimationFrame(function () { el.classList.add("in"); });
     try { if (navigator.vibrate) navigator.vibrate([20, 40, 20]); } catch (e) {}
     el.querySelector("[data-x]").onclick = closePop;
     el.querySelector("[data-m]").onclick = function () { api.mute(true); closePop(); if (api.toast) api.toast("Pop-ups muted. Turn them back on in Me → Settings."); };
-    el.querySelector("[data-j]").onclick = function () { closePop(); api.onJoin(inv); };
+    el.querySelector("[data-j]").onclick = function () { closePop(); if (inv.t === "ko" && inv.room) { if (api.onJoinKo) api.onJoinKo(inv.room); else location.href = "/j/" + inv.room; } else api.onJoin(inv); };
     popT = setTimeout(closePop, 25000);
   }
 
@@ -113,6 +115,8 @@
     muted: function () { return !!cfg.mute; },
     mute: function (b) { cfg.mute = !!b; lsSet(LSO, cfg); hb(true); },
     onJoin: function (inv) { location.href = "/#/qm?join=" + encodeURIComponent(inv.id); },
+    onJoinKo: null,
+    name: myName,
     toast: null,
     _popup: popup,
   };

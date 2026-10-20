@@ -233,7 +233,48 @@ function koShareText(s) {
   const h = s.ko.host ? s.ko.host.name : "I";
   return `⚔️ ${h} challenges you on Bible Arena!\nLive Bible knockout: answer fast, lose a round and you're out. Last one standing wins. 📖\nTap to join: ${koUrl()}\nOr enter code ${code} in Bible Arena.`;
 }
+let koCdEnd = 0, koAgEnd = 0, koAloneSince = 0, koBoxKey = "";
+function koClock(s) {
+  const k = s.ko;
+  koCdEnd = s.phase === "lobby" && k.startsIn != null ? performance.now() + k.startsIn : 0;
+  koAgEnd = s.phase === "final" && k.again != null ? performance.now() + k.again : 0;
+  if (s.phase === "lobby" && k.auto && (k.here || 0) < 2) koAloneSince = koAloneSince || Date.now(); else koAloneSince = 0;
+}
+const mmss = (ms) => { const t = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0"); };
+/** v3.7.0 lobby status: countdown, or "waiting for players" in a live game lobby (with Arena Bot / solo after a while alone) */
+function koBoxState(s) {
+  const k = s.ko;
+  if (k.startsIn != null) return "cd" + k.here;
+  if (k.auto && (k.here || 0) < 2) return koAloneSince && Date.now() - koAloneSince > 45000 ? "alone2" : "alone";
+  if (k.auto) return "two";
+  return "";
+}
+function koBoxHTML(s) {
+  const k = s.ko, st = koBoxState(s);
+  if (st.slice(0, 2) === "cd") return `<div class="card kocd"><div class="tiny muted">Game starts in</div><div class="kc" id="kocd">${mmss(k.startsIn)}</div><div class="small muted">${k.here} players here. Anyone can still join until it starts.</div></div>`;
+  if (st === "alone" || st === "alone2") return `<div class="card kocd"><div class="tiny" style="color:#3DDC97">● Live game lobby</div><h2 style="margin:6px 0 4px">Waiting for players…</h2><div class="small muted">Everyone online gets a pop-up. It starts by itself once 3 are in (or 2 after a minute).</div>${st === "alone2" ? `<div class="small muted" style="margin-top:10px">Nobody yet? Play now and come back:</div><div class="row2" style="margin-top:8px"><a class="btn ghost" href="/#/bot">🤖 Arena Bot</a><a class="btn ghost" href="/#/play/mixed">▶ Play solo</a></div>` : ""}</div>`;
+  return "";
+}
+function koPubHTML(s) {
+  const k = s.ko;
+  if (!k.isHost) return "";
+  return `<div class="card kopubrow"><div class="grow" style="text-align:left"><b>Show in Live now (public)</b><div class="small muted" id="kopubtxt">${k.pub ? "Everyone online can see this game and join." : "Private: only people with your link or code can join."}</div></div><button class="kosw ${k.pub ? "on" : ""}" id="kopub" aria-label="Show in Live now"></button></div>`;
+}
+function koBindPub() {
+  const b = $("#kopub"); if (!b) return;
+  b.onclick = async () => {
+    const on = !b.classList.contains("on"); b.classList.toggle("on", on); L.buzz(8);
+    try { const r = await L.api("/lv/r/" + code + "/ko", { t: sess.token, action: "pub", on }); if (r && r.state) { S = r.state; koRefreshList(r.state); } toast(on ? "Listed in Live now 🟢" : "Private: link or code only 🔒"); }
+    catch (e) { b.classList.toggle("on", !on); toast(e.message); }
+  };
+}
+setInterval(() => {
+  const c = $("#kocd"); if (c && koCdEnd) c.textContent = mmss(koCdEnd - performance.now());
+  const g = $("#koag"); if (g && koAgEnd) g.textContent = Math.max(0, Math.ceil((koAgEnd - performance.now()) / 1000));
+  if (S && S.ko && S.phase === "lobby" && koBoxKey !== koBoxState(S)) { const box = $("#kobox"); if (box) { koBoxKey = koBoxState(S); box.innerHTML = koBoxHTML(S); } }
+}, 250);
 function koState(s, prev) {
+  koClock(s);
   const key = s.phase + ":" + s.qi + ":" + s.ko.game + (s.phase === "lobby" ? ":" + s.ko.per + ":" + (s.ko.isHost ? 1 : 0) : "");
   if (key === scene) {
     const p = $("#pts"); if (p && s.me) p.textContent = fmt(s.me.score);
@@ -262,11 +303,13 @@ function koRefreshList(s) {
   const el = $("#kolist"); if (el) el.innerHTML = koList(s, el.dataset.mode === "lobby" ? { lobby: true } : el.dataset.mode === "round" ? { round: true } : {});
   const n = $("#kon"); if (n) n.textContent = s.ko.left;
   const st = $("#kostart"); if (st) koStartBtn(s);
+  const box = $("#kobox"); if (box && koBoxKey !== koBoxState(s)) { koBoxKey = koBoxState(s); box.innerHTML = koBoxHTML(s); }
+  const pb = $("#kopub"); if (pb) { pb.classList.toggle("on", !!s.ko.pub); const t = $("#kopubtxt"); if (t) t.textContent = s.ko.pub ? "Everyone online can see this game and join." : "Private: only people with your link or code can join."; }
 }
 function koStartBtn(s) {
   const b = $("#kostart"); if (!b) return;
   const on = s.ko.list.filter((x) => x.on).length;
-  b.disabled = on < 2; b.textContent = on < 2 ? "Waiting for 1 more player…" : `▶ Start (${on} players)`;
+  b.disabled = on < 2; b.textContent = on < 2 ? "Waiting for 1 more player…" : s.ko.startsIn != null ? `▶ Start now (${on} players)` : `▶ Start (${on} players)`;
 }
 function koShareButtons() {
   return `<div class="row2"><a class="btn wa" id="kowa" href="https://wa.me/?text=${encodeURIComponent(koShareText(S))}" target="_blank" rel="noopener">📲 WhatsApp</a><button class="btn ghost" id="kocopy">🔗 Copy invite</button></div>`;
@@ -284,15 +327,17 @@ function koLobby(s) {
   const k = s.ko, host = k.host || {};
   app.innerHTML = `${top(s)}<div class="center" style="justify-content:flex-start;gap:12px">
     <div class="tiny" style="color:var(--gold);margin-top:6px">⚔️ Bible knockout${k.game > 1 ? " · game " + k.game : ""}</div>
-    <h1>${k.isHost ? "Your challenge is ready" : esc(host.name || "") + "'s challenge"}</h1>
+    <h1>${k.auto ? "Live game lobby" : k.isHost ? "Your challenge is ready" : esc(host.name || "") + "'s challenge"}</h1>
+    <div id="kobox" style="width:100%">${koBoxHTML(s)}</div>
     <div class="card kocode"><div class="tiny muted">Challenge code</div><div class="kc">${esc(code)}</div><div class="small muted">Friends tap your link, or enter this code in Bible Arena.</div></div>
     ${koShareButtons()}
+    ${koPubHTML(s)}
     <div class="card" style="width:100%;text-align:left"><div class="row3"><b><span id="kon">${k.left}</span> joined</b><span class="small muted">up to ${k.max}</span></div><div id="kolist" data-mode="lobby">${koList(s, { lobby: true })}</div></div>
     ${k.isHost ? `<div class="card" style="width:100%"><div class="tiny muted">Questions per round</div><div class="perpick">${(k.choices || [5, 7, 10]).map((c) => `<button data-per="${c}" class="${c === k.per ? "on" : ""}">${c}</button>`).join("")}</div><div class="small muted" style="margin-top:6px">The final is ${k.finalLen} questions.</div></div>
-      <button class="btn primary" id="kostart"></button>` : `<div class="card" style="width:100%"><div class="tiny muted">Waiting for ${esc(host.name || "the host")} to start</div><div class="small muted" style="margin-top:6px">Keep this screen open. ${host.on === false ? `<a href="#" id="kotake">${esc(host.name || "The host")} left? Start it yourself</a>` : ""}</div></div>`}
+      <button class="btn primary" id="kostart"></button>` : k.auto ? "" : `<div class="card" style="width:100%"><div class="tiny muted">Waiting for ${esc(host.name || "the host")} to start</div><div class="small muted" style="margin-top:6px">Keep this screen open. ${host.on === false ? `<a href="#" id="kotake">${esc(host.name || "The host")} left? Start it yourself</a>` : ""}</div></div>`}
     <div class="card small muted" style="width:100%;text-align:left">📜 <b style="color:var(--ivory)">How it works:</b> ${esc(k.rule)}</div>
     <p class="foot"><a href="/">Bible Arena home</a></p></div>`;
-  koBindShare(s);
+  koBindShare(s); koBindPub(); koBoxKey = koBoxState(s);
   const st = $("#kostart"); if (st) { koStartBtn(s); st.onclick = () => { L.buzz(15); koAction("start", st); }; }
   const tk = $("#kotake"); if (tk) tk.onclick = (e) => { e.preventDefault(); koAction("start"); };
   $$(".perpick button").forEach((b) => (b.onclick = async () => {
@@ -341,7 +386,9 @@ function koFinal(s) {
     <div class="medal">🏆</div><div class="tiny" style="color:var(--gold)">Winner</div>
     <h1 class="kowin">${w.avatar || ""} ${esc(w.name || "")}</h1>
     <p class="muted" style="margin:0">${iWon ? "That's you! Last one standing 🎉" : k.meOut > 0 && k.meOut === k.round ? "So close! You made the final and came 2nd 🥈" : k.meOut > 0 ? `You were knocked out in round ${k.meOut}. Next time!` : k.meOut === -1 ? "You'll play in the next one." : "So close! You made the final 💪"}</p>
-    ${k.isHost ? `<button class="btn primary" id="koagain">🔁 Play again (everyone)</button>` : `<div class="card small muted" style="width:100%">Waiting for ${esc(k.host ? k.host.name : "the host")} to start the next challenge. ${k.host && k.host.on === false ? `<a href="#" id="kotake">They left? Start it yourself</a>` : ""}</div>`}
+    ${k.again != null ? `<div class="card small" style="width:100%">🔁 Next game starts in <b id="koag">${Math.ceil(k.again / 1000)}</b>s. Stay here to play!</div>` : ""}
+    <div id="pushask" style="width:100%"></div>
+    ${k.isHost ? `<button class="btn primary" id="koagain">🔁 Play again (everyone)</button>` : k.again != null ? "" : `<div class="card small muted" style="width:100%">Waiting for ${esc(k.host ? k.host.name : "the host")} to start the next challenge. ${k.host && k.host.on === false ? `<a href="#" id="kotake">They left? Start it yourself</a>` : ""}</div>`}
     ${koShareButtons()}
     <div class="card" style="width:100%;text-align:left"><div class="row3"><b>Final standings</b><span class="small muted">${k.list.length} players</span></div><div id="kolist" data-mode="">${koList(s)}</div></div>
     <a class="btn ghost" href="/" style="text-decoration:none">Bible Arena home</a></div>`;
@@ -349,6 +396,21 @@ function koFinal(s) {
   const a = $("#koagain"); if (a) a.onclick = () => { L.buzz(15); koAction("again", a); };
   const tk = $("#kotake"); if (tk) tk.onclick = (e) => { e.preventDefault(); koAction("again"); };
   if (!confettiDone) { confettiDone = true; setTimeout(() => L.confetti({ count: iWon ? 200 : 120 }), 300); if (iWon) L.buzz([30, 80, 30, 80, 60]); }
+  koPushAsk();
+}
+/** v3.7.0: after the first finished game, ask once: "Get notified when people are looking for players?" */
+async function koPushAsk() {
+  const box = $("#pushask"); if (!box || !window.BAS) return;
+  try { if (localStorage.getItem("ba3:pushask")) return; } catch (e) { return; }
+  let st = "off"; try { st = await window.BAS.push.state(); } catch (e) {}
+  if (st !== "off" || !$("#pushask")) return;
+  try { localStorage.setItem("ba3:pushask", String(Date.now())); } catch (e) {}
+  box.innerHTML = `<div class="card kopubrow"><div class="grow" style="text-align:left"><b>🔔 Get notified when people are looking for players?</b><div class="small muted">Max 3 a day, never 10 pm to 7 am.</div></div><button class="btn primary" id="pushyes" style="width:auto;padding:10px 16px">Yes</button></div>`;
+  $("#pushyes").onclick = async () => {
+    let r = "off"; try { r = await window.BAS.push.enable(); } catch (e) {}
+    toast(r === "on" ? "Notifications on ✓" : r === "denied" ? "Notifications are blocked in your browser settings." : "Couldn't turn on notifications here.");
+    box.innerHTML = "";
+  };
 }
 
 /* phone countdown */
