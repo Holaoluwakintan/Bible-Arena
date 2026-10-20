@@ -234,7 +234,7 @@ function koShareText(s) {
   return `⚔️ ${h} challenges you on Bible Arena!\nLive Bible knockout: answer fast, lose a round and you're out. Last one standing wins. 📖\nTap to join: ${koUrl()}\nOr enter code ${code} in Bible Arena.`;
 }
 function koState(s, prev) {
-  const key = s.phase + ":" + s.qi + ":" + s.ko.game;
+  const key = s.phase + ":" + s.qi + ":" + s.ko.game + (s.phase === "lobby" ? ":" + s.ko.per + ":" + (s.ko.isHost ? 1 : 0) : "");
   if (key === scene) {
     const p = $("#pts"); if (p && s.me) p.textContent = fmt(s.me.score);
     if (s.phase === "lobby" || s.phase === "final" || s.phase === "board") return koRefreshList(s);
@@ -288,18 +288,23 @@ function koLobby(s) {
     <div class="card kocode"><div class="tiny muted">Challenge code</div><div class="kc">${esc(code)}</div><div class="small muted">Friends tap your link, or enter this code in Bible Arena.</div></div>
     ${koShareButtons()}
     <div class="card" style="width:100%;text-align:left"><div class="row3"><b><span id="kon">${k.left}</span> joined</b><span class="small muted">up to ${k.max}</span></div><div id="kolist" data-mode="lobby">${koList(s, { lobby: true })}</div></div>
-    ${k.isHost ? `<button class="btn primary" id="kostart"></button>` : `<div class="card" style="width:100%"><div class="tiny muted">Waiting for ${esc(host.name || "the host")} to start</div><div class="small muted" style="margin-top:6px">Keep this screen open. ${host.on === false ? `<a href="#" id="kotake">${esc(host.name || "The host")} left? Start it yourself</a>` : ""}</div></div>`}
+    ${k.isHost ? `<div class="card" style="width:100%"><div class="tiny muted">Questions per round</div><div class="perpick">${(k.choices || [5, 7, 10]).map((c) => `<button data-per="${c}" class="${c === k.per ? "on" : ""}">${c}</button>`).join("")}</div><div class="small muted" style="margin-top:6px">The final is ${k.finalLen} questions.</div></div>
+      <button class="btn primary" id="kostart"></button>` : `<div class="card" style="width:100%"><div class="tiny muted">Waiting for ${esc(host.name || "the host")} to start</div><div class="small muted" style="margin-top:6px">Keep this screen open. ${host.on === false ? `<a href="#" id="kotake">${esc(host.name || "The host")} left? Start it yourself</a>` : ""}</div></div>`}
     <div class="card small muted" style="width:100%;text-align:left">📜 <b style="color:var(--ivory)">How it works:</b> ${esc(k.rule)}</div>
     <p class="foot"><a href="/">Bible Arena home</a></p></div>`;
   koBindShare(s);
   const st = $("#kostart"); if (st) { koStartBtn(s); st.onclick = () => { L.buzz(15); koAction("start", st); }; }
   const tk = $("#kotake"); if (tk) tk.onclick = (e) => { e.preventDefault(); koAction("start"); };
+  $$(".perpick button").forEach((b) => (b.onclick = async () => {
+    L.buzz(8); $$(".perpick button").forEach((x) => x.classList.toggle("on", x === b));
+    try { const r = await L.api("/lv/r/" + code + "/ko", { t: sess.token, action: "per", n: +b.dataset.per }); if (r && r.state) { S = r.state; scene = ""; koState(r.state); } } catch (e) { toast(e.message); }
+  }));
 }
 function koIntro(s) {
   myPick = null; fbShown = "";
   const q = s.q || {};
   app.innerHTML = `${top(s)}<div class="center"><div class="tiny" style="color:var(--gold)">${koRoundLabel(s)} · Question ${s.ko.rq} of ${s.ko.rlen}</div>
-    ${s.ko.rq === 1 ? `<h1>${s.ko.final ? "The final! 🔥" : s.ko.round === 1 ? "Here we go!" : "You made it through!"}</h1><p class="muted small" style="margin:0">${s.ko.left} still in${s.ko.final ? ". Most points in 5 questions wins." : ". Bottom half after this round is out."}</p>` : `<h1>Get ready</h1>`}
+    ${s.ko.rq === 1 ? `<h1>${s.ko.final ? "The final! 🔥" : s.ko.round === 1 ? "Here we go!" : "You made it through!"}</h1><p class="muted small" style="margin:0">${s.ko.left} still in${s.ko.final ? `. Most points in ${s.ko.rlen} questions wins.` : `. ${s.ko.rlen} questions, then the bottom half is out.`}</p>` : `<h1>Get ready</h1>`}
     <p class="qmini">${esc(q.q || "")}</p>${q.clues && q.clues.length ? `<div class="clues">${q.clues.map((c) => `<div>🎭 ${esc(c)}</div>`).join("")}</div>` : ""}
     <div class="bar" style="max-width:280px"><i id="ib" style="transform:scaleX(0)"></i></div></div>`;
   const total = Math.max(300, s.remain || 3000), t0 = performance.now();
@@ -335,8 +340,8 @@ function koFinal(s) {
   app.innerHTML = `${top(s)}<div class="center" style="justify-content:flex-start;gap:10px;padding-top:8px">
     <div class="medal">🏆</div><div class="tiny" style="color:var(--gold)">Winner</div>
     <h1 class="kowin">${w.avatar || ""} ${esc(w.name || "")}</h1>
-    <p class="muted" style="margin:0">${iWon ? "That's you! Last one standing 🎉" : k.meOut > 0 ? `You were knocked out in round ${k.meOut}. Next time!` : k.meOut === -1 ? "You'll play in the next one." : "So close! You made the final 💪"}</p>
-    ${k.isHost ? `<button class="btn primary" id="koagain">🔁 Play again: everyone back in</button>` : `<div class="card small muted" style="width:100%">Waiting for ${esc(k.host ? k.host.name : "the host")} to start the next challenge. ${k.host && k.host.on === false ? `<a href="#" id="kotake">They left? Start it yourself</a>` : ""}</div>`}
+    <p class="muted" style="margin:0">${iWon ? "That's you! Last one standing 🎉" : k.meOut > 0 && k.meOut === k.round ? "So close! You made the final and came 2nd 🥈" : k.meOut > 0 ? `You were knocked out in round ${k.meOut}. Next time!` : k.meOut === -1 ? "You'll play in the next one." : "So close! You made the final 💪"}</p>
+    ${k.isHost ? `<button class="btn primary" id="koagain">🔁 Play again (everyone)</button>` : `<div class="card small muted" style="width:100%">Waiting for ${esc(k.host ? k.host.name : "the host")} to start the next challenge. ${k.host && k.host.on === false ? `<a href="#" id="kotake">They left? Start it yourself</a>` : ""}</div>`}
     ${koShareButtons()}
     <div class="card" style="width:100%;text-align:left"><div class="row3"><b>Final standings</b><span class="small muted">${k.list.length} players</span></div><div id="kolist" data-mode="">${koList(s)}</div></div>
     <a class="btn ghost" href="/" style="text-decoration:none">Bible Arena home</a></div>`;

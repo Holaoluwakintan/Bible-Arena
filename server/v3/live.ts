@@ -165,8 +165,9 @@ function koView(room: E.LRoom, p: E.LPlayer | undefined, now: number) {
   const winner = ko.winner ? room.players[ko.winner] : undefined;
   return {
     game: ko.game, round: ko.round, rq: room.qi >= 0 ? room.qi - ko.roundStart + 1 : 0, rlen: ko.roundLen,
-    final: room.phase !== "lobby" && alive.length <= 2 && ko.roundLen === E.KO_FINAL_LEN,
-    left: room.phase === "lobby" ? all.length : alive.length, rule: E.KO_RULE, max: room.maxPlayers,
+    final: room.phase !== "lobby" && alive.length <= 2 && ko.roundLen === E.koFinalLen(ko),
+    per: E.koPer(ko), finalLen: E.koFinalLen(ko), choices: E.KO_PER_CHOICES,
+    left: room.phase === "lobby" ? all.length : alive.length, rule: E.koRule(ko), max: room.maxPlayers,
     host: host ? { id: host.id, name: host.name, avatar: host.avatar, on: online(room.code, host, now) } : null,
     isHost: !!p && p.id === ko.hostId,
     meOut: p && p.id in ko.out ? ko.out[p.id] : 0, mePos: p ? pos.get(p.id) || null : null,
@@ -252,6 +253,7 @@ function ensureLoops() {
     loop = setInterval(() => {
       const now = Date.now();
       for (const room of rooms.values()) {
+        if (room.ko && room.phase === "board" && room.questions.length < room.qi + 1 + E.koFinalLen(room.ko)) koTopUp(room);
         const before = room.phase;
         if (E.tick(room, now)) {
           touch(room);
@@ -268,6 +270,16 @@ function ensureLoops() {
     }, 5000).unref();
   }
   if (!flushLoop) { flushLoop = setInterval(() => { void flushLive(); }, 3000); flushLoop.unref(); }
+}
+
+let bankRef: (() => BankItem[]) | null = null;
+/** Knockout rooms add fresh questions (none repeated) before a round would run out. */
+function koTopUp(room: E.LRoom) {
+  if (!bankRef || !room.ko) return;
+  const used = new Set(room.questions.map((q) => q.id));
+  const more = pickSet(bankRef(), { tiers: [room.ko.tier], count: 30 }).filter((q) => !used.has(q.id));
+  room.questions.push(...more);
+  touch(room);
 }
 
 function genCode(): string {
@@ -287,6 +299,7 @@ function hostOk(room: E.LRoom, key: unknown) {
 
 // ---------- routes ----------
 export function registerLive(app: Express, bank: () => BankItem[], webDir: string): void {
+  bankRef = bank;
   ensureLoops();
 
   app.get("/lv/meta", (_req, res) => { res.setHeader("Cache-Control", "public, max-age=300"); res.json(bankMeta(bank())); });
@@ -321,7 +334,7 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
     room.maxPlayers = E.KO_MAX;
     const j = E.joinRoom(room, { name, avatar: b.avatar }, Date.now());
     if (!j.ok) return json(res, 400, { error: j.error });
-    room.ko = E.makeKo(j.player.id, tier);
+    room.ko = E.makeKo(j.player.id, tier, Number(b.per) || E.KO_ROUND_LEN);
     rooms.set(room.code, room);
     touch(room);
     void flushLive();
@@ -349,6 +362,10 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
     if (action === "start") {
       const r = E.koStart(room, now, (x) => online(room.code, x, now));
       if (!r.ok) return json(res, 400, { error: r.error });
+    } else if (action === "per") {
+      if (room.phase !== "lobby") return json(res, 400, { error: "Pick this before the game starts." });
+      if (!E.KO_PER_CHOICES.includes(Number(b.n))) return json(res, 400, { error: "Pick 5, 7 or 10." });
+      room.ko.per = Number(b.n); room.version++; room.pversion++;
     } else if (action === "again") {
       if (room.phase !== "final" && room.phase !== "lobby") return json(res, 400, { error: "Wait for this game to finish." });
       if (room.phase === "final") E.koAgain(room, pickSet(bank(), { tiers: [room.ko.tier], count: 45 }), now);
@@ -363,7 +380,7 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
     if (!room) return json(res, 404, { error: "No game with that code. Check the screen and try again." });
     json(res, 200, { code: room.code, title: room.title, church: room.church, phase: room.phase, n: E.activePlayers(room).length, max: room.maxPlayers,
       locked: room.locked, teams: room.teams, full: E.activePlayers(room).length >= room.maxPlayers, avatars: E.AVATARS,
-      ko: room.ko ? { host: room.players[room.ko.hostId]?.name || "", rule: E.KO_RULE } : undefined });
+      ko: room.ko ? { host: room.players[room.ko.hostId]?.name || "", rule: E.koRule(room.ko) } : undefined });
   });
 
   app.post("/lv/r/:code/join", async (req, res) => {

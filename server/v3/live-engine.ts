@@ -30,6 +30,8 @@ export interface LRoom {
  * watches; the last two play a longer final; one winner. "Play again" puts everyone back in the lobby. */
 export interface LKo {
   hostId: string; tier: string; game: number;
+  /** questions per elimination round, picked by the host in the lobby (5/7/10); the final is double, max 15 */
+  per?: number;
   round: number; roundStart: number; roundLen: number;
   /** player id -> round they were knocked out in; -1 = joined mid-game or missed the start (watching) */
   out: Record<string, number>;
@@ -37,12 +39,16 @@ export interface LKo {
   history: Array<{ round: number; out: string[]; left: number }>;
 }
 export const KO_MAX = 50;
-export const KO_ROUND_LEN = 3;
-export const KO_FINAL_LEN = 5;
+export const KO_ROUND_LEN = 5;
+export const KO_PER_CHOICES = [5, 7, 10];
+export const koPer = (ko: LKo) => (KO_PER_CHOICES.includes(Number(ko.per)) ? Number(ko.per) : KO_ROUND_LEN);
+export const koFinalLen = (ko: LKo) => Math.min(15, koPer(ko) * 2);
 export const KO_TIMER = 15;
 export const KO_REVEAL_MS = 5000;
 export const KO_BOARD_MS = 8000;
-export const KO_RULE = "3 questions a round. After each round the bottom half (fewest points that round) is knocked out and watches. The last two play a 5-question final.";
+export function koRule(ko: LKo): string {
+  return `${koPer(ko)} questions a round. After each round the bottom half (fewest points that round) is knocked out and watches. The last two play a ${koFinalLen(ko)}-question final.`;
+}
 
 export const MAX_PLAYERS = 200;
 export const INTRO_MS = 4000;
@@ -347,8 +353,8 @@ export function summary(room: LRoom) {
 
 
 // ---------- knockout (v3.6.0 "Challenge someone") ----------
-export function makeKo(hostId: string, tier: string): LKo {
-  return { hostId, tier, game: 1, round: 0, roundStart: 0, roundLen: KO_ROUND_LEN, out: {}, lastOut: [], history: [] };
+export function makeKo(hostId: string, tier: string, per = KO_ROUND_LEN): LKo {
+  return { hostId, tier, game: 1, per: KO_PER_CHOICES.includes(per) ? per : KO_ROUND_LEN, round: 0, roundStart: 0, roundLen: KO_ROUND_LEN, out: {}, lastOut: [], history: [] };
 }
 /** Points and correct-answer time a player earned in the current knockout round. */
 export function roundPoints(room: LRoom, p: LPlayer): { pts: number; ms: number; ok: number } {
@@ -370,7 +376,7 @@ function koNewRound(room: LRoom, now: number, startQi: number): boolean {
   const ko = room.ko!;
   ko.round++;
   ko.roundStart = startQi;
-  ko.roundLen = alivePlayers(room).length <= 2 ? KO_FINAL_LEN : KO_ROUND_LEN;
+  ko.roundLen = alivePlayers(room).length <= 2 ? koFinalLen(ko) : koPer(ko);
   ko.lastOut = [];
   if (startQi + ko.roundLen > room.questions.length) ko.roundLen = Math.max(1, room.questions.length - startQi);
   if (startQi >= room.questions.length) return koEnd(room, now);
@@ -426,7 +432,7 @@ export function koAgain(room: LRoom, questions: LQ[], now: number): void {
   room.questions = questions.slice(0, 60);
   room.phase = "lobby"; room.qi = -1; room.phaseAt = now; room.endsAt = 0; delete room.endedAt;
   room.createdAt = now; // a room that keeps being played stays alive
-  ko.game++; ko.round = 0; ko.roundStart = 0; ko.roundLen = KO_ROUND_LEN; ko.out = {}; ko.lastOut = []; ko.history = []; delete ko.winner;
+  ko.game++; ko.round = 0; ko.roundStart = 0; ko.roundLen = koPer(ko); ko.out = {}; ko.lastOut = []; ko.history = []; delete ko.winner;
   for (const p of Object.values(room.players)) {
     p.score = 0; p.streak = 0; p.best = 0; p.correct = 0; p.timeMs = 0; p.answers = {}; delete p.rank; delete p.prevRank;
   }

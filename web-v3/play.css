@@ -105,3 +105,4 @@ a.btn{color:var(--ivory)}a.btn.primary{color:#1A1203}
 .koout{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:8px}
 .koout span{padding:6px 12px;border-radius:99px;background:rgba(255,93,115,.16);font-weight:700}
 .kowin{font-size:34px;color:var(--gold2)}
+.perpick{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}.perpick button{padding:12px 0;border-radius:14px;background:rgba(255,255,255,.06);border:2px solid transparent;font-weight:900;font-size:20px}.perpick button.on{border-color:var(--gold);background:rgba(245,185,66,.16);color:var(--gold2)}
