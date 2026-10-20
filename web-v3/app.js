@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.4.0";
+window.BA_V = "3.4.1";
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
 const app = $("#app");
@@ -706,6 +706,7 @@ async function createChurch() {
     if (body.city.trim().length < 2) return err("Please enter the city or town.");
     if (!body.state) return err("Please pick the state.");
     $("#cgo").disabled = true; $("#cgo").textContent = "Creating…";
+    if (!ME.player) await savePlayer();
     try {
       const r = await api("/api/v3/churches", { body });
       syncChurch(r.church); sfx.win(); confetti(70); toast("Your church team is live ⛪");
@@ -801,6 +802,7 @@ async function joinByCode(code) {
   </div>`);
   $("#jgo").onclick = async () => {
     if (needName) { const n = $("#nm").value.trim().slice(0, 40); if (!n) { $("#nm").focus(); return toast("Tell us your name first"); } S.name = n; S.onboarded = true; save(); await savePlayer(); }
+    if (!ME.player) await savePlayer(); // so the church page shows their name
     $("#jgo").disabled = true; $("#jgo").textContent = "Joining…";
     try { const r = await api("/api/v3/churches/join", { body: { code } }); syncChurch(r.church); sfx.win(); confetti(60); toast(`Welcome to ${r.church.name} ⛪`); go("#/church/" + r.church.id); }
     catch (e) { $("#jgo").disabled = false; $("#jgo").textContent = "Join"; toast((e.data && e.data.message) || "Couldn't join. Try again."); }

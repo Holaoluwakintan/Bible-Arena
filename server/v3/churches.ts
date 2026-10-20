@@ -71,6 +71,7 @@ export function validateChurch(b: any): { ok: true; name: string; city: string; 
 }
 
 // ---------- SQLite registry ----------
+let purged = false;
 function db() {
   const d = getDb();
   d.exec(`CREATE TABLE IF NOT EXISTS v3_churches (
@@ -82,7 +83,10 @@ function db() {
     CREATE TABLE IF NOT EXISTS v3_church_members (
       open_id TEXT PRIMARY KEY, church_id TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'member', joined_at INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS v3_church_members_church ON v3_church_members(church_id);
-    CREATE TABLE IF NOT EXISTS v3_church_wins (week TEXT PRIMARY KEY, church_id TEXT NOT NULL, name TEXT NOT NULL, points INTEGER NOT NULL, recorded_at INTEGER NOT NULL);`);
+    CREATE TABLE IF NOT EXISTS v3_church_wins (week TEXT PRIMARY KEY, church_id TEXT NOT NULL, name TEXT NOT NULL, points INTEGER NOT NULL, recorded_at INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS v3_church_creates (open_id TEXT NOT NULL, at INTEGER NOT NULL);
+    CREATE INDEX IF NOT EXISTS v3_church_creates_who ON v3_church_creates(open_id, at);`);
+  if (!purged) { purged = true; try { d.exec("DELETE FROM v3_churches WHERE deleted_at IS NOT NULL"); } catch {} } // v3.4.0 soft-deleted rows
   return d;
 }
 type Church = { id: string; code: string; name: string; city: string; state: string; kind: string; owner_open_id: string; created_at: number };
@@ -119,7 +123,7 @@ function leaveInternal(openId: string): { left: string | null; closed: boolean }
   d.prepare("DELETE FROM v3_church_members WHERE open_id = ?").run(openId);
   const rest = d.prepare("SELECT open_id FROM v3_church_members WHERE church_id = ? ORDER BY joined_at ASC LIMIT 1").get(m.church_id) as any;
   if (!rest) {
-    d.prepare("UPDATE v3_churches SET deleted_at = ? WHERE id = ?").run(nowFn(), m.church_id);
+    d.prepare("DELETE FROM v3_churches WHERE id = ?").run(m.church_id); // an empty team is removed outright
     return { left: m.church_id, closed: true };
   }
   const c = d.prepare("SELECT owner_open_id FROM v3_churches WHERE id = ?").get(m.church_id) as any;
@@ -206,7 +210,15 @@ export function teamNameFor(openId: string): string | null {
 }
 /** Account deletion: drop the membership (a church left empty closes). */
 export function deleteChurchData(openId: string): number {
-  try { const r = leaveInternal(openId); if (r.left) persistSoon("church-account-delete"); return r.left ? 1 : 0; } catch { return 0; }
+  try {
+    const r = leaveInternal(openId);
+    const d = db();
+    d.prepare("DELETE FROM v3_church_creates WHERE open_id = ?").run(openId);
+    // a team they created that still has members keeps going under its new lead; no trace of them stays in it
+    d.prepare("UPDATE v3_churches SET created_by = '' WHERE created_by = ?").run(openId);
+    persistSoon("church-account-delete");
+    return r.left ? 1 : 0;
+  } catch { return 0; }
 }
 /** Guest -> Google merge: carry the guest's membership over when the Google account has none. */
 export function mergeChurchMembership(guestOpenId: string, googleOpenId: string) {
@@ -218,6 +230,8 @@ export function mergeChurchMembership(guestOpenId: string, googleOpenId: string)
     else {
       d.prepare("UPDATE v3_church_members SET open_id = ? WHERE open_id = ?").run(googleOpenId, guestOpenId);
       d.prepare("UPDATE v3_churches SET owner_open_id = ? WHERE owner_open_id = ?").run(googleOpenId, guestOpenId);
+      d.prepare("UPDATE v3_churches SET created_by = ? WHERE created_by = ?").run(googleOpenId, guestOpenId);
+      d.prepare("UPDATE v3_church_creates SET open_id = ? WHERE open_id = ?").run(googleOpenId, guestOpenId);
     }
     persistSoon("church-merge");
   } catch (error) {
@@ -249,7 +263,8 @@ export function registerChurches(app: Express, guard: Guard, send: Send): void {
     if (!v.ok) return send(res, 400, { error: "invalid", field: v.field, message: v.error });
     const d = db();
     const since = nowFn() - 86_400_000;
-    const made = Number((d.prepare("SELECT COUNT(*) AS n FROM v3_churches WHERE created_by = ? AND created_at > ?").get(me.openId, since) as any)?.n || 0);
+    d.prepare("DELETE FROM v3_church_creates WHERE at < ?").run(nowFn() - 2 * 86_400_000);
+    const made = Number((d.prepare("SELECT COUNT(*) AS n FROM v3_church_creates WHERE open_id = ? AND at > ?").get(me.openId, since) as any)?.n || 0);
     if (made >= LIMITS.maxCreatesPerDay) return send(res, 429, { error: "too_many", message: "You've created enough churches for today. Try again tomorrow." });
     const key = nameKey(v.name);
     const dup = d.prepare(`SELECT ${COLS} FROM v3_churches WHERE name_key = ? AND lower(city) = lower(?) AND deleted_at IS NULL`).get(key, v.city) as any;
@@ -262,6 +277,7 @@ export function registerChurches(app: Express, guard: Guard, send: Send): void {
       leaveInternal(me.openId);
       d.prepare("INSERT INTO v3_churches (id, code, name, name_key, city, state, kind, owner_open_id, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(id, code, v.name, key, v.city, v.state, v.kind, me.openId, me.openId, now);
       d.prepare("INSERT INTO v3_church_members (open_id, church_id, role, joined_at) VALUES (?, ?, 'owner', ?)").run(me.openId, id, now);
+      d.prepare("INSERT INTO v3_church_creates (open_id, at) VALUES (?, ?)").run(me.openId, now);
       d.exec("COMMIT");
     } catch (error) { d.exec("ROLLBACK"); throw error; }
     persistSoon("church-create");
