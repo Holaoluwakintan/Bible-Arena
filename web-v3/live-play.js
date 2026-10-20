@@ -19,6 +19,7 @@ function boot() {
 
 /* ---------- join ---------- */
 function enterCode(err) {
+  try { window.BAVoice && window.BAVoice.detach(); } catch (e) {}
   app.innerHTML = `<div class="center"><div class="logo">BIBLE ARENA<span>LIVE</span></div>
     <h1 style="margin-top:10px">Enter the game code</h1><p class="muted small" style="margin:0">It's on the big screen.</p>
     <input class="codein" id="code" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="6" placeholder="••••••" value="${esc(code)}">
@@ -41,6 +42,7 @@ function enterCode(err) {
 }
 
 async function profile() {
+  try { window.BAVoice && window.BAVoice.detach(); } catch (e) {}
   app.innerHTML = `<div class="center"><div class="mark">✦</div><div class="muted">Finding the game…</div></div>`;
   try { peek = await L.api("/lv/r/" + code + "/peek"); } catch (e) { code = ""; return enterCode(e.status === 404 ? "No game with that code. Check the screen." : e.message); }
   if (peek.phase === "final" && !peek.ko) return enterCode("That game has finished.");
@@ -113,6 +115,8 @@ function onState(s) {
   if (s.me && s.me.kicked) { store.del("bal:p:" + code); conn && conn.stop(); return enterCode("The host removed you from this game."); }
   const prev = S; S = s;
   if (window.BAS) window.BAS.setBusy(s.phase !== "final");
+  // v3.8.0 voice chat: group (knockout) rooms only; never lets an error reach the game
+  try { if (window.BAVoice) { if (s.ko && s.me && s.me.id) window.BAVoice.attach({ code, token: sess.token, myId: s.me.id, conn }); else window.BAVoice.detach(); } } catch (e) {}
   if (typeof s.remain === "number" && s.remain > 0) deadline = performance.now() + s.remain;
   if (s.ko) return koState(s, prev);
   const key = s.phase + ":" + s.qi;

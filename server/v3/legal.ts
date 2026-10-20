@@ -82,7 +82,8 @@ const PRIVACY = shell("Privacy Policy", `
 <li><b>Quiz-night entries</b>: the nickname, team and answers you use when you join a Bible Arena Live room.</li>
 <li><b>Technical data</b>: a sign-in cookie that keeps you logged in, and your IP address, which is used briefly in memory to stop abuse (rate limiting) and is not stored with your profile.</li>
 </ul>
-<p>We do <b>not</b> collect your location, contacts, photos, files, microphone, payment details or advertising ID. The app has <b>no ads</b> and <b>no analytics or tracking tools</b>.</p>
+<p>We do <b>not</b> collect your location, contacts, photos, files, payment details or advertising ID. The app has <b>no ads</b> and <b>no analytics or tracking tools</b>.</p>
+<p><b>Voice chat (optional).</b> In group games you can talk to the other players. The microphone is used only after you tap the mic button, and only while it is on. Your voice goes directly between the players' phones; we do not record, store or listen to it.</p>
 <h2>How we use it</h2>
 <ul><li>To run the game: score rounds, keep your progress, run duels, daily challenges, leaderboards and quiz nights.</li>
 <li>To keep your progress safe across phones when you sign in with Google.</li>

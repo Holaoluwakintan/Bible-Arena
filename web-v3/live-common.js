@@ -35,6 +35,7 @@ L.connect = function (base, qs, onState, onNet, onGone) {
     es = new EventSource(base + "/sse?" + qs);
     es.onmessage = (e) => { errors = 0; backoff = 1000; onNet("live"); try { handle(JSON.parse(e.data)); } catch (x) {} };
     es.onopen = () => { lastMsg = Date.now(); onNet("live"); };
+    es.addEventListener("vc", (e) => { lastMsg = Date.now(); try { L.onVc && L.onVc(JSON.parse(e.data)); } catch (x) {} }); // v3.8.0 voice signaling
     es.onerror = () => {
       errors++;
       onNet(errors > 1 ? "down" : "live");

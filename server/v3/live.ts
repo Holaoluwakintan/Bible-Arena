@@ -20,6 +20,50 @@ const waiters = new Map<string, Set<Waiter>>();
 const lastHostPush = new Map<string, number>();
 const lastPlayerPush = new Map<string, { v: number; at: number }>();
 const ROOM_TTL_MS = 12 * 3600_000;
+
+// ---------- v3.8.0 voice chat (knockout rooms) ----------
+// WebRTC audio goes phone-to-phone (full mesh); the server only relays the small signaling messages
+// (offer / answer / ICE) over the same SSE stream, with a mailbox + poll for phones on the long-poll fallback.
+// Voice state lives in memory only (never in the live_rooms snapshot): after a restart phones simply rejoin.
+export const VOICE_MAX = 8;
+interface VMember { id: string; muted: boolean; at: number }
+const voice = new Map<string, Map<string, VMember>>();          // room code -> player id -> member
+const vbox = new Map<string, any[]>();                            // "code:playerId" -> undelivered messages (no SSE open)
+function vRoster(room: E.LRoom) {
+  const m = voice.get(room.code);
+  const list = m ? [...m.values()].map((x) => { const p = room.players[x.id]; return p ? { id: x.id, name: p.name, avatar: p.avatar, muted: x.muted } : null; }).filter(Boolean) : [];
+  return { type: "roster", list, max: VOICE_MAX };
+}
+/** Send one voice message to one player: over their open SSE stream(s), else into their mailbox. */
+function vSend(room: E.LRoom, toId: string, msg: unknown, queue = true): void {
+  const p = room.players[toId];
+  if (!p) return;
+  let sent = false;
+  const set = conns.get(room.code);
+  if (set) for (const c of set) if (c.role === "player" && c.token === p.token) {
+    try { c.res.write(`event: vc\ndata: ${JSON.stringify(msg)}\n\n`); c.at = Date.now(); sent = true; } catch {}
+  }
+  if (!sent && queue) {
+    const k = room.code + ":" + toId;
+    const q = vbox.get(k) || [];
+    q.push(msg);
+    if (q.length > 200) q.splice(0, q.length - 200);
+    vbox.set(k, q);
+  }
+}
+/** Everyone in the room hears who is in voice (members get it queued if they are polling). */
+function vBroadcastRoster(room: E.LRoom): void {
+  const r = vRoster(room);
+  const m = voice.get(room.code);
+  for (const p of Object.values(room.players)) if (!p.kicked) vSend(room, p.id, r, !!m?.has(p.id));
+}
+function vRemove(room: E.LRoom, id: string): boolean {
+  const m = voice.get(room.code);
+  if (!m || !m.delete(id)) return false;
+  vbox.delete(room.code + ":" + id);
+  if (!m.size) voice.delete(room.code);
+  return true;
+}
 const hostSeen = new Map<string, number>(); // last time the host's screen was connected or acted (v3.5.0 Live now)
 const seenHost = (code: string) => hostSeen.set(code, Date.now());
 
@@ -296,7 +340,16 @@ function ensureLoops() {
     setInterval(() => { // keep-alive comments so proxies keep SSE streams open; expire old rooms
       const now = Date.now();
       for (const [code, set] of conns) for (const c of set) if (now - c.at > 15_000) { try { c.res.write(": ping\n\n"); c.at = now; } catch {} }
-      for (const [code, room] of rooms) if (now - room.createdAt > ROOM_TTL_MS && !conns.get(code)?.size) { rooms.delete(code); lastHostPush.delete(code); lastPlayerPush.delete(code); }
+      for (const [code, room] of rooms) if (now - room.createdAt > ROOM_TTL_MS && !conns.get(code)?.size) { rooms.delete(code); lastHostPush.delete(code); lastPlayerPush.delete(code); voice.delete(code); }
+      // v3.8.0 voice: a phone that closed without saying goodbye drops out of voice once it is offline
+      for (const [code, m] of voice) {
+        const room = rooms.get(code);
+        if (!room) { voice.delete(code); continue; }
+        let changed = false;
+        for (const x of [...m.values()]) { const p = room.players[x.id]; if (!p || p.kicked || (!online(code, p, now) && now - x.at > 20_000)) changed = vRemove(room, x.id) || changed; }
+        if (changed) vBroadcastRoster(room);
+      }
+      for (const k of vbox.keys()) { const [code, id] = k.split(":"); if (!voice.get(code)?.has(id)) vbox.delete(k); }
     }, 5000).unref();
   }
   if (!flushLoop) { flushLoop = setInterval(() => { void flushLive(); }, 3000); flushLoop.unref(); }
@@ -510,6 +563,71 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
     json(res, 200, { ok: true, already: !!r.already, c: a.c, ...(room.instant ? { correct: a.ok, a: r.correctIndex, pts: a.pts, speed: a.speed, streakBonus: a.streak, streak: p.streak, score: p.score } : {}) });
   });
 
+  // ---- v3.8.0 voice chat: ICE servers + signaling relay (knockout rooms only) ----
+  // TURN is optional and comes only from env (BA_TURN_URLS comma-separated, BA_TURN_USER, BA_TURN_CRED); STUN always.
+  app.get("/lv/ice", (_req, res) => {
+    const ice: any[] = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
+    const urls = String(process.env.BA_TURN_URLS || "").split(",").map((x) => x.trim()).filter((x) => /^turns?:/.test(x));
+    if (urls.length) ice.push({ urls, username: process.env.BA_TURN_USER || "", credential: process.env.BA_TURN_CRED || "" });
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ iceServers: ice, max: VOICE_MAX, turn: urls.length > 0 });
+  });
+  const vPlayer = (room: E.LRoom, token: string) => Object.values(room.players).find((x) => x.token === token && !x.kicked);
+  const vDrain = (room: E.LRoom, id: string) => { const k = room.code + ":" + id; const q = vbox.get(k) || []; vbox.delete(k); return q; };
+  app.get("/lv/r/:code/vc", async (req, res) => {
+    const token = String(req.query.t || "");
+    if (!token || !allow("vcp:" + token, 120, 60_000)) return json(res, 429, { error: "Slow down." });
+    const room = rooms.get(cleanCode(req.params.code));
+    if (!room || !room.ko) return json(res, 404, { error: "No voice here." });
+    const p = vPlayer(room, token);
+    if (!p) return json(res, 404, { error: "Join first." });
+    const m = voice.get(room.code)?.get(p.id);
+    if (m) m.at = Date.now();
+    json(res, 200, { roster: vRoster(room), box: m ? vDrain(room, p.id) : [] });
+  });
+  app.post("/lv/r/:code/vc", async (req, res) => {
+    const b = req.body || {};
+    const token = String(b.t || "");
+    if (!token || !allow("vc:" + token, 900, 60_000)) return json(res, 429, { error: "Slow down." });
+    const room = rooms.get(cleanCode(req.params.code)) || (await loadRoom(cleanCode(req.params.code)));
+    if (!room || !room.ko) return json(res, 404, { error: "Voice works in group games only." });
+    const p = vPlayer(room, token);
+    if (!p) return json(res, 404, { error: "Join first." });
+    const now = Date.now();
+    p.lastSeen = now;
+    const a = String(b.a || "");
+    let m = voice.get(room.code);
+    const me = m?.get(p.id);
+    if (me) me.at = now;
+    if (a === "join") {
+      if (!me) {
+        if ((m?.size || 0) >= VOICE_MAX) return json(res, 403, { error: `Voice is full (${VOICE_MAX} people). You can still play.`, code: "full", roster: vRoster(room) });
+        if (!m) { m = new Map(); voice.set(room.code, m); }
+        m.set(p.id, { id: p.id, muted: true, at: now });
+        vbox.delete(room.code + ":" + p.id);
+      }
+      vBroadcastRoster(room);
+    } else if (a === "leave") {
+      if (vRemove(room, p.id)) vBroadcastRoster(room);
+      return json(res, 200, { ok: true });
+    } else if (a === "mute") {
+      if (!me) return json(res, 409, { error: "Not in voice.", code: "out" });
+      const mu = b.m !== false;
+      if (me.muted !== mu) { me.muted = mu; vBroadcastRoster(room); }
+    } else if (a === "sig") {
+      // one or more { to, d } messages, in order (a phone batches its ICE candidates)
+      if (!me) return json(res, 409, { error: "Not in voice.", code: "out" });
+      const list: any[] = Array.isArray(b.list) ? b.list.slice(0, 40) : [{ to: b.to, d: b.d }];
+      if (JSON.stringify(list).length > 40_000) return json(res, 413, { error: "Too big." });
+      for (const x of list) {
+        const to = String(x?.to || ""), d = x?.d;
+        if (!m?.has(to) || to === p.id || !d || typeof d !== "object") continue;
+        vSend(room, to, { type: "sig", from: p.id, d });
+      }
+    } else return json(res, 400, { error: "Unknown action." });
+    json(res, 200, { ok: true, me: p.id, roster: vRoster(room), box: voice.get(room.code)?.has(p.id) ? vDrain(room, p.id) : [] });
+  });
+
   // live stream: SSE. ?t=<player token> or ?key=<host key>
   app.get("/lv/r/:code/sse", async (req, res) => {
     const room = await loadRoom(cleanCode(req.params.code));
@@ -527,6 +645,11 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
     if (p) { p.lastSeen = Date.now(); room.version++; }
     sse(c, role === "host" ? hostView(room) : playerView(room, p));
     c.sent = role === "host" ? room.version : room.pversion;
+    if (p && room.ko && voice.has(room.code)) { // v3.8.0: who is in voice, plus anything that waited while this phone was away
+      const k = room.code + ":" + p.id, q = vbox.get(k) || [];
+      vbox.delete(k);
+      try { for (const msg of [vRoster(room), ...q]) res.write(`event: vc\ndata: ${JSON.stringify(msg)}\n\n`); } catch {}
+    }
     req.on("close", () => {
       conns.get(room.code)?.delete(c);
       if (p) { p.lastSeen = Date.now(); room.version++; }
