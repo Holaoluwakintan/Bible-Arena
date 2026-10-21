@@ -1,18 +1,19 @@
-/* Bible Arena service worker (v3.8.3).
+/* Bible Arena service worker (v3.8.4).
  * - Opens instantly on repeat visits, even while the free server is waking up:
- *   page loads try the network for 3 s, then fall back to the last saved copy.
+ *   the home page is served from the saved copy at once and refreshed in the background;
+ *   duel links (/d/...) try the network for 3 s, then fall back to the last saved copy.
  * - Game files (/v3/...) are served from the cache and refreshed in the background.
  * - API calls, sign-in, downloads and legal pages always go to the network.
  * - Web Push (v3.5.0): shows "a challenger is waiting" notifications; a tap opens (or focuses) the game at the challenge.
  */
-const VERSION = "ba-3.8.3";
+const VERSION = "ba-3.8.4";
 const SHELL = "/";
 const PRECACHE = [
   "/",
-  "/v3/app.css?v=3.8.3",
-  "/v3/app.js?v=3.8.3",
-  "/v3/social.js?v=3.8.3",
-  "/v3/bank.json?v=3.8.3",
+  "/v3/app.css?v=3.8.4",
+  "/v3/app.js?v=3.8.4",
+  "/v3/social.js?v=3.8.4",
+  "/v3/bank.json?v=3.8.4",
   "/v3/fonts/cinzel-latin.woff2",
   "/v3/fonts/jakarta-latin.woff2",
   "/v3/icon-192.png",
@@ -56,6 +57,20 @@ async function pageRequest(event) {
   return network; // nothing saved yet: wait for the server as before
 }
 
+// Home page: paints from the saved copy at once (the loading screen and the game files are in it),
+// and the fresh page is fetched in the background for next time. First visit (nothing saved): network as before.
+async function shellFirst(event) {
+  const cache = await caches.open(VERSION);
+  const cached = await cache.match(SHELL);
+  if (!cached) return pageRequest(event);
+  const refresh = fetch(event.request).then((res) => {
+    if (res && res.ok && res.type === "basic") cache.put(SHELL, res.clone());
+    return res;
+  });
+  event.waitUntil(refresh.catch(() => {}));
+  return cached;
+}
+
 async function staticRequest(event) {
   const cache = await caches.open(VERSION);
   const cached = await cache.match(event.request);
@@ -75,7 +90,8 @@ self.addEventListener("fetch", (event) => {
   if (NETWORK_ONLY.test(url.pathname)) return;
   // Only the v3 game pages use the shell fallback; the classic app and Live keep their own behaviour.
   if (req.mode === "navigate") {
-    if (url.pathname === "/" || url.pathname === "/index.html" || url.pathname.startsWith("/d/")) event.respondWith(pageRequest(event));
+    if (url.pathname === "/" || url.pathname === "/index.html") event.respondWith(shellFirst(event));
+    else if (url.pathname.startsWith("/d/")) event.respondWith(pageRequest(event));
     return;
   }
   if (url.pathname.startsWith("/v3/")) event.respondWith(staticRequest(event));
