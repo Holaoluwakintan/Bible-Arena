@@ -82,8 +82,9 @@ const PRIVACY = shell("Privacy Policy", `
 <li><b>Quiz-night entries</b>: the nickname, team and answers you use when you join a Bible Arena Live room.</li>
 <li><b>Technical data</b>: a sign-in cookie that keeps you logged in, and your IP address, which is used briefly in memory to stop abuse (rate limiting) and is not stored with your profile.</li>
 </ul>
-<p>We do <b>not</b> collect your location, contacts, photos, files, payment details or advertising ID. The app has <b>no ads</b> and <b>no analytics or tracking tools</b>.</p>
+<p>We do <b>not</b> collect your location, contacts, photos, files, payment details or advertising ID. The website has <b>no ads</b>, and Bible Arena has <b>no analytics or tracking tools</b>. The only ads are optional rewarded ads in the Android app (see below).</p>
 <p><b>Voice chat (optional).</b> In group games you can talk to the other players. The microphone is used only after you tap the mic button, and only while it is on. Your voice goes directly between the players' phones; we do not record, store or listen to it.</p>
+<p><b>Rewarded ads (Android app only, optional).</b> The website has no ads. In the Android app you can choose to watch a short ad for a practice hint or a just-for-fun bonus life. Ads appear only when you tap that button. They are shown by Google AdMob, which may use your device&#39;s advertising ID and basic device information to show and measure ads (Google&#39;s policy: https://policies.google.com/technologies/ads). You can reset or delete the advertising ID in your phone&#39;s settings. We only receive a one-time code saying whether the ad finished, and we keep it for a few minutes.</p>
 <h2>How we use it</h2>
 <ul><li>To run the game: score rounds, keep your progress, run duels, daily challenges, leaderboards and quiz nights.</li>
 <li>To keep your progress safe across phones when you sign in with Google.</li>
@@ -91,7 +92,7 @@ const PRIVACY = shell("Privacy Policy", `
 <h2>What other players can see</h2>
 <p>Your display name, church or group, level and scores appear on leaderboards, in duels you take part in and in the Church League. Your quiz-night nickname and score appear on the host's screen and on that night's results page. Your email address is never shown to anyone.</p>
 <h2>Who we share it with</h2>
-<p>We do not sell or rent your data, and we do not share it with advertisers. It is processed only by the services that run the game: our server host (Render) and our database host (Supabase). Google handles the sign-in step if you choose Google. Data is sent over encrypted connections (HTTPS).</p>
+<p>We do not sell or rent your data, and we do not share it with advertisers. It is processed only by the services that run the game: our server host (Render) and our database host (Supabase). Google handles the sign-in step if you choose Google. In the Android app, Google AdMob shows a rewarded ad only when you choose to watch one. Data is sent over encrypted connections (HTTPS).</p>
 <h2>How long we keep it</h2>
 <p>We keep your profile and game history until you delete your account. Quiz-night rooms expire after 12 hours. Quiz-night results pages (nicknames and scores) are kept so the church can share them; email us to have one removed. Automatic backups are rotated and older copies are overwritten over time.</p>
 <h2>Deleting your account and data</h2>

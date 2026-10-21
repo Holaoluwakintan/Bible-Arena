@@ -14,6 +14,7 @@ import { compareDuel, sqlDuelRule } from "./duel-outcome";
 import { registerLive, flushLive } from "./live";
 import { shutdownHooks } from "../persist";
 import { registerLegal } from "./legal";
+import { registerAds } from "./ads";
 import { sentryBrowserTags } from "../_core/sentry-lite";
 import { registerChurches, registerVerify, teamNameFor, mergeChurchMembership, previewForOg } from "./churches";
 import { registerSocial, mergeSocial, scheduleKoPush } from "./social";
@@ -363,6 +364,8 @@ export function registerV3(app: Express): void {
   registerLive(app, () => BANK as any, WEB_DIR);
   shutdownHooks.push(flushLive);
   app.get("/api/v3/health", (_req, res) => send(res, 200, { ok: true, bank: BANK.length, storage: !!baPool() }));
+  // v3.8.3: opt-in rewarded ads relay (app only, practice rewards only)
+  registerAds(app, rateLimit({ windowMs: 60_000, max: 30, name: "v3-ads-post" }), rateLimit({ windowMs: 60_000, max: 240, name: "v3-ads-get" }));
 
   app.get("/api/v3/me", guard(async (_req, res, me) => {
     if (!me) return send(res, 200, { user: null, player: null });

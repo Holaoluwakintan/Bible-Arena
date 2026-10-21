@@ -1,7 +1,80 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.8.2";
+window.BA_V = "3.8.3";
+
+// ---------- v3.8.3: opt-in rewarded ads (Android app 1.4.0+ only; the website shows nothing new) ----------
+// The app tells the page it can play ads: its launch URL carries baads=1 (Chrome / TWA path, remembered for this tab only),
+// or its built-in view exposes window.BAAdsNative. Ads play ONLY when the player taps a "Watch a short ad" button,
+// and the reward is given ONLY on "reward". Rewards are practice-only, so XP, ranks, boards and duels are untouched.
+const BA_ADS = (() => {
+  const PKG = "com.holaoluwakintan.biblearena", SCHEME = "biblearena-ads";
+  try {
+    const qs = new URLSearchParams(location.search);
+    if (qs.get("baads") === "1") {
+      sessionStorage.setItem("ba_ads", "1");
+      qs.delete("baads");
+      const q = qs.toString();
+      history.replaceState(history.state, "", location.pathname + (q ? "?" + q : "") + location.hash);
+    }
+  } catch (e) {}
+  const bridge = () => !!(window.BAAdsNative && typeof window.BAAdsNative.showRewarded === "function");
+  const twa = () => { try { return sessionStorage.getItem("ba_ads") === "1"; } catch (e) { return false; } };
+  const available = () => bridge() || twa();
+  const pend = {};
+  let busy = false;
+  const nonce = () => { const a = new Uint8Array(16); crypto.getRandomValues(a); return Array.from(a, (b) => b.toString(16).padStart(2, "0")).join(""); };
+  const cleanReason = (r) => (String(r || "reward").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 24) || "reward");
+  function viaRelay(n, reason, done) {
+    // Chrome path: open the app's ad screen, then read how it ended from the server relay.
+    const t0 = Date.now(); let seen = false, visibleMs = 0, lastTick = Date.now(), timer = null, over = false;
+    const end = (r) => { if (over) return; over = true; clearTimeout(timer); document.removeEventListener("visibilitychange", onVis); done(r); };
+    const poll = async () => {
+      if (over) return;
+      const now = Date.now();
+      if (document.visibilityState === "visible") visibleMs += now - lastTick;
+      lastTick = now;
+      try {
+        const r = await fetch("/api/v3/ads/relay?n=" + n, { cache: "no-store" });
+        const j = r.ok ? await r.json() : null;
+        const s = j && j.s;
+        if (s === "reward" || s === "dismiss" || s === "unavailable") return end(s);
+        if (s === "open") seen = true;
+      } catch (e) {}
+      // No sign of the app's ad screen after ~15 s on screen: the app could not open it.
+      if (!seen && visibleMs > 15000) return end("unavailable");
+      if (Date.now() - t0 > 180000) return end(seen ? "dismiss" : "unavailable");
+      timer = setTimeout(poll, 1000);
+    };
+    const onVis = () => { if (document.visibilityState === "visible") { clearTimeout(timer); lastTick = Date.now(); poll(); } };
+    document.addEventListener("visibilitychange", onVis);
+    api._open("intent://reward?n=" + n + "&r=" + reason + "#Intent;scheme=" + SCHEME + ";package=" + PKG + ";end");
+    timer = setTimeout(poll, 1200);
+  }
+  /** showRewarded(reason, {onReward, onDismiss, onUnavailable}) -> Promise<"reward"|"dismiss"|"unavailable"> */
+  function showRewarded(reason, cb) {
+    cb = cb || {};
+    return new Promise((resolve) => {
+      const fire = (r) => {
+        busy = false; resolve(r);
+        try { (r === "reward" ? cb.onReward : r === "dismiss" ? cb.onDismiss : cb.onUnavailable || (() => {}))(); } catch (e) {}
+      };
+      if (!available() || busy) return fire("unavailable");
+      busy = true;
+      const n = nonce(), why = cleanReason(reason);
+      if (bridge()) {
+        pend[n] = fire;
+        setTimeout(() => { if (pend[n]) { delete pend[n]; fire("unavailable"); } }, 180000);
+        try { window.BAAdsNative.showRewarded(n, why); } catch (e) { delete pend[n]; fire("unavailable"); }
+        return;
+      }
+      viaRelay(n, why, fire);
+    });
+  }
+  const api = { available, showRewarded, _open(u) { location.href = u; }, _native(n, r) { const f = pend[n]; if (!f) return; delete pend[n]; f(r === "reward" || r === "dismiss" ? r : "unavailable"); } };
+  window.BAAds = api;
+  return api;
+})();
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
 const app = $("#app");
@@ -471,7 +544,7 @@ async function startMode(mode, tier) {
 function runRound(cfg) {
   const { ids, tier } = cfg;
   const items = ids.map((id) => BY[id]).filter(Boolean);
-  const answers = []; let idx = 0, score = 0, combo = 0, bestCombo = 0, correctN = 0;
+  const answers = []; let idx = 0, score = 0, combo = 0, bestCombo = 0, correctN = 0, bonusRight = 0;
   let timerH = null, tickH = null, rivalH = null, rival = null;
   const total = cfg.sudden ? null : items.length;
   const rid = ++ROUND_SEQ; const live = () => rid === ROUND_SEQ;
@@ -490,11 +563,11 @@ function runRound(cfg) {
   }
   function header() {
     const dots = cfg.sudden ? `<div class="grow small muted">Question ${idx + 1} · one life</div>` : `<div class="dots">${items.map((_, i) => `<i class="${i < idx ? (answers[i] && answers[i].correct ? "ok" : "bad") : i === idx ? "cur" : ""}"></i>`).join("")}</div>`;
-    return `<div class="playtop"><button class="iconbtn" id="quit" aria-label="Quit">✕</button>${dots}${combo >= 2 ? `<span class="combo">x${(1 + Math.min(combo, 10) * 0.1).toFixed(1)}</span>` : ""}<div class="score-pill" id="sc">${fmt(score)}</div></div>${cfg.practice ? `<div class="practicetag">Practice — not scored</div>` : ""}<div id="rival"></div>`;
+    return `<div class="playtop"><button class="iconbtn" id="quit" aria-label="Quit">✕</button>${dots}${combo >= 2 ? `<span class="combo">x${(1 + Math.min(combo, 10) * 0.1).toFixed(1)}</span>` : ""}<div class="score-pill" id="sc">${fmt(score)}</div></div>${cfg.practice ? `<div class="practicetag">Practice — not scored</div>` : ""}${cfg.bonusFrom ? `<div class="practicetag">❤️ Bonus life — just for fun, your score stays at ${fmt(score)}</div>` : ""}<div id="rival"></div>`;
   }
   function next() {
     clearTimeout(timerH); clearInterval(tickH);
-    if (idx >= items.length || (cfg.sudden && answers.length && !answers[answers.length - 1].correct)) return finish();
+    if (idx >= items.length || (cfg.sudden && answers.length && !answers[answers.length - 1].correct && answers.length !== cfg.bonusFrom)) return finish();
     show(items[idx]);
   }
   function show(it) {
@@ -502,7 +575,7 @@ function runRound(cfg) {
     const label = it.m === "gap" ? "Fill in the Gap" : it.m === "who" ? "Who Am I?" : it.m === "myth" ? "Bible or Myth?" : it.k === "who_said" ? "Who said it?" : it.k === "order" ? "Put in order" : (it.cat || "Arena");
     render(`${header()}${limit ? `<div class="timer" id="tm"><i></i></div>` : `<div style="height:20px"></div>`}
       <div class="qcard"><div class="qmeta"><span class="tiny">${esc(label)}</span><span class="pill-tier">${TIER[tier].name}</span></div><div id="qbody"></div></div>
-      <div id="ans"></div><div id="fb"></div>`);
+      <div id="ans"></div><div id="adhint"></div><div id="fb"></div>`);
     onLeave(() => { clearTimeout(timerH); clearInterval(tickH); });
     if (window.BAS) { BAS.setBusy(true); onLeave(() => BAS.setBusy(false)); }
     $("#quit").onclick = () => { if (confirm("Leave this round? Your progress in it will be lost.")) go("#/"); };
@@ -513,9 +586,11 @@ function runRound(cfg) {
       if (done || !live()) return; done = true; clearTimeout(timerH); clearInterval(tickH);
       const ms = Math.round(performance.now() - started);
       const c = check(it, tier, choice);
-      const pts = points(it, tier, c, ms, clues, combo);
-      if (c.correct) { combo++; correctN++; bestCombo = Math.max(bestCombo, combo); sfx.ok(); buzz(20); } else { combo = 0; sfx.bad(); buzz([40, 40, 60]); }
+      const bonus = !!cfg.bonusFrom; // v3.8.3: bonus-life answers are just for fun: never scored or sent
+      const pts = bonus ? 0 : points(it, tier, c, ms, clues, combo);
+      if (c.correct) { if (bonus) bonusRight++; else { combo++; correctN++; bestCombo = Math.max(bestCombo, combo); } sfx.ok(); buzz(20); } else { if (!bonus) combo = 0; sfx.bad(); buzz([40, 40, 60]); }
       score += pts;
+      const ah = $("#adhint"); if (ah) ah.innerHTML = "";
       answers.push({ id: it.id, choice, ms, clues, correct: c.correct, partial: c.partial, pts });
       const sc = $("#sc"); if (sc) sc.textContent = fmt(score);
       const tm = $("#tm"); if (tm) tm.style.visibility = "hidden";
@@ -529,7 +604,7 @@ function runRound(cfg) {
       timerH = setTimeout(() => finishQ(it.k === "gap" ? gapState() : null), limit * 1000);
       tickH = setInterval(() => { if (!live()) return clearInterval(tickH); const left = limit - (performance.now() - started) / 1000; if (left <= 5.5 && left > 0) { sfx.tick(); const t = $("#tm"); t && t.classList.add("low"); } }, 1000);
     }
-    let gapState = () => null;
+    let gapState = () => null, hintGap = null;
     const body = $("#qbody"), ans = $("#ans");
     if (it.k === "tf") {
       body.innerHTML = `<div class="qtext">${esc(it.q)}</div>`;
@@ -567,6 +642,7 @@ function runRound(cfg) {
         $("#chk").onclick = () => finishQ(gapState());
       };
       gapState = () => fill.map((f) => (f == null ? null : chips[f].w));
+      hintGap = () => { const e = fill.indexOf(null); if (e < 0) return false; const ci = chips.findIndex((c, k) => c.w === want[e] && fill.indexOf(k) < 0); if (ci < 0) return false; fill[e] = ci; draw(); return true; };
       draw();
       it._toks = toks; it._fill = fill; it._chips = chips;
     } else if (it.k === "order") {
@@ -583,6 +659,38 @@ function runRound(cfg) {
       ans.innerHTML = `<div class="opts">${opts.map(([o, i], n) => `<button class="opt" data-c="${i}"><span class="k">${"ABCD"[n]}</span>${esc(o)}</button>`).join("")}</div>`;
       $$(".opt", ans).forEach((b) => (b.onclick = () => finishQ(Number(b.dataset.c))));
     }
+    if (cfg.practice) adHint(it, () => done, () => hintGap);
+  }
+  // v3.8.3: Practice only (never scored): "Watch a short ad for a hint", shown only inside the Android app.
+  function adHint(it, isDone, getGap) {
+    const box = $("#adhint"); if (!box || !BA_ADS.available()) return;
+    const opts = it.k === "who" || it.k === "mc" || it.k === "who_said" || (!it.k && Array.isArray(it.o));
+    const kind = it.k === "gap" ? "gap" : it.k === "tf" ? (it.r ? "ref" : null) : it.k === "order" ? null : opts && it.o && it.o.length >= 3 ? "fifty" : null;
+    if (!kind) return;
+    const label = kind === "gap" ? "fill in one word" : kind === "ref" ? "see the Bible reference" : "remove two wrong answers";
+    box.innerHTML = `<button class="btn ghost block sm adbtn" id="adh">▶ Watch a short ad to ${label}</button>`;
+    $("#adh").onclick = async () => {
+      if (isDone() || !live()) return;
+      clearTimeout(timerH); clearInterval(tickH); // practice: the clock stops for a hint
+      const tm = $("#tm"); if (tm) tm.style.visibility = "hidden";
+      const b = $("#adh"); b.disabled = true; b.textContent = "Opening the ad…";
+      const r = await BA_ADS.showRewarded("hint");
+      if (isDone() || !live() || !$("#adhint")) return;
+      if (r !== "reward") {
+        if (r === "dismiss") { b.disabled = false; b.textContent = `▶ Watch a short ad to ${label}`; toast("The ad was closed early, so no hint this time."); }
+        else { box.innerHTML = ""; toast("No ad available right now. Keep going, you've got this!"); }
+        return;
+      }
+      box.innerHTML = "";
+      if (kind === "gap") { const g = getGap(); if (g && g()) toast("Hint: one word filled in ✓"); }
+      else if (kind === "ref") box.innerHTML = `<div class="card small" style="margin-top:8px">📖 Hint: look it up in <b>${esc(it.r)}</b> (KJV)</div>`;
+      else {
+        const wrong = $$("#ans .opt").filter((x) => String(x.dataset.c) !== String(it.a) && !x.disabled);
+        const drop = shuffled(wrong, String(Math.random())).slice(0, Math.max(1, Math.min(2, wrong.length - 1)));
+        drop.forEach((x) => { x.disabled = true; x.classList.add("dim"); x.style.visibility = "hidden"; });
+        toast("Hint: two wrong answers removed ✓");
+      }
+    };
   }
   function reveal(it, choice, c) {
     if (it.k === "gap") {
@@ -606,21 +714,35 @@ function runRound(cfg) {
       else if (it.k === "who" || it.k === "mc" || it.k === "who_said") ans = `Answer: <b>${esc(it.o[it.a])}</b>`;
     }
     const last = idx + 1 >= items.length || (cfg.sudden && !c.correct);
+    // v3.8.3: Sudden Death, first miss, Android app only: one opt-in bonus life (answers after it are never scored or sent).
+    const offerBonus = cfg.sudden && !c.correct && !cfg.bonusFrom && idx + 1 < items.length && BA_ADS.available();
     $("#fb").innerHTML = `<div class="feedback ${verdict[0]}">
       <div class="row between"><span class="verdict">${verdict[1]}</span><span class="gold serif" style="font-weight:800">+${fmt(pts)}</span></div>
       ${ans ? `<div style="margin-top:6px">${ans}</div>` : ""}
       ${it.k === "gap" && !c.correct ? `<div class="vod" style="margin-top:8px;font-size:15.5px">“${esc(it.text)}”</div>` : ""}
       ${it.x ? `<div class="small muted" style="margin-top:6px">${esc(it.x)}</div>` : ""}
       ${it.r ? `<div class="ref">📖 ${esc(it.r)} <span class="dim small" style="font-weight:600">KJV</span></div>` : ""}
-      </div><button class="btn primary block" id="nx" style="margin-top:12px">${last ? "See results" : "Next ›"}</button>`;
+      </div>${offerBonus ? `<button class="btn primary block adbtn" id="adlife" style="margin-top:12px">▶ Watch a short ad for a bonus life</button><div class="small muted center" style="margin-top:6px">Just for fun: your score stays at ${fmt(score)}.</div>` : ""}<button class="btn ${offerBonus ? "ghost" : "primary"} block" id="nx" style="margin-top:12px">${last ? "See results" : "Next ›"}</button>`;
     $("#nx").onclick = () => { idx++; sfx.tap(); next(); };
+    if (offerBonus) $("#adlife").onclick = async () => {
+      const b = $("#adlife"), nx = $("#nx"); b.disabled = true; nx.disabled = true; b.textContent = "Opening the ad…";
+      const r = await BA_ADS.showRewarded("bonus_life");
+      if (!live() || !$("#adlife")) return;
+      nx.disabled = false;
+      if (r === "reward") { cfg.bonusFrom = answers.length; toast("Bonus life ❤️ Keep going!"); idx++; next(); return; }
+      if (r === "dismiss") { b.disabled = false; b.textContent = "▶ Watch a short ad for a bonus life"; toast("The ad was closed early, so no bonus life this time."); }
+      else { b.remove(); toast("No ad available right now."); }
+    };
     setTimeout(() => { const n = $("#nx"); n && n.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, 120);
   }
   function finish() {
     clearInterval(rivalH);
     if (!cfg.practice) markSeen(answers.map((a) => a.id), tier);
     if (cfg.practice) return practiceResults(cfg, answers, { score, correct: correctN, bestCombo, total: answers.length });
-    results(cfg, answers, { score, correct: correctN, bestCombo, total: answers.length });
+    // v3.8.3: only the answers up to the Sudden Death miss are scored; a bonus life is just for fun.
+    const scored = cfg.bonusFrom ? answers.slice(0, cfg.bonusFrom) : answers;
+    if (cfg.bonusFrom) cfg.bonusNote = `Bonus life: ${bonusRight} more right after your miss, just for fun (not scored).`;
+    results(cfg, scored, { score, correct: correctN, bestCombo, total: scored.length });
   }
   next();
 }
@@ -649,6 +771,7 @@ async function results(cfg, answers, local) {
     <div class="stats3"><div class="stat"><b>${correct}/${total}</b><span>Correct</span></div><div class="stat"><b>x${local.bestCombo}</b><span>Best streak</span></div><div class="stat"><b class="gold">+${fmt(r ? r.xp : 0)}</b><span>XP</span></div></div>
     ${r && r.player ? `<div class="card"><div class="row between"><b>${esc(r.player.rank.name)} ${r.player.rank.division}</b><span class="small muted">${fmt(r.player.xp)} XP</span></div><div class="xpbar" style="margin-top:8px"><i id="xpb" style="width:${Math.round((r.rankBefore ? r.rankBefore.progress : 0) * 100)}%"></i></div><div class="small dim" style="margin-top:6px">${r.player.rank.next ? `${fmt(r.player.rank.nextXp - r.player.xp)} XP to ${r.player.rank.next}` : "You've reached Apostle"} · 🔥 ${r.player.streak}-day streak</div></div>` : ""}
     ${r && !cfg.duel ? `<div id="reschurch"></div>` : ""}
+    ${cfg.bonusNote ? `<div class="card small">❤️ ${esc(cfg.bonusNote)}</div>` : ""}
     ${err && !r ? `<div class="card small">⚠️ Couldn't save this round (no connection). Your score still counts here.</div>` : ""}
     ${r && r.newAchievements && r.newAchievements.length ? r.newAchievements.map((a) => ACH[a] ? `<div class="badge"><div class="bi">${ACH[a][0]}</div><div><b>Achievement: ${ACH[a][1]}</b><div class="small muted">${ACH[a][2]}</div></div></div>` : "").join("") : ""}
     ${cfg.mode !== "daily" && cfg.mode !== "sudden" ? `<button class="card gold row" id="dset" style="text-align:left;gap:12px"><div style="font-size:28px">⚔️</div><div class="grow"><b>Challenge someone with this exact set</b><div class="small muted">They play the same ${total} questions and try to beat ${fmt(score)}</div></div><div class="gold">›</div></button>` : ""}

@@ -231,3 +231,7 @@ a.badge,a.lb{cursor:pointer}
 .olp i{width:8px;height:8px;border-radius:50%;background:#3DDC97;flex:none}
 .olp.busy i{background:#F5B942}.olp em{font-style:normal;font-weight:600;color:#aab3c8;font-size:12px}
 .olp.more{color:#aab3c8}
+
+/* v3.8.3 opt-in rewarded ads (Android app only) */
+#adhint .adbtn{margin-top:10px;border-style:dashed}
+.adbtn[disabled]{opacity:.6}
