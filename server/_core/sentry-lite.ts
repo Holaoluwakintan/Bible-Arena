@@ -18,7 +18,7 @@ function parseDsn(raw?: string): Dsn | null {
 }
 
 const DSN = parseDsn(process.env.SENTRY_DSN);
-const RELEASE = process.env.SENTRY_RELEASE || "bible-arena@3.8.1";
+const RELEASE = process.env.SENTRY_RELEASE || "bible-arena@3.8.2";
 const ENVIRONMENT = process.env.SENTRY_ENVIRONMENT || (process.env.NODE_ENV === "production" ? "production" : "development");
 let sentThisMinute = 0;
 setInterval(() => { sentThisMinute = 0; }, 60_000).unref();

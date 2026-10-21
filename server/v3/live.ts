@@ -564,13 +564,17 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
   });
 
   // ---- v3.8.0 voice chat: ICE servers + signaling relay (knockout rooms only) ----
-  // TURN is optional and comes only from env (BA_TURN_URLS comma-separated, BA_TURN_USER, BA_TURN_CRED); STUN always.
+  // TURN is optional and comes only from env, never from git: BA_TURN_URLS (comma-separated) + BA_TURN_USER + BA_TURN_CRED,
+  // and a second relay BA_TURN2_URLS + BA_TURN2_USER + BA_TURN2_CRED (v3.8.2). STUN always.
   app.get("/lv/ice", (_req, res) => {
     const ice: any[] = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
-    const urls = String(process.env.BA_TURN_URLS || "").split(",").map((x) => x.trim()).filter((x) => /^turns?:/.test(x));
-    if (urls.length) ice.push({ urls, username: process.env.BA_TURN_USER || "", credential: process.env.BA_TURN_CRED || "" });
+    let turn = 0;
+    for (const k of ["BA_TURN", "BA_TURN2"]) {
+      const urls = String(process.env[k + "_URLS"] || "").split(",").map((x) => x.trim()).filter((x) => /^turns?:/.test(x));
+      if (urls.length) { ice.push({ urls, username: process.env[k + "_USER"] || "", credential: process.env[k + "_CRED"] || "" }); turn++; }
+    }
     res.setHeader("Cache-Control", "no-store");
-    res.json({ iceServers: ice, max: VOICE_MAX, turn: urls.length > 0 });
+    res.json({ iceServers: ice, max: VOICE_MAX, turn: turn > 0 });
   });
   const vPlayer = (room: E.LRoom, token: string) => Object.values(room.players).find((x) => x.token === token && !x.kicked);
   const vDrain = (room: E.LRoom, id: string) => { const k = room.code + ":" + id; const q = vbox.get(k) || []; vbox.delete(k); return q; };

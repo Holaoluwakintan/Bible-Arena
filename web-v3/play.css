@@ -139,3 +139,6 @@ body.vd-on #toast{bottom:calc(96px + env(safe-area-inset-bottom))}
 #vdock .vpill{height:44px;padding:0 14px;border-radius:14px;background:#1B2650;font-size:14px;font-weight:600;white-space:nowrap}
 #vdock .vpill b{color:var(--gold)}
 #vdock .vpill.tap{background:var(--gold);color:#1A1203;font-weight:800}
+/* v3.8.2: phones block sound until a tap; this banner sits right above the dock and cannot be missed */
+#vdock .vtapall{position:absolute;left:0;right:0;bottom:calc(100% + 8px);height:64px;border-radius:18px;background:var(--gold);color:#1A1203;font-size:18px;font-weight:800;box-shadow:0 8px 28px rgba(0,0,0,.5),0 0 0 4px rgba(255,200,60,.35);animation:vtapPulse 1.2s ease-in-out infinite}
+@keyframes vtapPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}

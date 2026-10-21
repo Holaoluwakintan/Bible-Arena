@@ -183,10 +183,20 @@ function closePeer(id) {
 }
 function play(p) {
   if (!p.audio || !p.audio.srcObject) return;
+  p.audio.muted = mutedByMe.has(p.id);
   const r = p.audio.play();
-  if (r && r.catch) r.catch(() => { needTap = true; render(); });
+  if (r && r.then) r.then(() => { if (needTap && [...peers.values()].every((q) => !q.audio || !q.audio.srcObject || !q.audio.paused)) hideTap(); })
+    .catch(() => { if (!needTap) { needTap = true; render(); } });
 }
-function unlockAudio() { if (!needTap) return; needTap = false; peers.forEach(play); render(); }
+// v3.8.2: ANY tap or key anywhere on the page (the mic button, an answer, the Tap to hear banner) unlocks remote audio for everyone.
+// Phones block sound until the player touches the page; this retries every connected player's audio on each touch.
+function unlockAudio() {
+  try { if (actx && actx.state === "suspended") actx.resume(); } catch (e) {}
+  peers.forEach((p) => { if (p.audio && p.audio.srcObject && p.audio.paused) play(p); });
+  if (needTap && ![...peers.values()].some((p) => p.audio && p.audio.srcObject && p.audio.paused)) hideTap();
+}
+// Remove only the banner node: redrawing the whole dock between a finger's pointerdown and its click would swallow that tap (e.g. on the mic).
+function hideTap() { needTap = false; try { const b = document.querySelector("#vdock .vtapall"); if (b) b.remove(); } catch (e) {} }
 
 /* ---------- mic ---------- */
 async function micToggle() {
@@ -244,6 +254,7 @@ function levels() {
     for (let i = 0; i < abuf.length; i++) { const v = (abuf[i] - 128) / 128; s += v * v; }
     myLevel = Math.sqrt(s / abuf.length);
   } else myLevel = 0;
+  if (!needTap) peers.forEach((p) => { if (p.audio && p.audio.srcObject && p.audio.paused && p.state === "on") play(p); });
   peers.forEach((p) => {
     p.level = 0;
     try { const r = p.pc && p.pc.getReceivers()[0]; const ss = r && r.getSynchronizationSources ? r.getSynchronizationSources() : []; if (ss[0] && Date.now() - ss[0].timestamp < 600) p.level = ss[0].audioLevel || 0; } catch (e) {}
@@ -309,7 +320,7 @@ function render() {
       <div class="vchips">${full && !inVoice ? `<span class="vmsg">Voice is full (${max}). You can still play.</span>`
         : !inVoice ? `<span class="vmsg">${joining ? "Connecting voice…" : "Voice not connected"}</span>`
         : (meX ? chip(meX, true) : "") + (others.length ? others.map((x) => chip(x, false)).join("") : `<span class="vmsg">No one else in voice yet</span>`)}</div>
-      ${needTap ? `<button class="vpill tap" data-v="tap">🔊 Tap to hear</button>` : ""}
+      ${needTap ? `<button class="vtapall" data-v="tap">🔊 Tap here to hear the others</button>` : ""}
       <button class="vx" data-v="off" aria-label="Turn voice chat off">🔊<span>Voice</span></button>`;
   }
   if (h !== lastHTML) { d.innerHTML = h; lastHTML = h; levels(); }
@@ -382,5 +393,6 @@ V.stats = async () => {
   return out;
 };
 window.addEventListener("pagehide", () => V.detach(true));
-document.addEventListener("click", unlockAudio, true);
+["pointerdown", "touchend", "click", "keydown"].forEach((ev) => document.addEventListener(ev, unlockAudio, { capture: true, passive: true }));
+document.addEventListener("visibilitychange", () => { if (!document.hidden) peers.forEach((p) => { if (p.audio && p.audio.srcObject && p.audio.paused) play(p); }); });
 })();
