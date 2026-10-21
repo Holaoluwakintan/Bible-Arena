@@ -52,8 +52,8 @@
 #bl .bl-tp{text-align:center;color:#9AA6C2;font-size:13px;line-height:1.45;min-height:38px;transition:opacity .3s}
 @keyframes blp{0%,100%{opacity:.55;transform:scale(.94)}50%{opacity:1;transform:scale(1.06)}}
 @media (prefers-reduced-motion:reduce){#bl .bl-mk{animation:none}#bl .bl-bar i{transition:none}}</style>
-<link rel="stylesheet" id="bacss" href="/v3/app.css?v=3.8.4" media="print" onload="this.media='all'">
-<noscript><link rel="stylesheet" href="/v3/app.css?v=3.8.4"></noscript>
+<link rel="stylesheet" id="bacss" href="/v3/app.css?v=3.8.5" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="/v3/app.css?v=3.8.5"></noscript>
 </head>
 <body>
 <div id="sky" aria-hidden="true"></div>
@@ -100,7 +100,7 @@ function tick(){if(done)return;var s=(Date.now()-t0)/1000;$("blb").style.width=(
  $("bls").textContent=s<5?"Getting the arena ready…":s<15?"Almost there…":"The arena is waking up. This can take up to a minute, keep playing!";}
 var ti2=setInterval(tick,400);tick();
 function cssOk(){var l=document.getElementById("bacss");return !l||(l.media!=="print"&&!!l.sheet)}
-function appOk(){var a=document.getElementById("app");return a&&!a.querySelector(".boot")&&a.children.length>0}
+function appOk(){var a=document.getElementById("app");if(!a||a.querySelector(".boot")||!a.children.length)return false;var h=document.getElementById("h");return !(h&&!h.children.length&&Date.now()-t0<90000)}
 function finish(){if(done)return;done=true;clearInterval(tt);clearInterval(ti2);$("blb").style.width="100%";el.className=(el.className||"")+" bl-out";
  setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);document.documentElement.style.overflow=""},400);try{window.BA_LOADER_MS=Date.now()-t0}catch(e){}}
 function check(){if(done)return;if(!appOk())return;
@@ -109,11 +109,11 @@ function check(){if(done)return;if(!appOk())return;
  var wait=lastTap?1600-(Date.now()-lastTap):0;if(wait>0){setTimeout(check,wait+20);return}
  finish()}
 setInterval(check,150);
-try{new MutationObserver(check).observe(document.getElementById("app"),{childList:true})}catch(e){}
+try{new MutationObserver(check).observe(document.getElementById("app"),{childList:true,subtree:true})}catch(e){}
 window.BALoader={finish:finish};
 })();</script>
-<script src="/v3/social.js?v=3.8.4" defer></script>
-<script src="/v3/app.js?v=3.8.4" defer></script>
+<script src="/v3/social.js?v=3.8.5" defer></script>
+<script src="/v3/app.js?v=3.8.5" defer></script>
 <script>if("serviceWorker"in navigator)addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").catch(function(){})});</script>
 </body>
 </html>
