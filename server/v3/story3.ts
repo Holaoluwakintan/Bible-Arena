@@ -14,7 +14,27 @@ const view = (e: St3Energy) => ({ u: e.u, a: e.a, max: ST3_ENERGY + e.a, left: M
 /** Applies one story round to a stats object (mutates it). fast = the player answered everything with time to spare (only matters for 3 stars). */
 export function story3Apply(stats: any, id: string, count: number, correct: number, fast: boolean, day: string): St3Result | null {
   const m = ST3_ID.exec(id); if (!m) return null;
-  const boss = m[3] === "b"; const need = boss ? 15 : 10, pass = boss ? 13 : 7;
+  return applyLevel(stats, id, m[3] === "b", count, correct, fast, day);
+}
+// v3.11.1 Endless mode: level ids "e1", "e2"... (every 10th is a boss). Opens after the Revelation boss; must be played in order.
+// Same energy and stars as story; stats.endless = highest endless level passed (the "highest endless level" board).
+export const EN_ID = /^e(\d{1,5})$/;
+export function endlessApply(stats: any, id: string, count: number, correct: number, fast: boolean, day: string): (St3Result & { level: number; best: number; locked?: boolean }) | null {
+  const m = EN_ID.exec(id); if (!m) return null;
+  const n = Number(m[1]); if (n < 1) return null;
+  const best = Math.max(0, Number(stats.endless) || 0);
+  const open = (Number(stats.st3?.["rev.b"]) || 0) >= 1 && n <= best + 1;
+  if (!open) { const e = energyOf(stats, day); return { stars: 0, passed: false, energyOut: false, counted: false, energy: view(e), level: n, best, locked: true }; }
+  const r = applyLevel(stats, id, n % 10 === 0, count, correct, fast, day);
+  let nb = best;
+  if (r.passed) {
+    nb = Math.max(best, n); stats.endless = nb;
+    const st = stats.st3 || {}; for (const k of Object.keys(st)) { const x = EN_ID.exec(k); if (x && Number(x[1]) < nb - 300) delete st[k]; } // keep the last 300 endless levels' stars
+  }
+  return { ...r, level: n, best: nb };
+}
+function applyLevel(stats: any, id: string, boss: boolean, count: number, correct: number, fast: boolean, day: string): St3Result {
+  const need = boss ? 15 : 10, pass = boss ? 13 : 7;
   const st: Record<string, number> = { ...(stats.st3 || {}) };
   const e = energyOf(stats, day);
   if (count !== need) return { stars: 0, passed: false, energyOut: false, counted: false, energy: view(e) };

@@ -261,6 +261,7 @@ async function route() {
   if (a === "c" && b) return joinByCode(b.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8));
   if (a === "report") return reportCard();
   if (a === "story") return storyMap();
+  if (a === "endless") return endlessScreen();
   if (a === "me") { if (q.get("signedin")) { toast("Signed in with Google ✓"); history.replaceState(null, "", "#/me"); } return profile(); }
   return home();
 }
@@ -609,6 +610,10 @@ async function startMode(mode, tier) {
     const q = parseHash().q, id = String(q.get("l") || "");
     if (!/^[0-9a-z]{3}\.(\d{1,2}|b)$/.test(id)) return go("#/story");
     return stStart(id, q.get("m") === "1");
+  }
+  if (mode === "endless") {
+    if (!ME.player) { try { await ensureSession(); } catch (e) {} }
+    return enStart(Number(parseHash().q.get("l")) || 0);
   }
   if (mode === "book") {
     // v3.10: practise one book (from the weekly report card's "Books to work on")
@@ -1029,7 +1034,7 @@ function storyCardHTML() {
   return `<a class="card way storycard" href="#/story" style="text-decoration:none;color:inherit">
     <div class="row" style="gap:12px"><div class="wayico">${s.rank[1]}</div><div class="grow"><b class="wayt">Story mode · ${esc(s.rank[0])}</b><div class="small muted">The whole Bible, book by book: ${s.total} levels. ${s.done}/${s.total} done · ${s.stars} ★</div></div><div class="energy small">⚡ ${e.left}/${e.max}</div></div>
     <div class="xpbar" style="margin-top:12px"><i style="width:${Math.max(2, s.pct)}%"></i></div>
-    <div class="small muted" style="margin-top:8px">${c ? `Next: <b class="gold">${esc(c.L.s.title)} ${c.L.boss ? "· Boss" : c.L.i}</b> · ${esc(stLabel(c.L))}` : s.gate ? `🔒 ${esc(s.gate.g.label)} needs 2★ on ${s.gate.g.need}% of levels (you have ${s.gate.g.have}%)` : "Journey complete! Mastery is open 🏆"}</div></a>`;
+    <div class="small muted" style="margin-top:8px">${c ? `Next: <b class="gold">${esc(c.L.s.title)} ${c.L.boss ? "· Boss" : c.L.i}</b> · ${esc(stLabel(c.L))}` : s.gate ? `🔒 ${esc(s.gate.g.label)} needs 2★ on ${s.gate.g.need}% of levels (you have ${s.gate.g.have}%)` : `Journey complete! 🏆 Mastery and ♾️ Endless (best: level ${enBest()}) are open`}</div></a>`;
 }
 function stTimeToMidnight() { const now = Date.now() + 3600e3; const m = 86400e3 - (now % 86400e3); const h = Math.floor(m / 3600e3), mi = Math.floor((m % 3600e3) / 60e3); return h ? `${h}h ${mi}m` : `${mi}m`; }
 function stEnergyHTML(e) {
@@ -1059,7 +1064,7 @@ async function storyMap() {
     <div class="hero center strank"><div style="font-size:38px">${s.rank[1]}</div><h2 style="margin:4px 0;font-family:var(--serif)">${esc(m ? "Mastery" : s.rank[0])}</h2>
       <div class="small muted">${s.done} of ${s.total} levels${m ? " at Master level" : ""} · ${s.two} with 2★ or more</div><div class="xpbar" style="margin-top:10px"><i style="width:${Math.max(2, s.pct)}%"></i></div>
       <div class="tiny muted" style="margin-top:6px">${m ? "The whole journey at the hardest level, shorter clock, no power-ups." : "Seeker → Explorer → Pathfinder → Student → Scholar → Sage → Expert → Master"}</div></div>
-    ${s.masteryOpen ? `<div class="row" style="gap:8px;margin:10px 0"><a class="chip ${m ? "" : "on"}" href="#/story">Journey</a><a class="chip ${m ? "on" : ""}" href="#/story?m=1">🏆 Mastery</a></div>` : ""}
+    ${s.masteryOpen ? `<div class="row" style="gap:8px;margin:10px 0"><a class="chip ${m ? "" : "on"}" href="#/story">Journey</a><a class="chip ${m ? "on" : ""}" href="#/story?m=1">🏆 Mastery</a><a class="chip" href="#/endless">♾️ Endless</a></div>` : ""}
     ${stEnergyHTML(e)}`;
   let sec = "";
   ST_STAGES.forEach((st) => {
@@ -1131,6 +1136,78 @@ function storyResultHTML(cfg, correct, total) {
     ${nx && nx.L.s.k !== L.s.k && pass ? `<div class="small gold" style="margin-top:6px">🎉 ${esc(L.s.title)} complete! Next: ${esc(nx.L.s.title)}</div>` : ""}
     <div class="small muted" style="margin-top:6px">⚡ ${e.left}/${e.max} new-level tries left today${retryFree ? " · this level is free to replay" : ""}</div>
     <div class="row" style="gap:8px;margin-top:12px">${nextOk ? `<button class="btn primary grow" data-go="#/play/story?l=${nx.L.id}${m ? "&m=1" : ""}">▶ Next level</button>` : `<button class="btn primary grow" data-go="#/play/story?l=${L.id}${m ? "&m=1" : ""}">🔁 Try again</button>`}<button class="btn ghost grow" data-go="#/story?${m ? "m=1&" : ""}s=${L.s.k}">🗺️ Map</button></div></div>`;
+}
+
+
+// ---------- v3.11.1 Endless mode (Michael, Oct 24): opens after the Revelation boss; levels 1, 2, 3... forever ----------
+// Every level is built from the checked question bank only (new top-up questions flow in by themselves), seeded by its level number, preferring
+// questions this player hasn't seen in Endless yet and bringing back recent misses. The clock tightens as the level climbs; every 10th level is a
+// boss (15 questions, 13 to pass). Same energy and stars as Story. Board: highest Endless level passed (players.stats.endless).
+const enBoss = (n) => n % 10 === 0;
+const enTier = (n) => (n < 30 ? "s" : "t");
+const enScale = (n) => Math.round(Math.max(0.45, 0.75 - 0.004 * n) * (enBoss(n) ? 0.85 : 1) * 100) / 100;
+function enBest() { return Math.max(Number(S.enBest) || 0, Number(ME.player && ME.player.stats && ME.player.stats.endless) || 0); }
+function enOpen() { return (Number(stBest()["rev.b"]) || 0) >= 1; }
+function enQuestions(n) {
+  const N = enBoss(n) ? ST_BOSS_N : ST_N, tier = enTier(n), seed = "endless:" + n;
+  const all = shuffled(BANK.items.filter((i) => i.k !== "order"), seed);
+  const seen = new Set(Array.isArray(S.enSeen) ? S.enSeen : []);
+  const pick = [], has = new Set();
+  const take = (arr, k) => { for (const it of arr) { if (k <= 0 || pick.length >= N) break; if (it && !has.has(it.id)) { has.add(it.id); pick.push(it.id); k--; } } };
+  take(stMisses().map((id) => BY[id]).filter((it) => it && it.k !== "order"), 2);
+  take(prefTier(all.filter((i) => !seen.has(i.id)), tier), N - pick.length);
+  if (pick.length < N) { S.enSeen = []; take(prefTier(all, tier), N - pick.length); }
+  return shuffled(pick, seed + "o");
+}
+function enStart(n) {
+  if (!enOpen()) { toast("Endless opens after the Revelation boss in Story mode."); return go("#/story"); }
+  const best = enBest();
+  if (!(n >= 1) || n > best + 1) { toast(`Pass level ${best + 1} first.`); return go("#/endless"); }
+  const passed = (Number(stBest()["e" + n]) || 0) >= 1;
+  if (!passed) {
+    const e = stEnergy();
+    if (e.left <= 0) { toast(`Out of ⚡ for today. Refills in ${stTimeToMidnight()}. Replays of passed levels are free.`, 4000); return go("#/endless"); }
+    S.st3e = { d: e.d, u: e.u + 1, a: e.a }; save();
+  }
+  const tier = enTier(n), scale = enScale(n), ids = enQuestions(n);
+  const limitSum = ids.reduce((a, id) => a + (Math.round((limitOf(BY[id], tier) || 40) * scale) || 40), 0);
+  return runRound({ ids, tier, mode: "endless", title: `Endless · Level ${n}${enBoss(n) ? " · Boss" : ""}`, story: { id: "e" + n, endless: n, L: { boss: enBoss(n) }, limitSum, replay: passed }, timeScale: scale });
+}
+function enAfterRound(cfg, answers) {
+  const st = cfg.story; const n = st.endless;
+  if (st.stars && !st.out) S.enBest = Math.max(Number(S.enBest) || 0, n);
+  S.enSeen = (Array.isArray(S.enSeen) ? S.enSeen : []).concat(answers.map((a) => a.id)).slice(-1500);
+  save();
+}
+function enResultHTML(cfg, correct, total) {
+  const st = cfg.story, n = st.endless, need = enBoss(n) ? ST_BOSS_PASS : ST_PASS, e = stEnergy(), pass = st.stars > 0;
+  const msg = st.out ? `Out of ⚡ for today, so this try didn't count. Refills in ${stTimeToMidnight()}.` : pass ? `${"★".repeat(st.stars)}${"☆".repeat(3 - st.stars)} Level ${n} passed!` : `${correct}/${total}. You need ${need} to pass.`;
+  return `<div class="card gold center storyres">
+    <div class="tiny gold">Endless · Level ${n}${enBoss(n) ? " · Boss" : ""}</div><div style="font-size:34px;margin:4px 0">${enBoss(n) ? "⚔️" : "♾️"}</div><div><b>${msg}</b></div>
+    <div class="small muted" style="margin-top:6px">Best: level ${enBest()} · ⚡ ${e.left}/${e.max} new-level tries left today</div>
+    <div class="row" style="gap:8px;margin-top:12px">${pass ? `<button class="btn primary grow" data-go="#/play/endless?l=${n + 1}">▶ Level ${n + 1}</button>` : `<button class="btn primary grow" data-go="#/play/endless?l=${n}">🔁 Try again</button>`}<button class="btn ghost grow" data-go="#/endless">♾️ Endless</button></div></div>`;
+}
+async function endlessScreen() {
+  render(`<div id="en"></div>${tabbar("home")}`);
+  await Promise.all([loadBank(), ME.player ? null : ensureSession()]);
+  const el = $("#en"); if (!el) return;
+  if (!enOpen()) { el.innerHTML = `<div class="row between" style="margin-bottom:10px"><a class="chip" href="#/story">‹ Story</a><b>Endless</b><span></span></div><div class="hero center"><div style="font-size:40px">♾️</div><h2>Endless mode</h2><p class="muted small">Opens after you beat the Revelation boss in Story mode. Then the levels never stop.</p><a class="btn primary block" href="#/story">🗺️ Go to Story mode</a></div>`; return; }
+  const best = enBest(), next = best + 1, e = stEnergy(), b = stBest();
+  const recent = []; for (let n = Math.max(1, best - 4); n <= best; n++) recent.push(`<span class="chip">${n}: ${"★".repeat(Number(b["e" + n]) || 0) || "✓"}</span>`);
+  el.innerHTML = `<div class="row between" style="margin-bottom:10px"><a class="chip" href="#/story">‹ Story</a><b>Endless</b><span class="small gold">Best ${best}</span></div>
+    <div class="row" style="gap:8px;margin:0 0 10px"><a class="chip" href="#/story">Journey</a><a class="chip" href="#/story?m=1">🏆 Mastery</a><a class="chip on" href="#/endless">♾️ Endless</a></div>
+    <div class="hero center"><div style="font-size:40px">${enBoss(next) ? "⚔️" : "♾️"}</div><h2 style="font-family:var(--serif);margin:4px 0">Level ${next}${enBoss(next) ? " · Boss" : ""}</h2>
+      <p class="small muted" style="margin:0 0 12px">${enBoss(next) ? "15 questions, 13 to pass, shorter clock." : "10 questions, 7 to pass."} The clock gets tighter every level; a boss every 10th.</p>
+      <button class="btn primary block" data-go="#/play/endless?l=${next}">▶ Play level ${next}</button>
+      ${recent.length ? `<div class="row" style="gap:6px;flex-wrap:wrap;justify-content:center;margin-top:10px">${recent.join("")}</div>` : ""}</div>
+    ${stEnergyHTML(e)}
+    <div class="card" style="margin-top:12px"><b>♾️ Highest Endless level</b><div id="enlb" class="small muted" style="margin-top:8px">Loading…</div></div>`;
+  $$("[data-go]", el).forEach((x) => (x.onclick = () => { sfx.tap(); go(x.dataset.go); }));
+  const ad = $("#stad"); if (ad) ad.onclick = () => stWatchAd(() => endlessScreen());
+  try {
+    const d = await api("/api/v3/leaderboard?scope=endless"); const box = $("#enlb"); if (!box) return;
+    box.innerHTML = d.rows && d.rows.length ? d.rows.slice(0, 20).map((r, i) => `<div class="row between lbrow ${r.isMe ? "me" : ""}" style="padding:6px 0"><span>${i + 1}. ${esc(r.name)}${r.church ? ` <span class="muted">· ${esc(r.church)}</span>` : ""}</span><b class="gold">Level ${r.score}</b></div>`).join("") : "Nobody on the board yet. Be the first!";
+  } catch (err) { const box = $("#enlb"); if (box) box.textContent = "Couldn't load the board."; }
 }
 
 // ---------- v3.10 voice answers (Web Speech API) ----------
@@ -1239,7 +1316,7 @@ async function results(cfg, answers, local) {
   if (cfg.duel && r && r.duel) return duelResult(r.duel, r, cfg);
   const score = r ? r.score : local.score, correct = r ? r.correct : local.correct, total = r ? r.total : local.total;
   const perfect = total > 0 && correct === total;
-  if (cfg.story) stAfterRound(cfg, r, answers, correct, total);
+  if (cfg.story) { stAfterRound(cfg, r, answers, correct, total); if (cfg.story.endless) enAfterRound(cfg, answers); }
   render(`
   <div class="col" style="gap:14px">
     <div class="center" style="padding-top:10px">
@@ -1248,7 +1325,7 @@ async function results(cfg, answers, local) {
       <div class="muted">${perfect ? "A perfect round. Rightly dividing the word of truth! 👑" : correct / Math.max(1, total) >= 0.7 ? "Strong round. The Word is in you." : correct / Math.max(1, total) >= 0.4 ? "Good effort. Every verse you missed is now one you know." : "Tough set! Read the references and come back stronger."}</div>
     </div>
     <div id="pushask"></div>
-    ${cfg.story ? storyResultHTML(cfg, correct, total) : ""}
+    ${cfg.story ? (cfg.story.endless ? enResultHTML(cfg, correct, total) : storyResultHTML(cfg, correct, total)) : ""}
     <div class="stats3"><div class="stat"><b>${correct}/${total}</b><span>Correct</span></div><div class="stat"><b>x${local.bestCombo}</b><span>Best streak</span></div><div class="stat"><b class="gold">+${fmt(r ? r.xp : 0)}</b><span>XP</span></div></div>
     ${r && r.player ? `<div class="card"><div class="row between"><b>${esc(r.player.rank.name)} ${r.player.rank.division}</b><span class="small muted">${fmt(r.player.xp)} XP</span></div><div class="xpbar" style="margin-top:8px"><i id="xpb" style="width:${Math.round((r.rankBefore ? r.rankBefore.progress : 0) * 100)}%"></i></div><div class="small dim" style="margin-top:6px">${r.player.rank.next ? `${fmt(r.player.rank.nextXp - r.player.xp)} XP to ${r.player.rank.next}` : "You've reached Apostle"} · 🔥 ${r.player.streak}-day streak</div></div>` : ""}
     ${r && !cfg.duel ? `<div id="reschurch"></div>` : ""}

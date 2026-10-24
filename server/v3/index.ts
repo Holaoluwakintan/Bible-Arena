@@ -23,7 +23,7 @@ import { registerSocial, mergeSocial, scheduleKoPush, setReminderDeps, reminderT
 import { publicRooms, liveWinner, publicKo, onKoOpen } from "./live";
 import { badName } from "./names";
 import { initReportStore, registerReport, tallyBooks } from "./report";
-import { ST3_ID, story3Apply, story3Ad } from "./story3";
+import { ST3_ID, EN_ID, story3Apply, story3Ad, endlessApply } from "./story3";
 
 type Tier = "b" | "s" | "t";
 type Mode = "arena" | "myth" | "who" | "gap";
@@ -257,7 +257,7 @@ async function applyRound(openId: string, fallbackName: string, opts: { mode: st
     (s as any).story = st;
   }
   // v3.11 deep story mode: stars per level + daily energy (server/v3/story3.ts)
-  const st3 = opts.story3 ? story3Apply(s, opts.story3.id, scored.count, scored.correct, opts.story3.fast, today) : null;
+  const st3 = opts.story3 ? (EN_ID.test(opts.story3.id) ? endlessApply(s, opts.story3.id, scored.count, scored.correct, opts.story3.fast, today) : story3Apply(s, opts.story3.id, scored.count, scored.correct, opts.story3.fast, today)) : null;
   if (opts.duel === "sent") s.duelsSent++;
   if (opts.duel === "played") s.duelsPlayed++;
   if (opts.won) s.duelsWon += opts.won;
@@ -453,7 +453,7 @@ export function registerV3(app: Express): void {
     const scored = scoreRound(daily ? "s" : tier, answers);
     if (!scored.count) return send(res, 400, { error: "no_answers" });
     const story = mode === "story" && /^[a-z0-9]{2,8}$/.test(String(b.level || "")) ? String(b.level) : undefined;
-    const story3 = mode === "story" && ST3_ID.test(String(b.level || "")) ? { id: String(b.level), fast: b.fast === true } : undefined;
+    const story3 = (mode === "story" && ST3_ID.test(String(b.level || ""))) || (mode === "endless" && EN_ID.test(String(b.level || ""))) ? { id: String(b.level), fast: b.fast === true } : undefined;
     const applied = await applyRound(me.openId, me.name, { mode, tier: daily ? "s" : tier, scored, daily, story, story3 });
     send(res, 200, { score: scored.total, correct: scored.correct, total: scored.count, bestCombo: scored.bestCombo, results: scored.results, ...applied });
   }));
@@ -593,6 +593,8 @@ export function registerV3(app: Express): void {
     } else if (scope === "daily") {
       const day = lagosDay();
       rows = await cachedLb("daily:" + day, async () => (await pool.query(`select r.open_id, p.name, p.church, r.score, r.correct, r.total, p.xp from ${SCH}.rounds r join ${SCH}.players p on p.open_id=r.open_id where r.mode='daily' and r.day=$1 order by r.score desc limit 50`, [day])).rows);
+    } else if (scope === "endless") { // v3.11.1: highest Endless level passed
+      rows = await cachedLb("endless", async () => (await pool.query(`select open_id, name, church, (stats->>'endless')::int as score, xp from ${SCH}.players where stats->>'endless' ~ '^[0-9]{1,6}$' and (stats->>'endless')::int > 0 order by score desc, updated_at asc limit 50`)).rows);
     } else if (scope === "church") {
       const r = await cachedLb("church", () => pool.query(`select min(church) as church, count(*)::int as players, sum(xp)::int as score, max(xp) as top from ${SCH}.players where church is not null and church<>'' group by lower(regexp_replace(church,'\\s+',' ','g')) order by score desc limit 40`));
       return send(res, 200, { scope, churches: r.rows });
