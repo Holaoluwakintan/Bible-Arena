@@ -263,3 +263,10 @@ a.badge,a.lb{cursor:pointer}
 .node.cur .nico{border-color:var(--gold);animation:pulse 1.6s ease-in-out infinite}
 .node.lock{opacity:.5}.node.lock .nst{color:var(--dim)!important}
 .storyres .btn{min-height:44px}
+/* v3.10 voice answers */
+.voicebar{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+.vmic{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:8px 14px;border-radius:999px;border:1px solid var(--line2);background:rgba(255,255,255,.05);color:inherit;font:inherit;font-weight:700;font-size:14px}
+.vmic.on{border-color:#e5484d;background:rgba(229,72,77,.15);animation:pulse 1.2s ease-in-out infinite}
+.vmic[disabled]{opacity:.45}
+.vheard{flex:1;min-width:150px;line-height:1.35}
+.opt.vpick{border-color:var(--gold)!important;box-shadow:0 0 0 3px rgba(245,185,66,.25)}

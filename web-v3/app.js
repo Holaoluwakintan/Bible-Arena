@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.10.4";
+window.BA_V = "3.10.5";
 
 // ---------- v3.8.3: opt-in rewarded ads (Android app 1.4.0+ only; the website shows nothing new) ----------
 // The app tells the page it can play ads: its launch URL carries baads=1 (Chrome / TWA path, remembered for this tab only),
@@ -220,6 +220,7 @@ function parseHash() {
 }
 function render(html, cls) {
   cleanup.forEach((f) => { try { f(); } catch (e) {} }); cleanup = [];
+  voiceStop();
   // The tab bar lives outside the animated screen: a transformed ancestor would pin it mid-page.
   let tabs = "";
   html = html.replace(/<div class="tabbar">[\s\S]*?<\/nav><\/div>/, (m) => { tabs = m; return ""; });
@@ -664,7 +665,7 @@ function runRound(cfg) {
     const started = performance.now();
     let done = false, clues = 1;
     const finishQ = (choice) => {
-      if (done || !live()) return; done = true; clearTimeout(timerH); clearInterval(tickH);
+      if (done || !live()) return; done = true; clearTimeout(timerH); clearInterval(tickH); voiceStop();
       const ms = Math.round(performance.now() - started);
       const c = check(it, tier, choice);
       const bonus = !!cfg.bonusFrom; // v3.8.3: bonus-life answers are just for fun: never scored or sent
@@ -728,6 +729,7 @@ function runRound(cfg) {
       body.innerHTML = `<div class="qtext">${esc(it.q)}</div>`;
       ans.innerHTML = `<div class="mythbtns"><button class="opt" data-c="fact">FACT<small>It's in the Bible</small></button><button class="opt" data-c="myth">MYTH<small>Not what it says</small></button></div>`;
       $$(".opt", ans).forEach((b) => (b.onclick = () => finishQ(b.dataset.c)));
+      voiceBar(it, ans, () => done, finishQ);
     } else if (it.k === "who") {
       const draw = () => {
         body.innerHTML = `<div class="tiny muted" style="margin-bottom:8px">Identify me with as few clues as you can</div><div class="clues">${it.clues.map((c, i) => i < clues ? `<div class="clue"><b>CLUE ${i + 1}</b>${esc(c)}</div>` : "").join("")}${clues < it.clues.length ? `<button class="clue locked" id="more">🔓 Reveal clue ${clues + 1} (points drop to ${[100, 100, 75, 50, 30][clues + 1]}%)</button>` : ""}</div>`;
@@ -737,6 +739,7 @@ function runRound(cfg) {
       const opts = shuffled(it.o.map((o, i) => [o, i]), it.id);
       ans.innerHTML = `<div class="opts">${opts.map(([o, i], n) => `<button class="opt" data-c="${i}"><span class="k">${"ABCDEF"[n]}</span>${esc(o)}</button>`).join("")}</div>`;
       $$(".opt", ans).forEach((b) => (b.onclick = () => finishQ(Number(b.dataset.c))));
+      voiceBar(it, ans, () => done, finishQ);
     } else if (it.k === "gap") {
       const toks = []; let last = 0; const text = it.text; let m; const re = new RegExp(WORD.source, "g");
       while ((m = re.exec(text))) { if (m.index > last) toks.push({ sep: text.slice(last, m.index) }); toks.push({ w: m[0], i: toks.filter((t) => t.w).length }); last = m.index + m[0].length; }
@@ -776,6 +779,7 @@ function runRound(cfg) {
       const opts = shuffled(it.o.map((o, i) => [o, i]), it.id);
       ans.innerHTML = `<div class="opts">${opts.map(([o, i], n) => `<button class="opt" data-c="${i}"><span class="k">${"ABCD"[n]}</span>${esc(o)}</button>`).join("")}</div>`;
       $$(".opt", ans).forEach((b) => (b.onclick = () => finishQ(Number(b.dataset.c))));
+      voiceBar(it, ans, () => done, finishQ);
     }
     if (cfg.practice) adHint(it, () => done, () => hintGap);
   }
@@ -950,6 +954,97 @@ function storyResultHTML(cfg, correct) {
     <div style="font-size:34px;margin:6px 0">${pass ? "★".repeat(stars) + "☆".repeat(3 - stars) : L.icon}</div>
     <b style="font-size:18px">${pass ? (next ? `Level passed! ${next.icon} ${esc(next.title)} is open.` : "You finished the whole story! 🎉") : `${correct}/10. You need ${STORY_PASS} to pass.`}</b>
     <div class="row" style="gap:8px;margin-top:12px">${pass && next ? `<button class="btn primary grow" data-go="#/play/story?l=${next.k}">▶ Next level</button>` : `<button class="btn primary grow" data-go="#/play/story?l=${L.k}">🔁 Try again</button>`}<button class="btn ghost grow" data-go="#/story">🗺️ Map</button></div></div>`;
+}
+
+
+// ---------- v3.10 voice answers (Web Speech API) ----------
+// A 🎤 button under quiz questions with options (multiple choice, who-am-I, who-said, fact or myth). The mic only starts when the
+// player taps it, one answer per tap. The browser's speech service turns speech into text (on Android Chrome that is Google's);
+// Bible Arena only gets the text, matches it to the options on the phone and sends nothing extra to our server. Tapping always works.
+// Honest limit: speech services mishear Bible names, and accents (Nigerian English included) make it worse, so a weak match is
+// only highlighted for the player to tap; only a clear match answers by itself.
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+const VOICE = { rec: null };
+const V_NUM = { zero: "0", one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9", ten: "10", eleven: "11", twelve: "12", thirteen: "13", fourteen: "14", fifteen: "15", twenty: "20", thirty: "30", forty: "40", fifty: "50", hundred: "100", first: "1", second: "2", third: "3" };
+const V_STOP = new Set("the a an of and is it its i think answer my say option letter number its em uh um er ah so is it was".split(" "));
+function vNorm(s) {
+  return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/['’]/g, "").replace(/[^a-z0-9]+/g, " ").trim()
+    .split(" ").map((w) => V_NUM[w] || w).filter((w) => w && !V_STOP.has(w)).join(" ");
+}
+function vGrams(s) { const x = " " + s.replace(/ /g, "") + " "; const g = []; for (let i = 0; i < x.length - 1; i++) g.push(x.slice(i, i + 2)); return g; }
+function vDice(a, b) {
+  if (!a || !b) return 0; if (a === b) return 1;
+  const A = vGrams(a), B = vGrams(b); const m = new Map(); A.forEach((g) => m.set(g, (m.get(g) || 0) + 1));
+  let hit = 0; B.forEach((g) => { const n = m.get(g); if (n) { hit++; m.set(g, n - 1); } });
+  return (2 * hit) / (A.length + B.length);
+}
+/** How well the heard words fit one option (0..1): whole-string similarity, or the option said inside a longer sentence. */
+function vSim(heard, opt) {
+  if (!heard || !opt) return 0;
+  let best = vDice(heard, opt);
+  const hw = heard.split(" "), n = opt.split(" ").length;
+  for (let len = Math.max(1, n - 1); len <= n + 1; len++) for (let i = 0; i + len <= hw.length; i++) best = Math.max(best, vDice(hw.slice(i, i + len).join(" "), opt) * (hw.length > len ? 0.97 : 1));
+  return best;
+}
+const V_LETTER = { a: 0, ay: 0, eh: 0, b: 1, be: 1, bee: 1, c: 2, see: 2, sea: 2, si: 2, d: 3, dee: 3, di: 3, e: 4, f: 5, ef: 5 };
+const V_TF = { fact: ["fact", "fat", "fax", "facts", "true", "yes", "correct", "its in bible", "in bible", "bible says"], myth: ["myth", "mit", "mith", "miff", "meet", "mid", "miss", "false", "no", "not true", "not in bible", "lie", "wrong"] };
+/** alts: what the speech service heard (best first); opts: [{ c, t, l }] option value, text, letter. Returns the decision. */
+function voiceMatch(alts, opts, kind) {
+  const scored = opts.map((o) => ({ ...o, s: 0 }));
+  alts.slice(0, 5).forEach((raw, ai) => {
+    const w = ai === 0 ? 1 : 0.95; // later guesses count a little less
+    const plain = String(raw || "").toLowerCase().replace(/[^a-z ]+/g, " ").replace(/\b(option|letter|answer|its|it's|is|the)\b/g, " ").trim();
+    if (kind !== "tf" && V_LETTER[plain] != null) { const o = scored.find((x) => x.l === "abcdef"[V_LETTER[plain]]); if (o) o.s = Math.max(o.s, 0.95 * w); }
+    const h = vNorm(raw);
+    scored.forEach((o) => {
+      const keys = kind === "tf" ? V_TF[o.c] || [o.t] : [o.t];
+      keys.forEach((k) => { o.s = Math.max(o.s, vSim(h, vNorm(k)) * w); });
+    });
+  });
+  scored.sort((x, y) => y.s - x.s);
+  const best = scored[0], second = scored[1] || { s: 0 };
+  const margin = best.s - second.s;
+  const verdict = best.s >= 0.75 && margin >= 0.18 ? "sure" : best.s >= 0.5 && margin >= 0.08 ? "guess" : "none";
+  return { verdict, c: best.c, t: best.t, s: Math.round(best.s * 100) / 100, margin: Math.round(margin * 100) / 100, heard: String(alts[0] || "") };
+}
+function voiceStop() { const r = VOICE.rec; VOICE.rec = null; if (r) { try { r.onresult = r.onerror = null; r.abort(); } catch (e) {} } }
+function voiceBar(it, box, isDone, pick) {
+  if (S.voice === false || !box) return;
+  const opts = it.k === "tf" ? [{ c: "fact", t: "fact", l: "a" }, { c: "myth", t: "myth", l: "b" }]
+    : $$(".opt", box).map((b, n) => ({ c: Number(b.dataset.c), t: it.o[Number(b.dataset.c)], l: "abcdef"[n] }));
+  const tips = (S.voiceN || 0) < 3;
+  box.insertAdjacentHTML("beforeend", `<div class="voicebar"><button class="vmic" type="button" aria-label="Say your answer">🎤 <span>Say it</span></button><div class="vheard small muted">${tips ? "Tap the mic and say your answer. It can mishear names and accents, so you can always tap instead." : ""}</div></div>`);
+  const btn = $(".vmic", box), out = $(".vheard", box), label = $("span", btn);
+  const optEl = (c) => $$(".opt", box).find((b) => String(b.dataset.c) === String(c));
+  btn.onclick = () => {
+    if (isDone()) return;
+    if (!SpeechRec) { out.innerHTML = "Voice answers don't work in this browser. Tap your answer instead. (Chrome on Android works best.)"; btn.disabled = true; return; }
+    if (VOICE.rec) { voiceStop(); btn.classList.remove("on"); label.textContent = "Say it"; return; }
+    const start = (lang) => {
+      const r = new SpeechRec(); r.lang = lang; r.interimResults = false; r.continuous = false; r.maxAlternatives = 5;
+      VOICE.rec = r; btn.classList.add("on"); label.textContent = "Listening…"; out.textContent = "";
+      r.onresult = (e) => {
+        if (isDone() || VOICE.rec !== r) return;
+        const alts = Array.from(e.results[0] || []).map((a) => a.transcript);
+        const m = voiceMatch(alts, opts, it.k);
+        S.voiceN = (S.voiceN || 0) + 1; save();
+        $$(".opt.vpick", box).forEach((b) => b.classList.remove("vpick"));
+        if (m.verdict === "sure") { out.innerHTML = `Heard “${esc(m.heard)}” → <b>${esc(it.k === "tf" ? m.t.toUpperCase() : m.t)}</b>`; const b = optEl(m.c); if (b) b.classList.add("vpick"); setTimeout(() => { if (!isDone()) pick(m.c); }, 450); }
+        else if (m.verdict === "guess") { out.innerHTML = `Heard “${esc(m.heard)}”. Did you mean <b>${esc(it.k === "tf" ? m.t.toUpperCase() : m.t)}</b>? Tap it to answer.`; const b = optEl(m.c); if (b) b.classList.add("vpick"); }
+        else out.innerHTML = alts.length ? `Heard “${esc(m.heard)}” but it doesn't match an answer. Try again or tap.` : "Didn't catch that. Try again or tap.";
+      };
+      r.onerror = (e) => {
+        if (VOICE.rec !== r) return;
+        if (e.error === "language-not-supported" && lang !== "en-US") { VOICE.rec = null; return start("en-US"); }
+        out.textContent = e.error === "not-allowed" || e.error === "service-not-allowed" ? "The mic is blocked. Allow it in your browser settings, or just tap your answer."
+          : e.error === "no-speech" ? "Didn't hear anything. Tap the mic and try again, or tap your answer."
+          : e.error === "network" ? "Voice answers need internet. Tap your answer instead." : e.error === "aborted" ? "" : "Voice didn't work this time. Tap your answer.";
+      };
+      r.onend = () => { if (VOICE.rec === r) VOICE.rec = null; btn.classList.remove("on"); label.textContent = "Say it"; };
+      try { r.start(); } catch (err) { VOICE.rec = null; btn.classList.remove("on"); label.textContent = "Say it"; out.textContent = "Voice didn't start. Tap your answer."; }
+    };
+    start(navigator.language && /^en-(NG|GH|KE|ZA|GB|US)$/i.test(navigator.language) ? navigator.language : "en-NG");
+  };
 }
 
 // ---------- results ----------
@@ -1820,6 +1915,7 @@ async function profile() {
       <div class="setrow"><div class="grow"><div>Level</div><div class="small muted">${TIER[S.tier].name}</div></div><button class="chip" id="etier">Change</button></div>
       <div class="setrow"><div>Sound</div><button class="switch ${S.sound ? "on" : ""}" id="snd" aria-label="Sound"></button></div>
       <div class="setrow"><div>Vibration</div><button class="switch ${S.haptics ? "on" : ""}" id="hap" aria-label="Vibration"></button></div>
+      <div class="setrow"><div class="grow"><div>Voice answers 🎤</div><div class="small muted">${SpeechRec ? "A mic button on quiz questions. It only listens after you tap it. It can mishear Bible names and accents, so tapping always works too." : "Not available in this browser (Chrome on Android works best). Tapping works as usual."}</div></div><button class="switch ${S.voice !== false && SpeechRec ? "on" : ""}" id="vce" aria-label="Voice answers" ${SpeechRec ? "" : "disabled"}></button></div>
       <div class="setrow"><div class="grow"><div>Game pop-ups</div><div class="small muted">“A live game is starting” or “someone is waiting for a challenger” while you're in the app (max 1 every 2 min)</div></div><button class="switch ${window.BAS && !BAS.muted() ? "on" : ""}" id="pops" aria-label="Challenge pop-ups"></button></div>
       <div class="setrow" id="pushrow"><div class="grow"><div>Phone notifications</div><div class="small muted" id="pushtxt">Checking…</div></div><span id="pushbtn"></span></div>
       <div class="setrow" id="remrow"><div class="grow"><div>Daily 7 PM reminder</div><div class="small muted" id="remtxt">If you haven't played the Daily Challenge by 7 PM (Lagos time)</div></div><button class="switch" id="rem" aria-label="Daily 7 PM reminder"></button></div>
@@ -1837,6 +1933,7 @@ async function profile() {
   $("#etier").onclick = () => tierSheet(() => profile());
   $("#snd").onclick = (e) => { S.sound = !S.sound; save(); e.target.classList.toggle("on", S.sound); sfx.ok(); };
   $("#hap").onclick = (e) => { S.haptics = !S.haptics; save(); e.target.classList.toggle("on", S.haptics); buzz(30); };
+  $("#vce").onclick = (e) => { if (!SpeechRec) return; S.voice = S.voice === false; save(); e.target.classList.toggle("on", S.voice !== false); toast(S.voice !== false ? "Voice answers on 🎤" : "Voice answers off"); };
   $("#pops").onclick = (e) => { if (!window.BAS) return; const on = BAS.muted(); BAS.mute(!on); e.target.classList.toggle("on", on); toast(on ? "Challenge pop-ups on" : "Challenge pop-ups muted"); };
   const drawPushRow = async () => {
     const tx = $("#pushtxt"), bt = $("#pushbtn"); if (!tx || !window.BAS) return;
