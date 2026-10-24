@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.10.3";
+window.BA_V = "3.10.4";
 
 // ---------- v3.8.3: opt-in rewarded ads (Android app 1.4.0+ only; the website shows nothing new) ----------
 // The app tells the page it can play ads: its launch URL carries baads=1 (Chrome / TWA path, remembered for this tab only),
@@ -259,6 +259,7 @@ async function route() {
   if (a === "church") { if (b === "new") return createChurch(); if (b) return churchPage(b, q); return churchHub(); }
   if (a === "c" && b) return joinByCode(b.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8));
   if (a === "report") return reportCard();
+  if (a === "story") return storyMap();
   if (a === "me") { if (q.get("signedin")) { toast("Signed in with Google ✓"); history.replaceState(null, "", "#/me"); } return profile(); }
   return home();
 }
@@ -389,6 +390,7 @@ async function home() {
       <div class="row" style="gap:12px"><div class="wayico">🎯</div><div class="grow"><b class="wayt">Play solo</b><div class="small muted">Just you and the Word. Pick a game, play as much as you like.</div></div></div>
       <div class="row" style="gap:8px;margin-top:12px"><a class="btn primary grow" href="#/play/mixed">▶ Play now</a><button class="btn ghost grow" data-more>Choose a game ↓</button></div>
     </div>
+    ${storyCardHTML()}
     <div id="homelive">${liveCardHTML()}</div>
     <div class="card way gold">
       <div class="row" style="gap:12px"><div class="wayico">⚔️</div><div class="grow"><b class="wayt">Challenge someone</b><div class="small muted">Get a code and send the link. Friends join, you play live: lose a round and you're out. Last one standing wins.</div></div></div>
@@ -600,6 +602,14 @@ async function startMode(mode, tier) {
   if (mode === "sudden") {
     const ids = shuffled([].concat(drawSet("arena", tier, 30), drawSet("myth", tier, 12), drawSet("gap", tier, 10)), Math.random() + "");
     return runRound({ ids, tier, mode: "sudden", title: "Sudden Death", sudden: true });
+  }
+  if (mode === "story") {
+    const L = STORY.find((x) => x.k === parseHash().q.get("l")) || STORY[0];
+    const st = storyState().lv[L.i];
+    if (!st.unlocked) { toast("Pass the level before it first."); return go("#/story"); }
+    const ids = bookSet(L.books, STORY_N, tier);
+    if (ids.length < STORY_N) { toast("Not enough questions for this level yet."); return go("#/story"); }
+    return runRound({ ids, tier, mode: "story", title: `Story ${L.i + 1}: ${L.title}`, story: L });
   }
   if (mode === "book") {
     // v3.10: practise one book (from the weekly report card's "Books to work on")
@@ -856,6 +866,92 @@ function runRound(cfg) {
 }
 
 const EXTRA_SECS = 15; // v3.10 extra-time power-up
+
+// ---------- v3.10 Story mode: Genesis to Revelation, 22 levels, unlock in order ----------
+// Each level is 10 questions from its books (existing bank, the player's level first). Pass = 7 of 10; stars at 7 / 9 / 10.
+// Progress: best score per level on the phone (ba3:v1 story) and on the server (players.stats.story, sent with the round).
+const STORY_PASS = 7, STORY_N = 10;
+const STORY = [
+  ["gen", "🌍", "In the Beginning", ["Genesis"]],
+  ["exo", "🌊", "Out of Egypt", ["Exodus"]],
+  ["law", "⛺", "Law and Wilderness", ["Leviticus", "Numbers", "Deuteronomy"]],
+  ["jos", "🏰", "Into the Land", ["Joshua", "Judges"]],
+  ["sam", "🌾", "Ruth and Samuel", ["Ruth", "1 Samuel"]],
+  ["dav", "👑", "King David", ["2 Samuel", "1 Chronicles"]],
+  ["sol", "🏛️", "Solomon and the Kings", ["1 Kings", "2 Chronicles"]],
+  ["eli", "🔥", "Elijah, Elisha and the Fall", ["2 Kings"]],
+  ["ret", "🧱", "Exile and Return", ["Ezra", "Nehemiah", "Esther"]],
+  ["psa", "🎵", "Job and the Psalms", ["Job", "Psalms"]],
+  ["wis", "🦉", "Wisdom", ["Proverbs", "Ecclesiastes", "Song of Solomon"]],
+  ["isa", "📜", "Isaiah and Jeremiah", ["Isaiah", "Jeremiah", "Lamentations"]],
+  ["dan", "🦁", "Ezekiel and Daniel", ["Ezekiel", "Daniel"]],
+  ["twv", "🐋", "The Twelve Prophets", ["Hosea", "Joel", "Amos", "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah", "Malachi"]],
+  ["mat", "⭐", "Matthew", ["Matthew"]],
+  ["mkl", "🐑", "Mark and Luke", ["Mark", "Luke"]],
+  ["jhn", "🍞", "John", ["John"]],
+  ["act", "⛵", "Acts", ["Acts"]],
+  ["rom", "✉️", "Romans and Corinthians", ["Romans", "1 Corinthians", "2 Corinthians"]],
+  ["pau", "🖋️", "Paul's Letters", ["Galatians", "Ephesians", "Philippians", "Colossians", "1 Thessalonians", "2 Thessalonians", "1 Timothy", "2 Timothy", "Titus", "Philemon"]],
+  ["heb", "⚓", "Hebrews to Jude", ["Hebrews", "James", "1 Peter", "2 Peter", "1 John", "2 John", "3 John", "Jude"]],
+  ["rev", "🌅", "Revelation", ["Revelation"]],
+].map(([k, icon, title, books], i) => ({ k, icon, title, books, i, nt: i >= 14 }));
+function storyBest() {
+  const out = Object.assign({}, S.story || {});
+  const srv = ME.player && ME.player.stats && ME.player.stats.story;
+  if (srv) Object.keys(srv).forEach((k) => { out[k] = Math.max(Number(out[k]) || 0, Number(srv[k]) || 0); });
+  return out;
+}
+function storyStars(best) { return best >= 10 ? 3 : best >= 9 ? 2 : best >= STORY_PASS ? 1 : 0; }
+function storyState() {
+  const best = storyBest(); let open = true; let done = 0, stars = 0, current = null;
+  const lv = STORY.map((L) => { const b = Number(best[L.k]) || 0; const passed = b >= STORY_PASS; const st = { L, best: b, passed, stars: storyStars(b), unlocked: open }; if (passed) { done++; stars += st.stars; } if (open && !passed && !current) current = st; open = open && passed; return st; });
+  return { lv, done, stars, current };
+}
+function storyCardHTML() {
+  const s = storyState(); const c = s.current;
+  return `<a class="card way storycard" href="#/story" style="text-decoration:none;color:inherit">
+    <div class="row" style="gap:12px"><div class="wayico">🗺️</div><div class="grow"><b class="wayt">Story mode</b><div class="small muted">Genesis to Revelation in ${STORY.length} levels. Pass each one to unlock the next.</div></div><div class="gold">›</div></div>
+    <div class="xpbar" style="margin-top:12px"><i style="width:${Math.round((s.done / STORY.length) * 100)}%"></i></div>
+    <div class="small muted" style="margin-top:6px">${s.done ? `${s.done}/${STORY.length} levels · ${s.stars}★` : "Start in Genesis"}${c ? ` · Next: <b class="gold">${esc(c.L.title)}</b>` : s.done === STORY.length ? " · All done! 🎉" : ""}</div></a>`;
+}
+async function storyMap() {
+  render(`<div id="sm"></div>${tabbar("home")}`);
+  await Promise.all([loadBank(), ME.player ? null : ensureSession()]);
+  const el = $("#sm"); if (!el) return;
+  const s = storyState();
+  let html = `<div class="col" style="gap:12px">
+    <div class="row between"><a class="iconbtn" href="#/" aria-label="Back">‹</a><div class="center grow"><div class="tiny gold">Story mode</div><b>Genesis to Revelation</b></div><span style="width:42px"></span></div>
+    <div class="card center"><div class="row between"><span class="small muted">${s.done}/${STORY.length} levels</span><span class="gold" style="font-weight:800">${s.stars}/${STORY.length * 3} ★</span></div><div class="xpbar" style="margin-top:8px"><i style="width:${Math.round((s.done / STORY.length) * 100)}%"></i></div><div class="small dim" style="margin-top:6px">10 questions a level · get ${STORY_PASS} right to pass</div></div>
+    <div class="path">`;
+  s.lv.forEach((x, n) => {
+    if (n === 0) html += `<div class="pathsec">📖 Old Testament</div>`;
+    if (n === 14) html += `<div class="pathsec">✝️ New Testament</div>`;
+    const cur = s.current && s.current.L.k === x.L.k;
+    const side = n % 2 ? "r" : "l";
+    html += `<button class="node ${side} ${x.passed ? "done" : ""} ${cur ? "cur" : ""} ${x.unlocked ? "" : "lock"}" data-lv="${x.L.k}" ${x.unlocked ? "" : `aria-disabled="true"`}>
+      <span class="nico">${x.unlocked ? x.L.icon : "🔒"}</span>
+      <span class="ntxt"><b>${n + 1}. ${esc(x.L.title)}</b><small>${esc(x.L.books.length > 3 ? x.L.books[0] + " – " + x.L.books[x.L.books.length - 1] : x.L.books.join(", "))}</small>
+      <small class="nst">${x.passed ? "★".repeat(x.stars) + "☆".repeat(3 - x.stars) + ` · best ${x.best}/10` : cur ? "▶ Play" : x.unlocked ? (x.best ? `best ${x.best}/10` : "Open") : "Locked"}</small></span></button>`;
+  });
+  html += `</div></div>`;
+  el.innerHTML = html;
+  const curEl = $(".node.cur"); if (curEl) setTimeout(() => curEl.scrollIntoView({ block: "center", behavior: "smooth" }), 150);
+  $$(".node").forEach((b) => (b.onclick = () => {
+    const x = s.lv.find((v) => v.L.k === b.dataset.lv); if (!x) return;
+    if (!x.unlocked) { buzz(20); return toast(`Pass level ${x.L.i} first to open this one.`); }
+    sfx.tap(); go("#/play/story?l=" + x.L.k);
+  }));
+}
+function storyResultHTML(cfg, correct) {
+  const L = cfg.story, pass = correct >= STORY_PASS, stars = storyStars(correct);
+  const next = STORY[L.i + 1];
+  return `<div class="card gold center storyres">
+    <div class="tiny gold">Story · level ${L.i + 1} of ${STORY.length}</div>
+    <div style="font-size:34px;margin:6px 0">${pass ? "★".repeat(stars) + "☆".repeat(3 - stars) : L.icon}</div>
+    <b style="font-size:18px">${pass ? (next ? `Level passed! ${next.icon} ${esc(next.title)} is open.` : "You finished the whole story! 🎉") : `${correct}/10. You need ${STORY_PASS} to pass.`}</b>
+    <div class="row" style="gap:8px;margin-top:12px">${pass && next ? `<button class="btn primary grow" data-go="#/play/story?l=${next.k}">▶ Next level</button>` : `<button class="btn primary grow" data-go="#/play/story?l=${L.k}">🔁 Try again</button>`}<button class="btn ghost grow" data-go="#/story">🗺️ Map</button></div></div>`;
+}
+
 // ---------- results ----------
 async function results(cfg, answers, local) {
   render(`<div class="boot"><div class="boot-mark">✦</div><div class="boot-sub">Scoring your round…</div></div>`);
@@ -863,7 +959,7 @@ async function results(cfg, answers, local) {
   let r = null, err = null;
   try {
     if (cfg.duel) r = await api("/api/v3/duels/" + cfg.duel.code + "/submit", { body: { name: S.name, church: S.church, answers: payload } });
-    else r = await api("/api/v3/round", { body: { mode: cfg.mode, tier: cfg.tier, answers: payload } });
+    else r = await api("/api/v3/round", { body: { mode: cfg.mode, tier: cfg.tier, answers: payload, level: cfg.story ? cfg.story.k : undefined } });
     if (r.player) ME.player = r.player;
     if (r.streakSaved) setTimeout(() => toast("🛡️ Streak save used. Your streak lives on!", 3500), 900);
     else if (r.saveEarned) setTimeout(() => toast("🛡️ 7 days in a row! You earned a streak save.", 3500), 900);
@@ -871,6 +967,7 @@ async function results(cfg, answers, local) {
   if (cfg.duel && r && r.duel) return duelResult(r.duel, r, cfg);
   const score = r ? r.score : local.score, correct = r ? r.correct : local.correct, total = r ? r.total : local.total;
   const perfect = total > 0 && correct === total;
+  if (cfg.story) { S.story = S.story || {}; S.story[cfg.story.k] = Math.max(Number(S.story[cfg.story.k]) || 0, correct); save(); }
   render(`
   <div class="col" style="gap:14px">
     <div class="center" style="padding-top:10px">
@@ -879,6 +976,7 @@ async function results(cfg, answers, local) {
       <div class="muted">${perfect ? "A perfect round. Rightly dividing the word of truth! 👑" : correct / Math.max(1, total) >= 0.7 ? "Strong round. The Word is in you." : correct / Math.max(1, total) >= 0.4 ? "Good effort. Every verse you missed is now one you know." : "Tough set! Read the references and come back stronger."}</div>
     </div>
     <div id="pushask"></div>
+    ${cfg.story ? storyResultHTML(cfg, correct) : ""}
     <div class="stats3"><div class="stat"><b>${correct}/${total}</b><span>Correct</span></div><div class="stat"><b>x${local.bestCombo}</b><span>Best streak</span></div><div class="stat"><b class="gold">+${fmt(r ? r.xp : 0)}</b><span>XP</span></div></div>
     ${r && r.player ? `<div class="card"><div class="row between"><b>${esc(r.player.rank.name)} ${r.player.rank.division}</b><span class="small muted">${fmt(r.player.xp)} XP</span></div><div class="xpbar" style="margin-top:8px"><i id="xpb" style="width:${Math.round((r.rankBefore ? r.rankBefore.progress : 0) * 100)}%"></i></div><div class="small dim" style="margin-top:6px">${r.player.rank.next ? `${fmt(r.player.rank.nextXp - r.player.xp)} XP to ${r.player.rank.next}` : "You've reached Apostle"} · 🔥 ${r.player.streak}-day streak</div></div>` : ""}
     ${r && !cfg.duel ? `<div id="reschurch"></div>` : ""}
@@ -900,6 +998,7 @@ async function results(cfg, answers, local) {
   $("#again").onclick = () => (cfg.mode === "daily" ? go("#/ranks?tab=daily") : startMode(cfg.mode, cfg.tier));
   const ds = $("#dset"); if (ds) ds.onclick = () => createDuelFromSet(cfg, answers);
   $$("[data-more]").forEach((b) => (b.onclick = () => { sfx.tap(); showMoreGames(); }));
+  $$("[data-go]").forEach((b) => (b.onclick = () => { sfx.tap(); go(b.dataset.go); })); // v3.10 story: go() replays the same hash (Try again)
   $("#share").onclick = () => shareCard({ score, correct, total, tier: cfg.tier, title: cfg.title });
 }
 // Practice results: scored on the phone only, never posted. Shows every correct answer.
@@ -1270,7 +1369,7 @@ async function pushAsk(sel) {
     : `<div class="card gold row" style="gap:12px"><div style="font-size:26px">🔔</div><div class="grow"><b>Get notified when people are looking for players?</b><div class="small muted">One tap. Max 3 a day, never 10 pm to 7 am.</div></div><button class="chip on" data-push>Yes</button></div>`;
   bindPush(box, () => { box.innerHTML = ""; });
 }
-// v3.10.3: after the Daily Challenge, a soft ask for the 7 PM reminder (players without notifications; at most once a week)
+// v3.10 reminder: after the Daily Challenge, a soft ask for the 7 PM reminder (players without notifications; at most once a week)
 async function dailyRemindAsk(sel) {
   const box = $(sel); if (!box || !window.BAS) return;
   try { const at = Number(localStorage.getItem("ba3:dailyask") || 0); if (Date.now() - at < 7 * 864e5) return; } catch (e) { return; }
@@ -1750,7 +1849,7 @@ async function profile() {
     const te = $("#ptest"); if (te) te.onclick = async () => { try { const r = await BAS.push.test(); toast(r.sent ? "Test sent. Check your notifications 🔔" : "Couldn't send a test right now."); } catch (e) { toast(e.status === 429 ? "Wait a few minutes before another test." : "Couldn't send a test right now."); } };
   };
   drawPushRow();
-  // v3.10.3 daily reminder switch: on by default once notifications are on
+  // v3.10 daily reminder switch: on by default once notifications are on
   const drawRem = async () => {
     const sw = $("#rem"), tx = $("#remtxt"); if (!sw || !window.BAS) return;
     const s = await BAS.push.state().catch(() => "off"); let p = { daily: true };
