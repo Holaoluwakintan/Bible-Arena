@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.10.0";
+window.BA_V = "3.10.1";
 
 // ---------- v3.8.3: opt-in rewarded ads (Android app 1.4.0+ only; the website shows nothing new) ----------
 // The app tells the page it can play ads: its launch URL carries baads=1 (Chrome / TWA path, remembered for this tab only),
@@ -629,7 +629,7 @@ function runRound(cfg) {
   function show(it) {
     const limit = limitOf(it, tier);
     const label = it.m === "gap" ? "Fill in the Gap" : it.m === "who" ? "Who Am I?" : it.m === "myth" ? "Bible or Myth?" : it.k === "who_said" ? "Who said it?" : it.k === "order" ? "Put in order" : (it.cat || "Arena");
-    render(`${header()}${limit ? `<div class="timer" id="tm"><i></i></div>` : `<div style="height:20px"></div>`}
+    render(`${header()}${limit ? `<div class="timer" id="tm"><i></i></div>` : `<div style="height:20px"></div>`}<div id="adtime"></div>
       <div class="qcard"><div class="qmeta"><span class="tiny">${esc(label)}</span><span class="pill-tier">${TIER[tier].name}</span></div><div id="qbody"></div></div>
       <div id="ans"></div><div id="adhint"></div><div id="fb"></div>`);
     onLeave(() => { clearTimeout(timerH); clearInterval(tickH); });
@@ -647,6 +647,7 @@ function runRound(cfg) {
       if (c.correct) { if (bonus) bonusRight++; else { combo++; correctN++; bestCombo = Math.max(bestCombo, combo); } sfx.ok(); buzz(20); } else { if (!bonus) combo = 0; sfx.bad(); buzz([40, 40, 60]); }
       score += pts;
       const ah = $("#adhint"); if (ah) ah.innerHTML = "";
+      const at = $("#adtime"); if (at) at.innerHTML = "";
       answers.push({ id: it.id, choice, ms, clues, correct: c.correct, partial: c.partial, pts });
       const sc = $("#sc"); if (sc) sc.textContent = fmt(score);
       const tm = $("#tm"); if (tm) tm.style.visibility = "hidden";
@@ -654,12 +655,48 @@ function runRound(cfg) {
       if (cfg.duel) api("/api/v3/duels/" + cfg.duel.code + "/progress", { body: { i: answers.length, score, correct: correctN, name: S.name, church: S.church } }).catch(() => {});
       feedback(it, c, pts);
     };
-    if (limit) {
-      const bar = $("#tm i"); bar.style.transition = "none"; bar.style.transform = "scaleX(1)";
-      requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.transition = `transform ${limit}s linear`; bar.style.transform = "scaleX(0)"; }));
-      timerH = setTimeout(() => finishQ(it.k === "gap" ? gapState() : null), limit * 1000);
-      tickH = setInterval(() => { if (!live()) return clearInterval(tickH); const left = limit - (performance.now() - started) / 1000; if (left <= 5.5 && left > 0) { sfx.tick(); const t = $("#tm"); t && t.classList.add("low"); } }, 1000);
+    // v3.10: the clock runs to a deadline so the extra-time power-up can pause it and move it.
+    let deadline = started + limit * 1000;
+    const runClock = (secs) => {
+      clearTimeout(timerH); clearInterval(tickH);
+      deadline = performance.now() + secs * 1000;
+      const bar = $("#tm i"); if (!bar) return;
+      const from = Math.max(0, Math.min(1, secs / limit));
+      bar.style.transition = "none"; bar.style.transform = `scaleX(${from})`;
+      requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.transition = `transform ${secs}s linear`; bar.style.transform = "scaleX(0)"; }));
+      timerH = setTimeout(() => finishQ(it.k === "gap" ? gapState() : null), secs * 1000);
+      tickH = setInterval(() => {
+        if (!live()) return clearInterval(tickH);
+        const left = (deadline - performance.now()) / 1000;
+        if (left <= 5.5 && left > 0) { sfx.tick(); const t = $("#tm"); t && t.classList.add("low"); }
+        if (left <= 10.5 && left > 1) offerExtra();
+      }, 1000);
+    };
+    // v3.10 extra-time power-up: solo games and practice only (never the Daily official try, duels, bot or live games),
+    // once per round, only inside the Android app (rewarded ad, given only on "reward"). The clock stops while the ad is open.
+    const extraOK = limit && !cfg.duel && cfg.mode !== "daily" && !cfg.extraUsed && !cfg.bonusFrom && BA_ADS.available();
+    let extraShown = false;
+    function offerExtra() {
+      if (!extraOK || extraShown || done || cfg.extraUsed) return;
+      const box = $("#adtime"); if (!box) return;
+      extraShown = true;
+      box.innerHTML = `<button class="btn ghost block sm adbtn" id="adx">⏱️ Watch a short ad for +${EXTRA_SECS} seconds</button>`;
+      $("#adx").onclick = async () => {
+        if (done || !live()) return;
+        const left = Math.max(0, (deadline - performance.now()) / 1000);
+        clearTimeout(timerH); clearInterval(tickH);
+        const bar = $("#tm i"); if (bar) { bar.style.transition = "none"; bar.style.transform = `scaleX(${Math.max(0, Math.min(1, left / limit))})`; }
+        const b = $("#adx"); b.disabled = true; b.textContent = "Opening the ad…";
+        const r = await BA_ADS.showRewarded("extra_time");
+        if (done || !live() || !$("#adtime")) return;
+        const t2 = $("#tm"); if (t2) t2.classList.remove("low");
+        if (r === "reward") { cfg.extraUsed = true; box.innerHTML = `<div class="small gold center" style="margin:4px 0 8px">⏱️ +${EXTRA_SECS} seconds!</div>`; toast(`+${EXTRA_SECS} seconds ⏱️`); runClock(left + EXTRA_SECS); return; }
+        box.innerHTML = "";
+        toast(r === "dismiss" ? "The ad was closed early, so no extra time this time." : "No ad available right now.");
+        runClock(Math.max(left, 3));
+      };
     }
+    if (limit) runClock(limit);
     let gapState = () => null, hintGap = null;
     const body = $("#qbody"), ans = $("#ans");
     if (it.k === "tf") {
@@ -803,6 +840,7 @@ function runRound(cfg) {
   next();
 }
 
+const EXTRA_SECS = 15; // v3.10 extra-time power-up
 // ---------- results ----------
 async function results(cfg, answers, local) {
   render(`<div class="boot"><div class="boot-mark">✦</div><div class="boot-sub">Scoring your round…</div></div>`);
