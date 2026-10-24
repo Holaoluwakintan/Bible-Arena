@@ -242,3 +242,9 @@ a.badge,a.lb{cursor:pointer}
 .lenpick .chip.on{background:var(--gold,#E8C46A);color:#1a1405;border-color:transparent}
 .flame .saves{font-size:11px;margin-left:4px;opacity:.9}
 .streaknote{margin:0 0 10px;padding:8px 10px;border-radius:12px;background:rgba(255,180,94,.1);color:#FFCF8E}
+/* v3.10 weekly report card */
+.rchero{padding:18px 14px}
+.bookrow{display:flex;align-items:center;gap:10px}
+.up{color:#7CE3A1;font-weight:700}.down{color:#FF8A80}
+.xpbar.weak i{background:linear-gradient(90deg,#ff8a80,#ffb27d)}
+.reportlink{text-decoration:none;color:inherit;gap:12px}

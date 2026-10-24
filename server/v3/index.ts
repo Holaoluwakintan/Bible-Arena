@@ -22,6 +22,7 @@ import { registerChurches, registerVerify, teamNameFor, mergeChurchMembership, p
 import { registerSocial, mergeSocial, scheduleKoPush } from "./social";
 import { publicRooms, liveWinner, publicKo, onKoOpen } from "./live";
 import { badName } from "./names";
+import { initReportStore, registerReport, tallyBooks } from "./report";
 
 type Tier = "b" | "s" | "t";
 type Mode = "arena" | "myth" | "who" | "gap";
@@ -265,6 +266,7 @@ async function applyRound(openId: string, fallbackName: string, opts: { mode: st
      select u.*, (select count(*) from r) as _r from u`,
     [openId, newXp, streak, bestStreak, today, JSON.stringify(s), JSON.stringify(merged), opts.mode, tier, scored.total, scored.correct, scored.count, xp],
   )).rows[0];
+  tallyBooks(openId, scored.results, (id) => BY_ID.get(id)?.r); // v3.10 weekly report card (per-book tallies in the server SQLite)
   return { xp, perfect, newAchievements: merged.filter((a) => !before.includes(a)), player: publicPlayer(fresh), rankBefore: rankOf(p.xp), rankAfter: rankOf(newXp), streakSaved: useSave, saveEarned: earnSave };
 }
 
@@ -587,6 +589,9 @@ export function registerV3(app: Express): void {
   registerChurches(app, guard as any, send);
   // ---- v3.9.0 player safety: report/block storage in the server SQLite + owner review at /admin/reports ----
   initSafetyStore(getDb as any, snapshotNow);
+  // ---- v3.10 weekly report card ----
+  initReportStore(getDb as any);
+  registerReport(app, guard, send, { pool: () => baPool()!, SCH, getPlayer });
   registerSafetyAdmin(app, adminGate, send as any);
   registerVerify(app, guard as any, send);
   registerSocial(app, guard as any, send, {

@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.10.1";
+window.BA_V = "3.10.2";
 
 // ---------- v3.8.3: opt-in rewarded ads (Android app 1.4.0+ only; the website shows nothing new) ----------
 // The app tells the page it can play ads: its launch URL carries baads=1 (Chrome / TWA path, remembered for this tab only),
@@ -258,6 +258,7 @@ async function route() {
   if (a === "ranks") return ranks(q.get("tab") || "week");
   if (a === "church") { if (b === "new") return createChurch(); if (b) return churchPage(b, q); return churchHub(); }
   if (a === "c" && b) return joinByCode(b.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8));
+  if (a === "report") return reportCard();
   if (a === "me") { if (q.get("signedin")) { toast("Signed in with Google ✓"); history.replaceState(null, "", "#/me"); } return profile(); }
   return home();
 }
@@ -567,6 +568,14 @@ function drawSet(mode, tier, n) {
   return shuffled(fresh, Math.random() + "").slice(0, n).map((i) => i.id);
 }
 function markSeen(ids, tier) { const s = S.seen[tier] || []; ids.forEach((id) => { if (s.indexOf(id) < 0) s.push(id); }); S.seen[tier] = s.slice(-900); save(); }
+// v3.10: the book of an item, from its KJV reference ("1 Samuel 17:49" -> "1 Samuel"; "Psalm" -> "Psalms"). Same rule as server/v3/report.ts.
+function bookOf(ref) { const m = String(ref || "").match(/^\s*((?:[1-3]\s)?[A-Za-z][A-Za-z ]*?)\s*\d/); if (!m) return ""; const b = m[1].replace(/\s+/g, " ").trim(); return b === "Psalm" ? "Psalms" : b; }
+/** Up to n random items from these books, preferring the player's level; tops up from other levels when a book is thin. */
+function bookSet(books, n, tier, seed) {
+  const want = new Set(books); const all = BANK.items.filter((i) => want.has(bookOf(i.r)));
+  const pri = all.filter((i) => i.tiers.indexOf(tier) >= 0), rest = all.filter((i) => i.tiers.indexOf(tier) < 0);
+  return shuffled(pri, seed || Math.random() + "").concat(shuffled(rest, (seed || Math.random()) + "x")).slice(0, n).map((i) => i.id);
+}
 function mixedSet(tier) { return shuffled([].concat(drawSet("arena", tier, 4), drawSet("gap", tier, 2), drawSet("myth", tier, 2), drawSet("who", tier, 2)), Math.random() + ""); }
 
 async function startMode(mode, tier) {
@@ -591,6 +600,12 @@ async function startMode(mode, tier) {
   if (mode === "sudden") {
     const ids = shuffled([].concat(drawSet("arena", tier, 30), drawSet("myth", tier, 12), drawSet("gap", tier, 10)), Math.random() + "");
     return runRound({ ids, tier, mode: "sudden", title: "Sudden Death", sudden: true });
+  }
+  if (mode === "book") {
+    // v3.10: practise one book (from the weekly report card's "Books to work on")
+    const b = String(parseHash().q.get("b") || "").slice(0, 40); const ids = bookSet([b], 10, tier);
+    if (ids.length < 3) { toast("Not enough questions from that book yet."); return go("#/report"); }
+    return runRound({ ids, tier, mode: "book", title: "Practise " + b });
   }
   const n = mode === "who" ? 6 : mode === "gap" ? 8 : mode === "myth" ? 12 : 10;
   const ids = mode === "mixed" ? mixedSet(tier) : drawSet(mode, tier, n);
@@ -1565,6 +1580,89 @@ async function ranks(tab) {
   el.innerHTML = rows.length ? rows.map((x, i) => `<div class="lb ${x.isMe ? "me" : ""}"><div class="pos p${i + 1}">${i + 1}</div><div class="grow"><b>${esc(x.name)}</b>${x.isMe ? ` <span class="small gold">you</span>` : ""}<div class="small muted">${esc(x.rank)}${x.church ? " · " + esc(x.church) : ""}${tab === "rivals" ? ` · You ${x.wins}–${x.losses}${x.draws ? ` · ${x.draws} draw${x.draws > 1 ? "s" : ""}` : ""}` : ""}${tab === "daily" && x.total ? ` · ${x.correct}/${x.total}` : ""}</div></div><div class="gold serif" style="font-weight:800">${fmt(x.score)}</div></div>`).join("") : `<div class="muted">${empty}</div>${tab === "rivals" ? `<a class="btn primary block" style="margin-top:12px" href="#/ko/new">⚔️ Challenge someone</a>` : ""}`;
 }
 
+
+// ---------- v3.10 weekly report card (Me → Your weekly report card) ----------
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function dayLabel(d) { const x = new Date(d + "T00:00:00Z"); return x.getUTCDate() + " " + MON[x.getUTCMonth()]; }
+function trendText(now, before, unit) {
+  if (now == null) return "";
+  if (before == null) return `<span class="dim">new this week</span>`;
+  const d = now - before;
+  return d > 0 ? `<span class="up">▲ ${d}${unit} vs last week</span>` : d < 0 ? `<span class="down">▼ ${-d}${unit} vs last week</span>` : `<span class="dim">same as last week</span>`;
+}
+function bookRows(list, weak) {
+  return list.map((b) => `<div class="bookrow"><div class="grow"><b>${esc(b.book)}</b><div class="small muted">${b.right}/${b.total} right${b.last != null ? ` · last week ${b.last}%` : ""}</div><div class="xpbar ${weak ? "weak" : ""}" style="margin-top:6px"><i style="width:${b.accuracy}%"></i></div></div><div class="serif ${weak ? "down" : "gold"}" style="font-weight:800;font-size:20px">${b.accuracy}%</div>${weak ? `<a class="chip" href="#/play/book?b=${encodeURIComponent(b.book)}">Practise</a>` : ""}</div>`).join("");
+}
+async function reportCard() {
+  render(`<div id="rc"><div class="boot"><div class="boot-mark">✦</div><div class="boot-sub">Adding up your week…</div></div></div>${tabbar("me")}`);
+  await ensureSession();
+  let r = null; try { r = await api("/api/v3/report"); } catch (e) {}
+  const el = $("#rc"); if (!el) return;
+  if (!r) { el.innerHTML = `<div class="card col"><b>Couldn't load your report</b><div class="small muted">Check your data and try again.</div><button class="btn primary" id="rcre">Try again</button></div>`; $("#rcre").onclick = () => reportCard(); return; }
+  const tw = r.thisWeek, lw = r.lastWeek, B = r.books || { strong: [], weak: [], count: 0 };
+  const range = `${dayLabel(r.week.start)} – ${dayLabel(r.week.end)}`;
+  const none = !tw.answered;
+  el.innerHTML = `<div class="col" style="gap:14px">
+    <div class="row between"><a class="iconbtn" href="#/me" aria-label="Back">‹</a><div class="center grow"><div class="tiny gold">Weekly report card</div><b>${range}</b></div><span style="width:36px"></span></div>
+    <div class="card gold center rchero">
+      <div class="tiny muted">Accuracy this week</div>
+      <div class="bigscore" style="font-size:56px">${tw.accuracy == null ? "–" : tw.accuracy + "%"}</div>
+      <div class="small">${none ? `<span class="dim">No games yet this week${lw.answered ? ` (last week ${lw.accuracy}%)` : ""}</span>` : trendText(tw.accuracy, lw.accuracy, " pts")}</div>
+    </div>
+    <div class="stats3">
+      <div class="stat"><b>${fmt(tw.answered)}</b><span>Questions</span></div>
+      <div class="stat"><b>${tw.rounds}</b><span>Games</span></div>
+      <div class="stat"><b>${tw.days}/7</b><span>Days played</span></div>
+    </div>
+    <div class="small muted center" style="margin-top:-6px">${lw.answered ? `Last week: ${fmt(lw.answered)} questions, ${lw.rounds} games, ${lw.accuracy}% right` : "Nothing played last week."}</div>
+    <div class="card row" style="gap:12px"><div style="font-size:30px">🔥</div><div class="grow"><b>${r.streak || 0}-day streak</b><div class="small muted">Best ever ${r.bestStreak || 0} · 🛡️ ${r.saves || 0} streak save${r.saves === 1 ? "" : "s"}</div></div></div>
+    ${B.strong.length ? `<div class="card"><b>💪 Strongest books</b><div class="col" style="gap:10px;margin-top:10px">${bookRows(B.strong, false)}</div></div>` : ""}
+    ${B.weak.length ? `<div class="card"><b>📖 Books to work on</b><div class="col" style="gap:10px;margin-top:10px">${bookRows(B.weak, true)}</div></div>` : ""}
+    ${!B.strong.length ? `<div class="card small muted">📚 Answer at least 3 questions from a book this week and your strongest and weakest books show here.</div>` : ""}
+    <div class="row" style="gap:8px"><button class="btn primary grow" id="rcimg">📤 Share as image</button><a class="btn ghost grow" id="rcwa" target="_blank" rel="noopener" href="${esc(reportWaLink(r))}">WhatsApp</a></div>
+    <a class="btn ghost block" href="#/play/mixed">▶ Play a round</a>
+  </div>`;
+  $("#rcimg").onclick = () => shareReportImage(r);
+}
+function reportText(r) {
+  const tw = r.thisWeek, best = r.books && r.books.strong[0];
+  return `My Bible Arena week: ${tw.accuracy == null ? "just getting started" : tw.accuracy + "% right"} on ${tw.answered} questions${r.streak ? `, 🔥 ${r.streak}-day streak` : ""}${best ? `. Strongest book: ${best.book}` : ""}. Can you beat me?`;
+}
+function reportWaLink(r) { return "https://wa.me/?text=" + encodeURIComponent(reportText(r) + " " + location.origin + "/"); }
+function reportCanvas(r) {
+  const W = 1080, H = 1350, c = document.createElement("canvas"); c.width = W; c.height = H; const g = c.getContext("2d");
+  const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#0E1730"); bg.addColorStop(1, "#070C1A"); g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  g.strokeStyle = "rgba(245,185,66,.45)"; g.lineWidth = 6; g.strokeRect(40, 40, W - 80, H - 80);
+  const tx = (s, x, y, font, col, al) => { g.font = font; g.fillStyle = col; g.textAlign = al || "center"; g.fillText(s, x, y); };
+  const tw = r.thisWeek, lw = r.lastWeek;
+  tx("BIBLE ARENA", W / 2, 150, "800 64px Georgia, serif", "#F5B942");
+  tx(`${(r.name || S.name || "My")}'s week · ${dayLabel(r.week.start)} – ${dayLabel(r.week.end)}`.slice(0, 48), W / 2, 220, "600 38px sans-serif", "#F6F1E7");
+  tx(tw.accuracy == null ? "–" : tw.accuracy + "%", W / 2, 420, "800 180px Georgia, serif", "#FFD98A");
+  const d = tw.accuracy != null && lw.accuracy != null ? tw.accuracy - lw.accuracy : null;
+  tx("right this week" + (d == null ? "" : d > 0 ? `  ▲ ${d} pts` : d < 0 ? `  ▼ ${-d} pts` : "  = last week"), W / 2, 490, "600 40px sans-serif", d != null && d < 0 ? "#FF8A80" : "#9AA6C0");
+  const col = (v, l, x) => { tx(String(v), x, 640, "800 72px Georgia, serif", "#F6F1E7"); tx(l, x, 690, "600 32px sans-serif", "#9AA6C0"); };
+  col(tw.answered, "questions", W / 6 + 20); col(`🔥 ${r.streak || 0}`, "day streak", W / 2); col(`${tw.days}/7`, "days played", (5 * W) / 6 - 20);
+  let y = 820;
+  const line = (label, list, colr) => { if (!list.length) return; tx(label, 110, y, "700 40px sans-serif", colr, "left"); y += 60; list.slice(0, 3).forEach((b) => { tx(b.book, 140, y, "600 40px sans-serif", "#F6F1E7", "left"); tx(b.accuracy + "%", W - 140, y, "800 40px sans-serif", colr, "right"); y += 56; }); y += 24; };
+  line("Strongest books", (r.books && r.books.strong) || [], "#F5B942");
+  line("Books to work on", (r.books && r.books.weak) || [], "#FF8A80");
+  tx("Can you beat me? Play free:", W / 2, H - 150, "600 38px sans-serif", "#F6F1E7");
+  tx(location.host, W / 2, H - 95, "700 40px sans-serif", "#F5B942");
+  return c;
+}
+function shareReportImage(r) {
+  let c; try { c = reportCanvas(r); } catch (e) { return toast("Couldn't make the image here."); }
+  c.toBlob(async (blob) => {
+    if (!blob) return toast("Couldn't make the image here.");
+    const file = new File([blob], "bible-arena-my-week.png", { type: "image/png" });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: reportText(r) + " " + location.origin + "/" }); return; }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    toast("Image saved. Share it from your gallery 📸", 3000);
+  }, "image/png");
+}
+
 // ---------- profile & settings ----------
 // v3.9: players blocked from voice games on this phone (kept in localStorage "bal:blocked" by voice.js, also on the server)
 function blockedList() { try { const o = JSON.parse(localStorage.getItem("bal:blocked") || "{}"); return Object.keys(o).map((k) => ({ k, n: (o[k] && o[k].n) || "Player" })); } catch (e) { return []; } }
@@ -1598,6 +1696,7 @@ async function profile() {
     <div class="hero center"><div class="rays"></div><div class="emblem" style="width:84px;height:84px;font-size:36px;border-radius:24px;margin:0 auto 10px">${rk.name[0]}</div>
       <h2 style="font-family:var(--serif)">${esc(S.name || "Player")}</h2><div class="gold" style="font-weight:800">${rk.name} ${rk.division}</div>${S.church ? `<div class="small muted">⛪ ${esc(S.church)}</div>` : ""}
       <div class="xpbar" style="margin:12px 0 6px"><i style="width:${Math.round(rk.progress * 100)}%"></i></div><div class="small muted">${fmt(p.xp)} XP${rk.next ? ` · ${fmt(rk.nextXp - p.xp)} to ${rk.next}` : ""}</div></div>
+    <a class="card row reportlink" href="#/report"><div style="font-size:28px">📊</div><div class="grow"><b>Your weekly report card</b><div class="small muted">Strongest and weakest books, accuracy vs last week</div></div><div class="gold">›</div></a>
     <div class="stats3"><div class="stat"><b>🔥 ${p.streak || 0}</b><span>Day streak</span></div><div class="stat"><b>${p.bestStreak || 0}</b><span>Best streak</span></div><div class="stat"><b>${p.rounds || 0}</b><span>Rounds</span></div></div>
     <div class="small muted center" style="margin-top:-6px">🛡️ Streak saves: <b>${saves(p)}</b> · earn one every 7 days in a row (max 2). Miss a day and a save keeps your streak going.</div>
     <div class="stats3"><div class="stat"><b>${st.correct || 0}</b><span>Correct</span></div><div class="stat"><b>${st.gapPerfect || 0}</b><span>Perfect gaps</span></div><div class="stat"><b>${st.duelsWon || 0}</b><span>Duels won</span></div></div>

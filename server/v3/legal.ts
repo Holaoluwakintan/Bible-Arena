@@ -10,6 +10,7 @@ import { snapshotNow } from "../persist";
 import { baPool, SCH } from "./pg";
 import { deleteChurchData } from "./churches";
 import { deleteSocialData } from "./social";
+import { deleteReportData } from "./report";
 
 const CONTACT = process.env.SUPPORT_EMAIL || "michaelolaoluwagab@gmail.com";
 const UPDATED = "24 October 2026";
@@ -52,6 +53,7 @@ export async function deleteAccountData(openId: string): Promise<Record<string, 
   }
   out.church_memberships = deleteChurchData(openId);
   out.push_subscriptions = deleteSocialData(openId);
+  out.book_tallies = deleteReportData(openId);
   const user = await getUserByOpenId(openId);
   if (user) { deleteUserAccount((user as any).id); out.users = 1; }
   snapshotNow("account-delete").catch(() => {});
@@ -78,7 +80,7 @@ const PRIVACY = shell("Privacy Policy", `
 <li><b>Your display name</b>, which you type in or which comes from your Google profile if you sign in with Google.</li>
 <li><b>Your email address</b>, only if you sign in with Google. We ask Google for your basic profile and email address and nothing else.</li>
 <li><b>Your church or group name</b>, if you choose to add one (used for the Church League).</li>
-<li><b>Your game activity</b>: rounds played, answers, scores, times, streaks, achievements, duels you send or accept, and your level.</li>
+<li><b>Your game activity</b>: rounds played, answers, scores, times, streaks (and streak saves), achievements, duels you send or accept, and your level. For your weekly report card we also keep, per week, how many questions you got right in each book of the Bible (kept 5 weeks).</li>
 <li><b>Game-room entries</b>: the nickname, team and answers you use when you join a quiz night, a challenge or a live game room.</li>
 <li><b>A guest ID</b>: if you play without signing in, we create a guest account with a random ID, kept in a sign-in cookie on your phone, so your progress is saved.</li>
 <li><b>A random phone ID for safety</b>: a random code made on your phone (not your name, number or advertising ID). We keep only a scrambled version of it, so a player you block stays blocked in every game.</li>
@@ -88,7 +90,7 @@ const PRIVACY = shell("Privacy Policy", `
 <p>We do <b>not</b> collect your location, contacts, photos, files, payment details or advertising ID. The website has <b>no ads</b>, and Bible Arena has <b>no analytics or tracking tools</b>. The only ads are optional rewarded ads in the Android app (see below).</p>
 <p><b>Voice chat (optional).</b> In group games (challenges and live games) you can talk to the other players. The microphone is used only after you tap the mic button, and only while it is on; in the Android app, Android asks for microphone permission the first time. Your voice goes between the players' phones as encrypted audio (WebRTC). When two phones cannot connect directly, the encrypted audio passes through a relay server (Metered or ExpressTURN) that forwards it in real time and cannot listen to it. Bible Arena's own server only passes the small connection messages. Nobody records, stores or listens to the audio.</p>
 <p><b>Safety tools.</b> In any game room you can tap a player to mute them for yourself, block them (you won't hear each other in voice in any game) or report them. Blocks are kept on your phone and on our server, linked only to the scrambled phone ID. Player names are checked against a list of offensive words.</p>
-<p><b>Rewarded ads (Android app only, optional).</b> The website has no ads. In the Android app you can choose to watch a short ad for a practice hint or a just-for-fun bonus life. Ads appear only when you tap that button. They are shown by Google AdMob, which may use your device&#39;s advertising ID and basic device information to show and measure ads (Google&#39;s policy: https://policies.google.com/technologies/ads). You can reset or delete the advertising ID in your phone&#39;s settings. We only receive a one-time code saying whether the ad finished, and we keep it for a few minutes.</p>
+<p><b>Rewarded ads (Android app only, optional).</b> The website has no ads. In the Android app you can choose to watch a short ad for a practice hint, extra time on a question in solo games, or a just-for-fun bonus life. Ads are never shown in online or multiplayer games. Ads appear only when you tap that button. They are shown by Google AdMob, which may use your device&#39;s advertising ID and basic device information to show and measure ads (Google&#39;s policy: https://policies.google.com/technologies/ads). You can reset or delete the advertising ID in your phone&#39;s settings. We only receive a one-time code saying whether the ad finished, and we keep it for a few minutes.</p>
 <h2>How we use it</h2>
 <ul><li>To run the game: score rounds, keep your progress, run duels, daily challenges, leaderboards and quiz nights.</li>
 <li>To keep your progress safe across phones when you sign in with Google.</li>
