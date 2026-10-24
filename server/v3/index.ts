@@ -173,10 +173,22 @@ export function buildSet(kind: string, tier: Tier, seed: string): string[] {
   if (kind === "myth") return pick("myth", tier, 12, rnd);
   return pick("arena", tier, 10, rnd);
 }
-export function dailySet(day = lagosDay()): string[] {
+// v3.10: the Daily Challenge comes in 10, 15 or 20 questions (Michael, Oct 24: "10 to 20, not something short").
+// The first 10 are the same set as before for every length; 15 adds 5 more and 20 adds 5 more again (one seed per day),
+// so everyone who picks the same length gets the same questions. dailySet(day) with no length is still the 10-set.
+export const DAILY_LENS = [10, 15, 20];
+export function dailySet(day = lagosDay(), n = 10): string[] {
   const rnd = seeded("daily:" + day);
   const none = new Set<string>();
-  return [...pick("arena", "s", 3, rnd, none, day), ...pick("gap", "s", 3, rnd, none, day), ...pick("myth", "s", 2, rnd, none, day), ...pick("who", "s", 2, rnd, none, day)];
+  const base = [...pick("arena", "s", 3, rnd, none, day), ...pick("gap", "s", 3, rnd, none, day), ...pick("myth", "s", 2, rnd, none, day), ...pick("who", "s", 2, rnd, none, day)];
+  if (!(n > 10)) return base;
+  const rx = seeded("daily+:" + day);
+  const out = [...base];
+  for (let k = 0; k < (n >= 20 ? 2 : 1); k++) {
+    const ex = new Set(out);
+    out.push(...pick("arena", "s", 2, rx, ex, day), ...pick("gap", "s", 1, rx, new Set([...ex, ...out]), day), ...pick("myth", "s", 1, rx, new Set([...ex, ...out]), day), ...pick("who", "s", 1, rx, new Set([...ex, ...out]), day));
+  }
+  return out;
 }
 function code(): string {
   const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -221,7 +233,12 @@ async function applyRound(openId: string, fallbackName: string, opts: { mode: st
     p = await getPlayer(openId);
   }
   const lastDay = p.last_day ? new Date(p.last_day).toISOString().slice(0, 10) : null;
-  const streak = lastDay === today ? p.streak : lastDay === yesterday ? p.streak + 1 : 1;
+  // v3.10 streak save: every 7th day of a streak earns a save (max 2, kept in players.stats). Miss exactly one day
+  // and the next round you play uses a save, so the streak carries on instead of going back to 1.
+  const saves0 = Math.max(0, Math.min(2, Number(p.stats?.streakSaves) || 0));
+  const useSave = lastDay !== today && lastDay !== yesterday && lastDay === lagosDay(-2) && saves0 > 0 && p.streak > 0;
+  const streak = lastDay === today ? p.streak : lastDay === yesterday || useSave ? p.streak + 1 : 1;
+  const earnSave = streak !== p.streak && streak > 0 && streak % 7 === 0 && saves0 - (useSave ? 1 : 0) < 2;
   const s = { rounds: 0, correct: 0, answered: 0, perfect: 0, theoPerfect: 0, bestCombo: 0, gapPerfect: 0, whoFirst: 0, mythRight: 0, dailies: 0, duelsSent: 0, duelsWon: 0, duelsDrawn: 0, duelsPlayed: 0, rematches: 0, ...(p.stats || {}) };
   s.rounds++; s.correct += scored.correct; s.answered += scored.count;
   if (perfect) s.perfect++;
@@ -229,6 +246,8 @@ async function applyRound(openId: string, fallbackName: string, opts: { mode: st
   s.bestCombo = Math.max(s.bestCombo, scored.bestCombo);
   s.gapPerfect += scored.stat.gapPerfect; s.whoFirst += scored.stat.whoFirst; s.mythRight += scored.stat.mythRight;
   if (opts.daily) s.dailies++;
+  s.streakSaves = saves0 - (useSave ? 1 : 0) + (earnSave ? 1 : 0);
+  if (useSave) s.savesUsed = (Number(s.savesUsed) || 0) + 1;
   if (opts.duel === "sent") s.duelsSent++;
   if (opts.duel === "played") s.duelsPlayed++;
   if (opts.won) s.duelsWon += opts.won;
@@ -246,7 +265,7 @@ async function applyRound(openId: string, fallbackName: string, opts: { mode: st
      select u.*, (select count(*) from r) as _r from u`,
     [openId, newXp, streak, bestStreak, today, JSON.stringify(s), JSON.stringify(merged), opts.mode, tier, scored.total, scored.correct, scored.count, xp],
   )).rows[0];
-  return { xp, perfect, newAchievements: merged.filter((a) => !before.includes(a)), player: publicPlayer(fresh), rankBefore: rankOf(p.xp), rankAfter: rankOf(newXp) };
+  return { xp, perfect, newAchievements: merged.filter((a) => !before.includes(a)), player: publicPlayer(fresh), rankBefore: rankOf(p.xp), rankAfter: rankOf(newXp), streakSaved: useSave, saveEarned: earnSave };
 }
 
 async function bumpStat(openId: string, key: string, by = 1) {
@@ -400,7 +419,7 @@ export function registerV3(app: Express): void {
       const r = await baPool()!.query(`select score, correct, total from ${SCH}.rounds where open_id=$1 and mode='daily' and day=$2 order by id limit 1`, [me.openId, day]);
       played = r.rows[0] || null;
     }
-    send(res, 200, { day, ids: dailySet(day), played });
+    send(res, 200, { day, ids: dailySet(day), sets: { 10: dailySet(day, 10), 15: dailySet(day, 15), 20: dailySet(day, 20) }, played });
   }, false));
 
   app.post("/api/v3/round", limitWrites, guard(async (req, res, me) => {
@@ -411,7 +430,7 @@ export function registerV3(app: Express): void {
     const daily = mode === "daily";
     if (daily) {
       const day = lagosDay();
-      const want = dailySet(day);
+      const want = DAILY_LENS.includes(answers.length) ? dailySet(day, answers.length) : [];
       if (answers.map((a: any) => a.id).join(",") !== want.join(",")) return send(res, 400, { error: "daily_mismatch" });
       const r = await baPool()!.query(`select 1 from ${SCH}.rounds where open_id=$1 and mode='daily' and day=$2 limit 1`, [me.openId, day]);
       if (r.rows.length) return send(res, 409, { error: "daily_done" });
@@ -546,7 +565,7 @@ export function registerV3(app: Express): void {
       rows = await cachedLb("week", async () => (await pool.query(`select r.open_id, p.name, p.church, sum(r.score)::int as score, p.xp from ${SCH}.rounds r join ${SCH}.players p on p.open_id=r.open_id where r.created_at > now() - interval '7 days' group by r.open_id, p.name, p.church, p.xp order by score desc limit 50`)).rows);
     } else if (scope === "daily") {
       const day = lagosDay();
-      rows = await cachedLb("daily:" + day, async () => (await pool.query(`select r.open_id, p.name, p.church, r.score, p.xp from ${SCH}.rounds r join ${SCH}.players p on p.open_id=r.open_id where r.mode='daily' and r.day=$1 order by r.score desc limit 50`, [day])).rows);
+      rows = await cachedLb("daily:" + day, async () => (await pool.query(`select r.open_id, p.name, p.church, r.score, r.correct, r.total, p.xp from ${SCH}.rounds r join ${SCH}.players p on p.open_id=r.open_id where r.mode='daily' and r.day=$1 order by r.score desc limit 50`, [day])).rows);
     } else if (scope === "church") {
       const r = await cachedLb("church", () => pool.query(`select min(church) as church, count(*)::int as players, sum(xp)::int as score, max(xp) as top from ${SCH}.players where church is not null and church<>'' group by lower(regexp_replace(church,'\\s+',' ','g')) order by score desc limit 40`));
       return send(res, 200, { scope, churches: r.rows });
@@ -561,7 +580,7 @@ export function registerV3(app: Express): void {
          left join ${SCH}.players p on p.open_id=o.open_id
          where m.open_id=$1 and m.finished group by o.open_id order by count(*) desc limit 30`, [me.openId])).rows;
     }
-    send(res, 200, { scope, rows: rows.map((r: any) => ({ name: badName(r.name) ? "Player" : r.name, church: r.church, score: r.score, rank: rankOf(r.xp || 0).name, isMe: me?.openId === r.open_id, wins: r.wins, losses: r.losses, draws: r.draws })) });
+    send(res, 200, { scope, rows: rows.map((r: any) => ({ name: badName(r.name) ? "Player" : r.name, church: r.church, score: r.score, rank: rankOf(r.xp || 0).name, isMe: me?.openId === r.open_id, wins: r.wins, losses: r.losses, draws: r.draws, ...(scope === "daily" ? { correct: r.correct, total: r.total } : {}) })) });
   }, false));
 
   // ---- Church League (teams, invite codes, weekly + all-time boards) ----

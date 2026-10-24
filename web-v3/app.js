@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.9.0";
+window.BA_V = "3.10.0";
 
 // ---------- v3.8.3: opt-in rewarded ads (Android app 1.4.0+ only; the website shows nothing new) ----------
 // The app tells the page it can play ads: its launch URL carries baads=1 (Chrome / TWA path, remembered for this tab only),
@@ -87,7 +87,7 @@ const MODES = {
   gap: { name: "Fill in the Gap", icon: "✍️", desc: "Tap the missing words" },
   who: { name: "Who Am I?", icon: "🎭", desc: "Fewer clues, more points" },
   myth: { name: "Bible or Myth", icon: "🧐", desc: "Fact or church folklore?" },
-  daily: { name: "Daily Challenge", icon: "☀️", desc: "Same 10 for everyone" },
+  daily: { name: "Daily Challenge", icon: "☀️", desc: "10, 15 or 20, same for everyone" },
   sudden: { name: "Sudden Death", icon: "💀", desc: "One mistake ends it" },
 };
 const ACH = {
@@ -367,11 +367,12 @@ function topbar() {
       <div class="xpbar" style="margin-top:6px"><i style="width:${Math.round(rk.progress * 100)}%"></i></div>
       <div class="small dim" style="margin-top:4px">${rk.next ? `${fmt(rk.nextXp - (p.xp || 0))} XP to ${rk.next}` : "Highest rank"}</div>
     </div>
-    <div class="flame" title="Daily streak">🔥 ${p.streak || 0}</div>
+    <div class="flame" title="Daily streak">🔥 ${p.streak || 0}${saves(p) ? `<small class="saves" title="Streak saves">🛡️${saves(p)}</small>` : ""}</div>
   </div>`;
 }
 async function home() {
   render(`${topbar()}<div id="h"></div>${tabbar("home")}`);
+  onLeave(lenPickerWire());
   const day = Math.floor((Date.now() + 3600e3) / 864e5);
   const vod = VOD[day % VOD.length];
   let daily = null;
@@ -396,11 +397,13 @@ async function home() {
     </div>
     <div class="card">
       <div class="row between"><div class="tiny gold">☀️ Daily Challenge · ${esc(daily ? daily.day : "")}</div>${daily && daily.played ? `<span class="small muted">✅ ${fmt(daily.played.score)} pts</span>` : ""}</div>
-      <b style="display:block;margin:6px 0 4px;font-size:17px">${daily && daily.played ? `Done! You got ${daily.played.correct}/${daily.played.total}` : "Today's 10 for everyone"}</b>
+      <b style="display:block;margin:6px 0 4px;font-size:17px">${daily && daily.played ? `Done! You got ${daily.played.correct}/${daily.played.total}` : `Today's ${dailyLen()} for everyone`}</b>
+      ${daily && daily.played ? "" : lenPicker()}
+      ${streakNote(daily)}
       ${dailyGuide(!!(daily && daily.played))}
       ${daily && daily.played
         ? `<div class="row" style="gap:8px"><a class="btn ghost grow sm" href="#/play/practice">🔁 Practise again</a><a class="btn ghost grow sm" href="#/ranks?tab=daily">🌍 Scoreboard</a></div>`
-        : `<a class="btn primary block" href="#/play/daily">▶ Play today's challenge</a>`}
+        : `<a class="btn primary block" href="#/play/daily" id="dailygo">▶ Play today's ${dailyLen()}</a>`}
     </div>
     <div id="moregames" class="col" style="gap:14px">
     <div class="sechead"><b>🎮 All games</b><span class="small muted">Solo, anytime, as many times as you like.</span></div>
@@ -455,15 +458,43 @@ function untilMidnight() {
   const now = Date.now() + 3600e3; const left = 864e5 - (now % 864e5);
   const h = Math.floor(left / 36e5), m = Math.floor((left % 36e5) / 6e4); return `${h}h ${m}m`;
 }
+// v3.10: Daily Challenge length. The player picks 10, 15 or 20 (default 15); everyone with the same length gets the same set.
+const DAILY_LENS = [10, 15, 20];
+function dailyLen() { const n = Number(S.dailyLen); return DAILY_LENS.indexOf(n) >= 0 ? n : 15; }
+function lenPicker() {
+  return `<div class="lenpick" id="lenpick"><span class="small muted">How many?</span>${DAILY_LENS.map((n) => `<button class="chip ${dailyLen() === n ? "on" : ""}" data-len="${n}">${n}</button>`).join("")}<span class="small dim">${dailyLen() === 10 ? "about 4 min" : dailyLen() === 15 ? "about 6 min" : "about 8 min"}</span></div>`;
+}
+function lenPickerWire() {
+  const f = (e) => {
+    const b = e.target.closest && e.target.closest("[data-len]"); if (!b || !$("#lenpick")) return;
+    S.dailyLen = Number(b.dataset.len); save(); sfx.tap();
+    const lp = $("#lenpick"); if (lp) lp.outerHTML = lenPicker();
+    const go2 = $("#dailygo"); if (go2) go2.textContent = `▶ Play today's ${dailyLen()}`;
+    const card = go2 && go2.closest(".card"); const bt = card && card.querySelector("b"); if (bt) bt.textContent = `Today's ${dailyLen()} for everyone`;
+  };
+  document.addEventListener("click", f);
+  return () => document.removeEventListener("click", f);
+}
+// v3.10 streak saves (earned every 7th day of a streak, max 2; used by the server when exactly one day is missed)
+function saves(p) { return Math.max(0, Math.min(2, Number(p && p.stats && p.stats.streakSaves) || 0)); }
+function streakNote(daily) {
+  const p = ME.player; if (!p || !daily || !daily.day || daily.played) return "";
+  const last = p.lastDay ? String(p.lastDay).slice(0, 10) : "";
+  const dayMs = Date.parse(daily.day + "T00:00:00Z"), lastMs = last ? Date.parse(last + "T00:00:00Z") : 0;
+  const gap = lastMs ? Math.round((dayMs - lastMs) / 864e5) : 0;
+  if (gap === 2 && saves(p) && p.streak > 0) return `<div class="small streaknote">🛡️ You missed yesterday, but a streak save will keep your 🔥 ${p.streak} going. Play any round today.</div>`;
+  if (gap === 1 && p.streak > 0) return `<div class="small streaknote">🔥 Play today to make it ${p.streak + 1} days in a row.</div>`;
+  return "";
+}
 // The daily set changes at 00:00 West Africa Time (UTC+1): lagosDay() on the server, untilMidnight() here.
-const DAILY_WHY = "One official try a day keeps it fair: everyone gets the same 10. Practise below anytime.";
+const DAILY_WHY = "One official try a day keeps it fair: everyone who picks the same length gets the same questions. Practise below anytime.";
 function dailyWhy() { return `<p class="dailywhy">${DAILY_WHY}</p>`; }
 // Step-by-step words for the Daily Challenge, before and after the official try (Michael, Oct 12: "people can be very in need of instruction").
 function dailyGuide(played) {
   const li = (i, t) => `<li><span class="gi">${i}</span><span>${t}</span></li>`;
   return played
-    ? `<ul class="guide">${li("🌍", "That was today's <b>Global Scoreboard</b> challenge. Your score is in!")}${li("⚖️", "One official try a day, the same 10 for everyone, so it's fair.")}${li("🔁", "Want another go? Practise today's set. It's <b>not scored</b>.")}${li("🎮", "<b>More games are below.</b> Play them anytime, as much as you like.")}${li("⏰", `New challenge at midnight, in ${untilMidnight()}.`)}</ul>`
-    : `<ul class="guide">${li("☀️", "Today's 10 questions, the same for everyone.")}${li("🎯", "You get <b>one official try</b> today.")}${li("🌍", "Your score goes on the <b>GLOBAL scoreboard</b>.")}${li("🎮", "Just want to play? <b>More games are below</b>, anytime.")}</ul>`;
+    ? `<ul class="guide">${li("🌍", "That was today's <b>Global Scoreboard</b> challenge. Your score is in!")}${li("⚖️", "One official try a day, the same questions for everyone, so it's fair.")}${li("🔁", "Want another go? Practise today's set. It's <b>not scored</b>.")}${li("🎮", "<b>More games are below.</b> Play them anytime, as much as you like.")}${li("⏰", `New challenge at midnight, in ${untilMidnight()}.`)}</ul>`
+    : `<ul class="guide">${li("☀️", "Pick 10, 15 or 20. Same questions for everyone who picks the same.")}${li("🎯", "You get <b>one official try</b> today.")}${li("🌍", "Your score goes on the <b>GLOBAL scoreboard</b>.")}${li("🎮", "Just want to play? <b>More games are below</b>, anytime.")}</ul>`;
 }
 function modeChips() {
   const c = (h, t) => `<a class="chip" href="${h}">${t}</a>`;
@@ -545,14 +576,17 @@ async function startMode(mode, tier) {
   if (mode === "daily") {
     let d = null; try { d = await api("/api/v3/daily"); } catch (e) { toast("Couldn't reach the server. Check your data."); return go("#/"); }
     if (d.played) { toast("You've played today's challenge. See the board!"); return go("#/ranks?tab=daily"); }
-    return runRound({ ids: d.ids, tier: "s", mode: "daily", title: "Daily Challenge" });
+    const qn = Number(parseHash().q.get("n")); if (DAILY_LENS.indexOf(qn) >= 0) { S.dailyLen = qn; save(); }
+    const n = dailyLen(), ids = (d.sets && d.sets[n]) || d.ids;
+    return runRound({ ids, tier: "s", mode: "daily", title: `Daily Challenge · ${ids.length}` });
   }
   if (mode === "practice") {
     // Practice replays today's Daily Challenge set on this phone only. Nothing is sent to the server,
     // so the board, streak, XP and leagues are untouched. It opens only after the official try.
     let d = null; try { d = await api("/api/v3/daily"); } catch (e) { toast("Couldn't reach the server. Check your data."); return go("#/"); }
     if (!d.played) { toast("Play today's official try first. Practice opens after."); return go("#/play/daily"); }
-    return runRound({ ids: d.ids, tier: "s", mode: "practice", title: "Practice — not scored", practice: true });
+    const pids = (d.sets && d.sets[d.played.total]) || d.ids;
+    return runRound({ ids: pids, tier: "s", mode: "practice", title: "Practice — not scored", practice: true });
   }
   if (mode === "sudden") {
     const ids = shuffled([].concat(drawSet("arena", tier, 30), drawSet("myth", tier, 12), drawSet("gap", tier, 10)), Math.random() + "");
@@ -778,6 +812,8 @@ async function results(cfg, answers, local) {
     if (cfg.duel) r = await api("/api/v3/duels/" + cfg.duel.code + "/submit", { body: { name: S.name, church: S.church, answers: payload } });
     else r = await api("/api/v3/round", { body: { mode: cfg.mode, tier: cfg.tier, answers: payload } });
     if (r.player) ME.player = r.player;
+    if (r.streakSaved) setTimeout(() => toast("🛡️ Streak save used. Your streak lives on!", 3500), 900);
+    else if (r.saveEarned) setTimeout(() => toast("🛡️ 7 days in a row! You earned a streak save.", 3500), 900);
   } catch (e) { err = e; if (e.status === 409 && e.data && e.data.duel) r = { duel: e.data.duel, score: local.score, correct: local.correct, total: local.total }; }
   if (cfg.duel && r && r.duel) return duelResult(r.duel, r, cfg);
   const score = r ? r.score : local.score, correct = r ? r.correct : local.correct, total = r ? r.total : local.total;
@@ -1477,7 +1513,7 @@ async function duelsScreen() {
 // ---------- leaderboards ----------
 async function ranks(tab) {
   const tabs = [["week", "This week"], ["church", "⛪ Churches"], ["rivals", "Rivals"], ["daily", "Today"], ["all", "All-time"]];
-  render(`<h2 style="margin-bottom:12px">Leaderboards</h2><div class="segs">${tabs.map(([k, l]) => `<a class="chip ${tab === k ? "on" : ""}" href="#/ranks?tab=${k}">${l}</a>`).join("")}</div>${tab === "daily" ? `<p class="small muted" style="margin:0 0 10px">🌍 Global Scoreboard for today's Daily Challenge: one official try each.</p>` : ""}<div id="lb" class="card"><div class="muted small">Loading…</div></div>${tabbar("ranks")}`);
+  render(`<h2 style="margin-bottom:12px">Leaderboards</h2><div class="segs">${tabs.map(([k, l]) => `<a class="chip ${tab === k ? "on" : ""}" href="#/ranks?tab=${k}">${l}</a>`).join("")}</div>${tab === "daily" ? `<p class="small muted" style="margin:0 0 10px">🌍 Global Scoreboard for today's Daily Challenge: one official try each. Longer sets can score more.</p>` : ""}<div id="lb" class="card"><div class="muted small">Loading…</div></div>${tabbar("ranks")}`);
   await ensureSession();
   if (tab === "church") { const l = $("#lb"); if (l) leagueBoard(l, parseHash().q.get("p") === "all" ? "all" : "week"); return; }
   let r; try { r = await api("/api/v3/leaderboard?scope=" + tab); } catch (e) { const l = $("#lb"); if (l) l.innerHTML = "Couldn't load the board."; return; }
@@ -1488,7 +1524,7 @@ async function ranks(tab) {
   }
   const rows = r.rows || [];
   const empty = { week: "No rounds this week yet. Play one and top the board!", daily: "Nobody has played today's challenge yet.", rivals: "Your rivals appear here after your first duel.", all: "No players yet." }[tab];
-  el.innerHTML = rows.length ? rows.map((x, i) => `<div class="lb ${x.isMe ? "me" : ""}"><div class="pos p${i + 1}">${i + 1}</div><div class="grow"><b>${esc(x.name)}</b>${x.isMe ? ` <span class="small gold">you</span>` : ""}<div class="small muted">${esc(x.rank)}${x.church ? " · " + esc(x.church) : ""}${tab === "rivals" ? ` · You ${x.wins}–${x.losses}${x.draws ? ` · ${x.draws} draw${x.draws > 1 ? "s" : ""}` : ""}` : ""}</div></div><div class="gold serif" style="font-weight:800">${fmt(x.score)}</div></div>`).join("") : `<div class="muted">${empty}</div>${tab === "rivals" ? `<a class="btn primary block" style="margin-top:12px" href="#/ko/new">⚔️ Challenge someone</a>` : ""}`;
+  el.innerHTML = rows.length ? rows.map((x, i) => `<div class="lb ${x.isMe ? "me" : ""}"><div class="pos p${i + 1}">${i + 1}</div><div class="grow"><b>${esc(x.name)}</b>${x.isMe ? ` <span class="small gold">you</span>` : ""}<div class="small muted">${esc(x.rank)}${x.church ? " · " + esc(x.church) : ""}${tab === "rivals" ? ` · You ${x.wins}–${x.losses}${x.draws ? ` · ${x.draws} draw${x.draws > 1 ? "s" : ""}` : ""}` : ""}${tab === "daily" && x.total ? ` · ${x.correct}/${x.total}` : ""}</div></div><div class="gold serif" style="font-weight:800">${fmt(x.score)}</div></div>`).join("") : `<div class="muted">${empty}</div>${tab === "rivals" ? `<a class="btn primary block" style="margin-top:12px" href="#/ko/new">⚔️ Challenge someone</a>` : ""}`;
 }
 
 // ---------- profile & settings ----------
@@ -1519,11 +1555,13 @@ async function profile() {
   const p = ME.player || { xp: 0, achievements: [], stats: {} };
   const rk = rankOf(p.xp); const st = p.stats || {}; const got = p.achievements || [];
   const google = ME.user && ME.user.openId === "google";
+  if (!$("#pf")) return; // left the Me tab while it was loading
   $("#pf").innerHTML = `<div class="col" style="gap:14px">
     <div class="hero center"><div class="rays"></div><div class="emblem" style="width:84px;height:84px;font-size:36px;border-radius:24px;margin:0 auto 10px">${rk.name[0]}</div>
       <h2 style="font-family:var(--serif)">${esc(S.name || "Player")}</h2><div class="gold" style="font-weight:800">${rk.name} ${rk.division}</div>${S.church ? `<div class="small muted">⛪ ${esc(S.church)}</div>` : ""}
       <div class="xpbar" style="margin:12px 0 6px"><i style="width:${Math.round(rk.progress * 100)}%"></i></div><div class="small muted">${fmt(p.xp)} XP${rk.next ? ` · ${fmt(rk.nextXp - p.xp)} to ${rk.next}` : ""}</div></div>
     <div class="stats3"><div class="stat"><b>🔥 ${p.streak || 0}</b><span>Day streak</span></div><div class="stat"><b>${p.bestStreak || 0}</b><span>Best streak</span></div><div class="stat"><b>${p.rounds || 0}</b><span>Rounds</span></div></div>
+    <div class="small muted center" style="margin-top:-6px">🛡️ Streak saves: <b>${saves(p)}</b> · earn one every 7 days in a row (max 2). Miss a day and a save keeps your streak going.</div>
     <div class="stats3"><div class="stat"><b>${st.correct || 0}</b><span>Correct</span></div><div class="stat"><b>${st.gapPerfect || 0}</b><span>Perfect gaps</span></div><div class="stat"><b>${st.duelsWon || 0}</b><span>Duels won</span></div></div>
     <div class="card"><div class="row between"><b>Ranks</b><span class="small muted">Seeker → Apostle</span></div><div class="row" style="flex-wrap:wrap;gap:6px;margin-top:10px">${RANKS.map(([n, x], i) => `<span class="chip ${i <= rk.index ? "on" : ""}">${n}<span class="dim small">${x ? fmt(x) : ""}</span></span>`).join("")}</div></div>
     <div class="card"><div class="row between"><b>Achievements</b><span class="small muted">${got.length}/${Object.keys(ACH).length}</span></div><div class="achs" style="margin-top:10px">${Object.keys(ACH).map((k) => `<div class="ach ${got.indexOf(k) >= 0 ? "got" : ""}"><div class="ai">${ACH[k][0]}</div><b>${ACH[k][1]}</b><span>${ACH[k][2]}</span></div>`).join("")}</div></div>
