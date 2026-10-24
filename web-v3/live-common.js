@@ -13,11 +13,24 @@ L.OPT = [
   { c: "#E8A317", s: "●", n: "gold" }, { c: "#1FA971", s: "■", n: "green" },
 ];
 
+/* v3.9.0: a random id for this phone (kept in localStorage). Sent as x-ba-d so Block works across rooms; the server keeps only a one-way tag of it. */
+L.did = function () {
+  try {
+    let d = localStorage.getItem("ba:did");
+    if (!d || !/^[A-Za-z0-9_-]{22,64}$/.test(d)) {
+      const b = new Uint8Array(18); crypto.getRandomValues(b);
+      d = btoa(String.fromCharCode.apply(null, b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      localStorage.setItem("ba:did", d);
+    }
+    return d;
+  } catch (e) { return ""; }
+};
 L.api = async function (url, body, opts) {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), (opts && opts.timeout) || 12000);
   try {
-    const r = await fetch(url, body === undefined ? { signal: ctl.signal, cache: "no-store" } : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctl.signal });
+    const did = L.did();
+    const r = await fetch(url, body === undefined ? { signal: ctl.signal, cache: "no-store", headers: did ? { "x-ba-d": did } : {} } : { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, did ? { "x-ba-d": did } : {}), body: JSON.stringify(body), signal: ctl.signal });
     let j = null; try { j = await r.json(); } catch (e) {}
     if (!r.ok) { const err = new Error((j && j.error) || "Network problem. Try again."); err.status = r.status; err.code = j && j.code; throw err; }
     return j;

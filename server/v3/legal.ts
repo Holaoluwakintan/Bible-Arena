@@ -12,7 +12,7 @@ import { deleteChurchData } from "./churches";
 import { deleteSocialData } from "./social";
 
 const CONTACT = process.env.SUPPORT_EMAIL || "michaelolaoluwagab@gmail.com";
-const UPDATED = "10 October 2026";
+const UPDATED = "24 October 2026";
 
 function readCookie(req: Request, name: string): string | undefined {
   const raw = req.headers.cookie || "";
@@ -79,22 +79,28 @@ const PRIVACY = shell("Privacy Policy", `
 <li><b>Your email address</b>, only if you sign in with Google. We ask Google for your basic profile and email address and nothing else.</li>
 <li><b>Your church or group name</b>, if you choose to add one (used for the Church League).</li>
 <li><b>Your game activity</b>: rounds played, answers, scores, times, streaks, achievements, duels you send or accept, and your level.</li>
-<li><b>Quiz-night entries</b>: the nickname, team and answers you use when you join a Bible Arena Live room.</li>
+<li><b>Game-room entries</b>: the nickname, team and answers you use when you join a quiz night, a challenge or a live game room.</li>
+<li><b>A guest ID</b>: if you play without signing in, we create a guest account with a random ID, kept in a sign-in cookie on your phone, so your progress is saved.</li>
+<li><b>A random phone ID for safety</b>: a random code made on your phone (not your name, number or advertising ID). We keep only a scrambled version of it, so a player you block stays blocked in every game.</li>
+<li><b>Reports</b>: if you report a player, we keep the game code, your nickname, their nickname, the reason and any note you write, so we can review it.</li>
 <li><b>Technical data</b>: a sign-in cookie that keeps you logged in, and your IP address, which is used briefly in memory to stop abuse (rate limiting) and is not stored with your profile.</li>
 </ul>
 <p>We do <b>not</b> collect your location, contacts, photos, files, payment details or advertising ID. The website has <b>no ads</b>, and Bible Arena has <b>no analytics or tracking tools</b>. The only ads are optional rewarded ads in the Android app (see below).</p>
-<p><b>Voice chat (optional).</b> In group games you can talk to the other players. The microphone is used only after you tap the mic button, and only while it is on. Your voice goes directly between the players' phones; we do not record, store or listen to it.</p>
+<p><b>Voice chat (optional).</b> In group games (challenges and live games) you can talk to the other players. The microphone is used only after you tap the mic button, and only while it is on; in the Android app, Android asks for microphone permission the first time. Your voice goes between the players' phones as encrypted audio (WebRTC). When two phones cannot connect directly, the encrypted audio passes through a relay server (Metered or ExpressTURN) that forwards it in real time and cannot listen to it. Bible Arena's own server only passes the small connection messages. Nobody records, stores or listens to the audio.</p>
+<p><b>Safety tools.</b> In any game room you can tap a player to mute them for yourself, block them (you won't hear each other in voice in any game) or report them. Blocks are kept on your phone and on our server, linked only to the scrambled phone ID. Player names are checked against a list of offensive words.</p>
 <p><b>Rewarded ads (Android app only, optional).</b> The website has no ads. In the Android app you can choose to watch a short ad for a practice hint or a just-for-fun bonus life. Ads appear only when you tap that button. They are shown by Google AdMob, which may use your device&#39;s advertising ID and basic device information to show and measure ads (Google&#39;s policy: https://policies.google.com/technologies/ads). You can reset or delete the advertising ID in your phone&#39;s settings. We only receive a one-time code saying whether the ad finished, and we keep it for a few minutes.</p>
 <h2>How we use it</h2>
 <ul><li>To run the game: score rounds, keep your progress, run duels, daily challenges, leaderboards and quiz nights.</li>
 <li>To keep your progress safe across phones when you sign in with Google.</li>
-<li>To protect the service from abuse.</li></ul>
+<li>To protect the service and other players from abuse (rate limits, name checks, blocks and reports).</li></ul>
 <h2>What other players can see</h2>
 <p>Your display name, church or group, level and scores appear on leaderboards, in duels you take part in and in the Church League. Your quiz-night nickname and score appear on the host's screen and on that night's results page. Your email address is never shown to anyone.</p>
 <h2>Who we share it with</h2>
 <p>We do not sell or rent your data, and we do not share it with advertisers. It is processed only by the services that run the game: our server host (Render) and our database host (Supabase). Google handles the sign-in step if you choose Google. In the Android app, Google AdMob shows a rewarded ad only when you choose to watch one. Data is sent over encrypted connections (HTTPS).</p>
+<h2>Community rules</h2>
+<p>Be kind. No bad language, bullying, hate, threats, sexual talk, spam, or asking for or sharing personal details (phone numbers, addresses, social media). Use a name you would be happy for anyone to see. Players who break these rules can be taken out of voice (this happens automatically when several players in one game report the same person) and offensive names are blocked. To report someone, tap them in the game and choose Report, or email us with the game code.</p>
 <h2>How long we keep it</h2>
-<p>We keep your profile and game history until you delete your account. Quiz-night rooms expire after 12 hours. Quiz-night results pages (nicknames and scores) are kept so the church can share them; email us to have one removed. Automatic backups are rotated and older copies are overwritten over time.</p>
+<p>We keep your profile and game history until you delete your account. Game rooms expire after 12 hours. Reports are deleted after 180 days. Blocks stay until you unblock (Me → Blocked players). Quiz-night results pages (nicknames and scores) are kept so the church can share them; email us to have one removed. Automatic backups are rotated and older copies are overwritten over time.</p>
 <h2>Deleting your account and data</h2>
 <p>In the app, open <b>Me → Delete account</b> (the Me tab at the bottom). Or go to <a href="/delete-account">bible-arena.onrender.com/delete-account</a>. This permanently deletes your profile, email, church, scores, rounds and the duels you created. If you cannot open the app, email <a href="mailto:${CONTACT}?subject=Bible%20Arena%20account%20deletion">${CONTACT}</a> with your display name and, if you used Google, your email. We will delete your account within 30 days.</p>
 <h2>Children</h2>

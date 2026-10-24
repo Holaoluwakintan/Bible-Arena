@@ -12,13 +12,16 @@ import { logger } from "../_core/logger";
 import { baPool, SCH } from "./pg";
 import { compareDuel, sqlDuelRule } from "./duel-outcome";
 import { registerLive, flushLive } from "./live";
-import { shutdownHooks } from "../persist";
+import { shutdownHooks, snapshotNow } from "../persist";
+import { getDb } from "../db";
+import { initSafetyStore, registerSafetyAdmin } from "./safety";
 import { registerLegal } from "./legal";
 import { registerAds } from "./ads";
 import { sentryBrowserTags } from "../_core/sentry-lite";
-import { registerChurches, registerVerify, teamNameFor, mergeChurchMembership, previewForOg } from "./churches";
+import { registerChurches, registerVerify, teamNameFor, mergeChurchMembership, previewForOg, adminGate } from "./churches";
 import { registerSocial, mergeSocial, scheduleKoPush } from "./social";
 import { publicRooms, liveWinner, publicKo, onKoOpen } from "./live";
+import { badName } from "./names";
 
 type Tier = "b" | "s" | "t";
 type Mode = "arena" | "myth" | "who" | "gap";
@@ -143,6 +146,8 @@ async function who(req: Request): Promise<{ openId: string; name: string } | nul
   return s ? { openId: s.openId, name: s.name } : null;
 }
 const clean = (v: unknown, max: number) => String(v ?? "").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, max);
+/** v3.9.0: player display names also pass the shared bad-word filter (names.ts); a bad name falls back to the saved/default name. */
+const cleanPlayerName = (v: unknown, max: number) => { const s = clean(v, max); return badName(s) ? "" : s; };
 const TIERS: Tier[] = ["b", "s", "t"];
 const asTier = (v: unknown): Tier => (TIERS.includes(v as Tier) ? (v as Tier) : "b");
 function seeded(seed: string) {
@@ -212,7 +217,7 @@ async function applyRound(openId: string, fallbackName: string, opts: { mode: st
   const yesterday = lagosDay(-1);
   let p = await getPlayer(openId);
   if (!p) {
-    await pool.query(`insert into ${SCH}.players(open_id, name) values ($1,$2) on conflict do nothing`, [openId, clean(fallbackName, 40) || "Player"]);
+    await pool.query(`insert into ${SCH}.players(open_id, name) values ($1,$2) on conflict do nothing`, [openId, cleanPlayerName(fallbackName, 40) || "Player"]);
     p = await getPlayer(openId);
   }
   const lastDay = p.last_day ? new Date(p.last_day).toISOString().slice(0, 10) : null;
@@ -374,7 +379,7 @@ export function registerV3(app: Express): void {
 
   app.post("/api/v3/player", limitWrites, guard(async (req, res, me) => {
     const b = req.body || {};
-    const name = clean(b.name, 40) || me.name || "Player";
+    const name = cleanPlayerName(b.name, 40) || me.name || "Player";
     const church = teamNameFor(me.openId) || clean(b.church, 60) || null; // a church-team member always plays for the team
     const tier = asTier(b.tier);
     const importXp = Math.max(0, Math.min(Number(b.importXp) || 0, 20000));
@@ -423,7 +428,7 @@ export function registerV3(app: Express): void {
     const tier = asTier(b.tier);
     const kind = ["mixed", "arena", "gap", "who", "myth"].includes(b.mode) ? b.mode : "mixed";
     const p = await getPlayer(me.openId);
-    const name = clean(b.name, 40) || p?.name || me.name || "A player";
+    const name = cleanPlayerName(b.name, 40) || p?.name || me.name || "A player";
     let ids: string[] = Array.isArray(b.ids) ? b.ids.map(String).filter((id: string) => BY_ID.has(id)).slice(0, 12) : [];
     if (ids.length < 4) ids = buildSet(kind, tier, code() + Date.now());
     const parent = b.parent ? clean(b.parent, 12) : null;
@@ -467,7 +472,7 @@ export function registerV3(app: Express): void {
   app.post("/api/v3/duels/:code/progress", rateLimit({ windowMs: 60_000, max: 120, name: "v3-progress" }), guard(async (req, res, me) => {
     const c = clean(req.params.code, 12).toUpperCase();
     const b = req.body || {};
-    const name = clean(b.name, 40) || me.name || "Player";
+    const name = cleanPlayerName(b.name, 40) || me.name || "Player";
     await baPool()!.query(
       `insert into ${SCH}.duel_entries(code, open_id, name, church, progress, score, correct)
        select $1,$2,$3,$4,$5,$6,$7 where exists(select 1 from ${SCH}.duels where code=$1)
@@ -491,7 +496,7 @@ export function registerV3(app: Express): void {
     const ordered = ids.map((id) => answers.find((a: any) => String(a.id) === id) || { id, choice: null, ms: 600000 });
     const scored = scoreRound(d.tier, ordered);
     const timeMs = ordered.reduce((t: number, a: any) => t + Math.max(0, Math.min(Number(a.ms) || 0, 600000)), 0);
-    const name = clean(b.name, 40) || me.name || "Player";
+    const name = cleanPlayerName(b.name, 40) || me.name || "Player";
     const church = clean(b.church, 60) || null;
     await pool.query(
       `insert into ${SCH}.duel_entries(code, open_id, name, church, score, correct, total, time_ms, answers, progress, finished)
@@ -556,11 +561,14 @@ export function registerV3(app: Express): void {
          left join ${SCH}.players p on p.open_id=o.open_id
          where m.open_id=$1 and m.finished group by o.open_id order by count(*) desc limit 30`, [me.openId])).rows;
     }
-    send(res, 200, { scope, rows: rows.map((r: any) => ({ name: r.name, church: r.church, score: r.score, rank: rankOf(r.xp || 0).name, isMe: me?.openId === r.open_id, wins: r.wins, losses: r.losses, draws: r.draws })) });
+    send(res, 200, { scope, rows: rows.map((r: any) => ({ name: badName(r.name) ? "Player" : r.name, church: r.church, score: r.score, rank: rankOf(r.xp || 0).name, isMe: me?.openId === r.open_id, wins: r.wins, losses: r.losses, draws: r.draws })) });
   }, false));
 
   // ---- Church League (teams, invite codes, weekly + all-time boards) ----
   registerChurches(app, guard as any, send);
+  // ---- v3.9.0 player safety: report/block storage in the server SQLite + owner review at /admin/reports ----
+  initSafetyStore(getDb as any, snapshotNow);
+  registerSafetyAdmin(app, adminGate, send as any);
   registerVerify(app, guard as any, send);
   registerSocial(app, guard as any, send, {
     createDuel: async (creatorOpenId, creatorName, mode, tier) => { const ids = buildSet(mode, tier, code() + Date.now()); return { code: await insertDuel(creatorOpenId, creatorName, mode, tier, ids), ids }; },

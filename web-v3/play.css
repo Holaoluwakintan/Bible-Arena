@@ -142,3 +142,18 @@ body.vd-on #toast{bottom:calc(96px + env(safe-area-inset-bottom))}
 /* v3.8.2: phones block sound until a tap; this banner sits right above the dock and cannot be missed */
 #vdock .vtapall{position:absolute;left:0;right:0;bottom:calc(100% + 8px);height:64px;border-radius:18px;background:var(--gold);color:#1A1203;font-size:18px;font-weight:800;box-shadow:0 8px 28px rgba(0,0,0,.5),0 0 0 4px rgba(255,200,60,.35);animation:vtapPulse 1.2s ease-in-out infinite}
 @keyframes vtapPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
+
+/* v3.9.0 player safety sheet (mute / block / report) */
+.kol div[data-pid]{cursor:pointer}
+.vsheet{position:fixed;inset:0;z-index:60;background:rgba(3,6,16,.62);display:flex;align-items:flex-end;justify-content:center;padding:12px 12px max(12px,env(safe-area-inset-bottom))}
+.vsh-card{width:min(480px,100%);background:#111a33;border:1px solid var(--line);border-radius:20px;padding:14px;display:flex;flex-direction:column;gap:8px;max-height:88vh;overflow:auto;box-shadow:0 -10px 40px rgba(0,0,0,.5)}
+.vsh-who{display:flex;align-items:center;gap:10px;font-size:17px;padding:2px 4px 6px}.vsh-who .va{font-size:26px}
+.vsh-sub{color:var(--muted);font-size:14px;padding:0 4px}
+.vsh-card button{font:inherit;font-weight:800;font-size:16px;color:var(--ivory);background:#1b2750;border:1px solid rgba(255,255,255,.08);border-radius:14px;min-height:52px;padding:10px 14px;text-align:left;cursor:pointer;display:flex;flex-direction:column;justify-content:center}
+.vsh-card button span{font-weight:500;font-size:13px;color:var(--muted)}
+.vsh-card button.vsh-go{background:#E5394F;border-color:#ff6b7d;text-align:center;align-items:center}
+.vsh-card button.vsh-cancel{background:transparent;text-align:center;align-items:center;color:var(--muted)}
+.vsh-reasons{display:flex;flex-direction:column;gap:4px}
+.vsh-reasons label,.vsh-also{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;background:rgba(255,255,255,.04);font-size:15px}
+.vsh-reasons input,.vsh-also input{width:20px;height:20px;accent-color:#F5B942}
+.vsheet textarea{font:inherit;font-size:15px;color:var(--ivory);background:#0b1430;border:1px solid var(--line);border-radius:12px;padding:10px;resize:none}

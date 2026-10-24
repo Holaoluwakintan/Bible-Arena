@@ -299,7 +299,7 @@ function koRoundLabel(s) { return s.ko.final ? "🏆 FINAL" : "Round " + s.ko.ro
 function koList(s, opts) {
   const o = opts || {};
   const rows = s.ko.list.filter((x) => (o.alive ? !x.out : true)).slice(0, o.limit || 60);
-  return `<div class="kol">${rows.map((x, i) => `<div class="${x.me ? "me " : ""}${x.out ? "out " : ""}${x.justOut ? "just " : ""}${x.on ? "" : "off"}">
+  return `<div class="kol">${rows.map((x, i) => `<div class="${x.me ? "me " : ""}${x.out ? "out " : ""}${x.justOut ? "just " : ""}${x.on ? "" : "off"}"${x.me ? "" : ` data-pid="${esc(x.id)}" data-k="${esc(x.k || "")}" data-n="${esc(x.name)}" data-a="${esc(x.avatar)}" role="button" tabindex="0" aria-label="${esc(x.name)}: mute, block or report"`}>
     <span class="kp">${o.lobby ? "" : x.out ? "❌" : i + 1}</span><span class="ka">${x.avatar}</span><span class="kn">${esc(x.name)}${x.host ? " 👑" : ""}${x.me ? " (you)" : ""}</span>
     <b>${o.lobby ? (x.on ? "" : "away") : x.out ? (x.out === -1 ? "watching" : s.phase === "final" && x.out === s.ko.round ? "2nd 🥈" : "out R" + x.out) : o.round ? "+" + fmt(x.rp) : fmt(x.score)}</b></div>`).join("")}</div>`;
 }
@@ -340,6 +340,7 @@ function koLobby(s) {
     ${k.isHost ? `<div class="card" style="width:100%"><div class="tiny muted">Questions per round</div><div class="perpick">${(k.choices || [5, 7, 10]).map((c) => `<button data-per="${c}" class="${c === k.per ? "on" : ""}">${c}</button>`).join("")}</div><div class="small muted" style="margin-top:6px">The final is ${k.finalLen} questions.</div></div>
       <button class="btn primary" id="kostart"></button>` : k.auto ? "" : `<div class="card" style="width:100%"><div class="tiny muted">Waiting for ${esc(host.name || "the host")} to start</div><div class="small muted" style="margin-top:6px">Keep this screen open. ${host.on === false ? `<a href="#" id="kotake">${esc(host.name || "The host")} left? Start it yourself</a>` : ""}</div></div>`}
     <div class="card small muted" style="width:100%;text-align:left">📜 <b style="color:var(--ivory)">How it works:</b> ${esc(k.rule)}</div>
+    <div class="card small muted" style="width:100%;text-align:left">🤝 <b style="color:var(--ivory)">Be kind:</b> no bad language, bullying or asking for personal details. Tap any player to mute, block or report them.</div>
     <p class="foot"><a href="/">Bible Arena home</a></p></div>`;
   koBindShare(s); koBindPub(); koBoxKey = koBoxState(s);
   const st = $("#kostart"); if (st) { koStartBtn(s); st.onclick = () => { L.buzz(15); koAction("start", st); }; }
@@ -444,6 +445,16 @@ async function results(c) {
     <a class="btn ghost" href="/live" style="text-decoration:none">Host your own quiz night (free)</a></div>`;
   $("#share").onclick = () => L.shareCard(f);
 }
+
+// v3.9.0: tap a player in the knockout list = mute / block / report (voice.js sheet)
+function koPlayerTap(e) {
+  if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+  const r = e.target.closest && e.target.closest(".kol [data-pid]"); if (!r || !window.BAVoice || !window.BAVoice.sheet) return;
+  e.preventDefault();
+  window.BAVoice.sheet({ id: r.dataset.pid, name: r.dataset.n, avatar: r.dataset.a, k: r.dataset.k });
+}
+document.addEventListener("click", koPlayerTap);
+document.addEventListener("keydown", koPlayerTap);
 
 boot();
 })();

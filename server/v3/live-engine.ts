@@ -1,6 +1,7 @@
 // Bible Arena Live: the quiz-night engine. Pure state transitions (no IO) so it can be tested
 // directly; server/v3/live.ts wires it to HTTP, SSE/long-poll and Postgres snapshots.
 import crypto from "node:crypto";
+import { badName } from "./names";
 
 export type Phase = "lobby" | "intro" | "question" | "reveal" | "board" | "final";
 export interface LQ {
@@ -13,6 +14,8 @@ export interface LPlayer {
   score: number; streak: number; best: number; correct: number; timeMs: number;
   joinedAt: number; lastSeen: number; answers: Record<string, LAnswer>; kicked?: boolean;
   prevRank?: number; rank?: number;
+  /** v3.9.0: one-way tag of the phone's random device id (safety.ts deviceTag), for Block across rooms. Never the id itself. */
+  dk?: string;
 }
 export interface LTeam { id: string; name: string; color: string; emoji: string }
 export interface LRoom {
@@ -79,7 +82,7 @@ export const rid = (n = 12) => crypto.randomBytes(n).toString("base64url");
 
 export function cleanName(raw: unknown): string {
   let s = String(raw ?? "").replace(/[\u0000-\u001f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 18);
-  if (BLOCK.test(s)) s = "";
+  if (BLOCK.test(s) || badName(s)) s = ""; // v3.9.0: + the stricter shared filter (names.ts)
   return s;
 }
 
@@ -116,13 +119,15 @@ export const alivePlayers = (room: LRoom) => activePlayers(room).filter((p) => !
 
 export type JoinResult = { ok: true; player: LPlayer; rejoined: boolean } | { ok: false; error: string; code: string };
 
-export function joinRoom(room: LRoom, input: { name?: unknown; avatar?: unknown; team?: unknown; token?: unknown }, now: number): JoinResult {
+export function joinRoom(room: LRoom, input: { name?: unknown; avatar?: unknown; team?: unknown; token?: unknown; dk?: unknown }, now: number): JoinResult {
   const token = typeof input.token === "string" ? input.token : "";
+  const dk = typeof input.dk === "string" && /^[A-Za-z0-9_-]{16}$/.test(input.dk) ? input.dk : "";
   if (token) {
     const back = Object.values(room.players).find((p) => p.token === token);
     if (back) {
       if (back.kicked) return { ok: false, error: "The host removed you from this game.", code: "kicked" };
       back.lastSeen = now;
+      if (dk && !back.dk) back.dk = dk;
       // a returning player may switch team only while the game has not started
       if (room.phase === "lobby" && room.teams && typeof input.team === "string" && room.teams.some((t) => t.id === input.team)) back.team = input.team;
       bump(room, false);
@@ -155,6 +160,7 @@ export function joinRoom(room: LRoom, input: { name?: unknown; avatar?: unknown;
     id: rid(6), token: rid(16), name, avatar, team, score: 0, streak: 0, best: 0, correct: 0, timeMs: 0,
     joinedAt: now, lastSeen: now, answers: {},
   };
+  if (dk) player.dk = dk;
   room.players[player.id] = player;
   if (room.ko && room.phase !== "lobby") room.ko.out[player.id] = -1; // joined mid-game or after the end: watches until Play again
   bump(room);

@@ -13,6 +13,7 @@ import type { Express, Request, Response } from "express";
 import { getDb } from "../db";
 import { logger } from "../_core/logger";
 import { sendPush, vapidPublicKey, endpointOk, type PushSub } from "./webpush";
+import { badName } from "./names";
 
 type Me = { openId: string; name: string };
 type Guard = (fn: (req: Request, res: Response, me: Me) => Promise<void>, needAuth?: boolean) => (req: Request, res: Response) => Promise<void>;
@@ -47,6 +48,8 @@ const TIERS: Tier[] = ["b", "s", "t"];
 const asTier = (v: unknown): Tier => (TIERS.includes(v as Tier) ? (v as Tier) : "s");
 const asMode = (v: unknown) => (MODES.includes(String(v)) ? String(v) : "mixed");
 const clean = (v: unknown, max: number) => String(v ?? "").replace(/[\u0000-\u001f\u007f<>{}\[\]\\`$]/g, "").replace(/\s+/g, " ").trim().slice(0, max);
+/** v3.9.0: player display names also pass the shared bad-word filter (names.ts); a bad name falls back to the saved/default name. */
+const cleanPlayerName = (v: unknown, max: number) => { const s = clean(v, max); return badName(s) ? "" : s; };
 const pidOk = (v: unknown) => (typeof v === "string" && /^[A-Za-z0-9_-]{8,40}$/.test(v) ? v : "");
 const lagosHour = (t: number) => new Date(t + 3600_000).getUTCHours();
 const lagosDay = (t: number) => new Date(t + 3600_000).toISOString().slice(0, 10);
@@ -298,7 +301,7 @@ export function registerSocial(app: Express, guard: Guard, send: Send, d: Social
     let p = pres.get(key);
     if (!p) { if (pres.size > 50_000) prune(now); p = { key, openId: "", at: now, busy: false, mute: false, lastPopup: 0, seen: new Set() }; pres.set(key, p); }
     p.at = now; p.busy = !!b.busy; p.mute = !!b.mute;
-    if (typeof b.name === "string") p.name = clean(b.name, 18) || undefined;
+    if (typeof b.name === "string") p.name = cleanPlayerName(b.name, 18) || undefined;
     if (me && p.openId !== me.openId) { p.openId = me.openId; }
     if (me) byOpen.set(me.openId, p);
     const out: any = { online: onlineCount(now), invite: inviteFor(p, now) };
@@ -323,7 +326,7 @@ export function registerSocial(app: Express, guard: Guard, send: Send, d: Social
     const now = nowFn();
     expire(now);
     cancelMine(me.openId);
-    const name = clean(b.name, 40) || me.name || "Player";
+    const name = cleanPlayerName(b.name, 40) || me.name || "Player";
     const church = clean(b.church, 60);
     let kind: Kind = "quick"; let vs: Wait["vs"]; let note = "";
     if (b.duel) {
@@ -370,7 +373,7 @@ export function registerSocial(app: Express, guard: Guard, send: Send, d: Social
     if (!w || !fresh(w, now)) return send(res, 410, { error: "taken" });
     if (w.openId === me.openId) return send(res, 400, { error: "own_challenge" });
     cancelMine(me.openId);
-    const name = clean((req.body || {}).name, 40) || me.name || "Player";
+    const name = cleanPlayerName((req.body || {}).name, 40) || me.name || "Player";
     send(res, 200, await pair(w, me, name, now));
   }));
 
@@ -384,7 +387,7 @@ export function registerSocial(app: Express, guard: Guard, send: Send, d: Social
     if (!allow("bot:" + me.openId, 10, 600_000)) return send(res, 429, { error: "slow_down" });
     const b = req.body || {};
     cancelMine(me.openId);
-    const r = await deps.createBotDuel(me.openId, clean(b.name, 40) || me.name || "Player", asMode(b.mode), asTier(b.tier));
+    const r = await deps.createBotDuel(me.openId, cleanPlayerName(b.name, 40) || me.name || "Player", asMode(b.mode), asTier(b.tier));
     send(res, 200, { ...r, tier: asTier(b.tier), mode: asMode(b.mode) });
   }));
 

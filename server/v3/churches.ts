@@ -478,7 +478,7 @@ function adminKeyOk(req: Request): boolean {
 }
 const adminFails = new Map<string, { n: number; reset: number }>();
 const ipOf = (req: Request) => { const f = req.headers["x-forwarded-for"]; return (typeof f === "string" ? f.split(",")[0].trim() : req.ip) || "ip"; };
-function adminGate(req: Request, res: Response, send: Send): boolean {
+export function adminGate(req: Request, res: Response, send: Send): boolean {
   const ip = ipOf(req), now = Date.now();
   let f = adminFails.get(ip);
   if (f && f.reset <= now) { adminFails.delete(ip); f = undefined; }

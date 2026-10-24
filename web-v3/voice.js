@@ -19,7 +19,9 @@ let ice = null, mic = null, micOn = false, micBusy = false, micDenied = false;
 let actx = null, analyser = null, abuf = null, myLevel = 0;
 let pollT = 0, levelT = 0, slowT = 0, outbox = [], sending = false, flushT = 0, needTap = false, lastHTML = "";
 const peers = new Map();      // id -> peer
-const mutedByMe = new Set();  // players I muted for myself
+const mutedByMe = new Set();  // players I muted for myself (this room)
+let banned = false;           // v3.9.0: taken out of voice in this room after reports
+let synced = false;
 const warned = new Set();
 const talkAt = new Map();     // id -> last time their level was up
 
@@ -36,7 +38,8 @@ async function call(a, extra) {
   } catch (e) {
     if (C !== c) return null;
     if (e.code === "full") { full = true; inVoice = false; if (e.roster) onMsg(e.roster); render(); }
-    if (e.code === "out" && prefOn()) { inVoice = false; setTimeout(() => join(), 500); }
+    if (e.code === "out" && prefOn() && !banned) { inVoice = false; setTimeout(() => join(), 500); }
+    if (e.code === "banned") { banned = true; inVoice = false; render(); }
     throw e;
   }
 }
@@ -62,16 +65,19 @@ function onMsg(m) {
   if (!m || !C) return;
   if (m.type === "roster") return setRoster(m);
   if (m.type === "sig") return onSig(m.from, m.d).catch(() => {});
+  if (m.type === "banned") { banned = true; inVoice = false; for (const id of [...peers.keys()]) closePeer(id); toast("Other players reported you, so voice is off for you in this game. You can still play."); render(); }
 }
 L.onVc = onMsg;
 
 function setRoster(m) {
-  roster = Array.isArray(m.list) ? m.list : [];
+  const bl = blockedMap();
+  roster = (Array.isArray(m.list) ? m.list : []).filter((x) => x.id === C.myId || !(x.k && bl[x.k])); // v3.9.0: never connect to someone I blocked
   max = m.max || max;
   const was = inVoice;
   inVoice = roster.some((x) => x.id === C.myId);
   if (inVoice) full = false;
-  if (was && !inVoice && prefOn() && !joining) setTimeout(() => join(), 800); // the server dropped us (weak data): come back
+  if (was && !inVoice && prefOn() && !joining && !banned) setTimeout(() => join(), 800); // the server dropped us (weak data): come back
+  if (!inVoice && full && !joining && prefOn() && !banned && roster.length < max) setTimeout(() => { if (C && full && !inVoice) { full = false; join(); } }, 400); // v3.9.0: a seat opened up
   if (inVoice) {
     const ids = new Set(roster.map((x) => x.id));
     for (const id of [...peers.keys()]) if (!ids.has(id)) closePeer(id);
@@ -226,6 +232,7 @@ async function micToggle() {
       }
     }
     setMic(!micOn);
+    if (micOn) { try { if (!localStorage.getItem("bal:rules")) { localStorage.setItem("bal:rules", "1"); toast("Be kind 🙏 Tap anyone's bubble to mute, block or report them."); } } catch (e) {} }
     if (L.buzz) L.buzz(12);
   } finally { micBusy = false; render(); }
 }
@@ -273,9 +280,10 @@ function levels() {
 
 /* ---------- join / leave ---------- */
 async function join() {
-  if (!C || joining || inVoice || !supported || !prefOn()) return;
+  if (!C || joining || inVoice || !supported || !prefOn() || banned) return;
   joining = true; render();
-  try { await getIce(); await call("join"); } catch (e) { if (e.code !== "full" && C) toast("Voice couldn't connect right now. The game continues."); }
+  syncBlocks();
+  try { await getIce(); await call("join"); } catch (e) { if (e.code !== "full" && e.code !== "banned" && C) toast("Voice couldn't connect right now. The game continues."); }
   finally { joining = false; render(); }
 }
 function leave(keepalive) {
@@ -300,7 +308,7 @@ function chip(x, me) {
   const st = me ? "" : p.state === "fail" ? "fail" : p.state === "on" ? "" : "wait";
   // badge: 🔇 muted for me · ⚠️ couldn't connect · … connecting · 🎙️ their mic is on
   const badge = mineMuted ? "🔇" : st === "fail" ? "⚠️" : st === "wait" ? "…" : !x.muted ? "🎙️" : "";
-  return `<button class="vchip ${mineMuted ? "mute " : ""}${st}${x.muted ? " micoff" : ""}" data-id="${esc(x.id)}" aria-label="${esc(x.name)}${me ? " (you)" : mineMuted ? ", muted for you. Tap to unmute" : ". Tap to mute for you"}">
+  return `<button class="vchip ${mineMuted ? "mute " : ""}${st}${x.muted ? " micoff" : ""}" data-id="${esc(x.id)}" aria-label="${esc(x.name)}${me ? " (you)" : mineMuted ? ", muted for you. Tap for options" : ". Tap to mute, block or report"}">
     <span class="va">${esc(x.avatar || "🙂")}</span>${badge ? `<span class="vb">${badge}</span>` : ""}<span class="vn">${me ? "You" : esc(x.name)}</span></button>`;
 }
 function render() {
@@ -317,7 +325,8 @@ function render() {
     const mtxt = micDenied ? "Mic blocked" : micOn ? "Mic on" : joining ? "Joining…" : "Tap to talk";
     const meX = roster.find((x) => x.id === C.myId);
     h = `<button id="vmic" class="vmic ${mcls}" aria-pressed="${micOn}" aria-label="${micOn ? "Mute your mic" : "Unmute your mic"}"><span class="vi">${micDenied ? "🚫" : micOn ? "🎙️" : "🎤"}</span><span class="vt">${mtxt}</span></button>
-      <div class="vchips">${full && !inVoice ? `<span class="vmsg">Voice is full (${max}). You can still play.</span>`
+      <div class="vchips">${banned ? `<span class="vmsg">Voice is off for you in this game (reports from other players). You can still play.</span>`
+        : full && !inVoice ? `<span class="vmsg">Voice is full (${max}). You can still play.</span>`
         : !inVoice ? `<span class="vmsg">${joining ? "Connecting voice…" : "Voice not connected"}</span>`
         : (meX ? chip(meX, true) : "") + (others.length ? others.map((x) => chip(x, false)).join("") : `<span class="vmsg">No one else in voice yet</span>`)}</div>
       ${needTap ? `<button class="vtapall" data-v="tap">🔊 Tap here to hear the others</button>` : ""}
@@ -339,12 +348,89 @@ function bindDock(d) {
       const p = peers.get(id);
       if (p && p.state === "fail") { p.tries = 0; p.state = "connecting"; warned.delete(id); if (p.init) start(p).catch(() => trouble(p)); else send(id, { k: "hello" }); render(); return; }
       const x = roster.find((r) => r.id === id);
-      if (mutedByMe.has(id)) { mutedByMe.delete(id); toast(`${x ? x.name : "Player"} unmuted`); } else { mutedByMe.add(id); toast(`${x ? x.name : "Player"} muted for you`); }
-      if (p && p.audio) p.audio.muted = mutedByMe.has(id);
-      render();
+      if (x) V.sheet({ id, name: x.name, avatar: x.avatar, k: x.k || "" }); // v3.9.0: mute / block / report
     } else if (id && C && id === C.myId) micToggle();
   });
 }
+
+/* ---------- v3.9.0 player safety: mute (for me) · block (every future room) · report ---------- */
+const BKEY = "bal:blocked";
+const REASONS = [["language", "Bad language"], ["bullying", "Bullying or insults"], ["sexual", "Sexual or inappropriate talk"], ["hate", "Hate or threats"],
+  ["personal", "Asking for or sharing personal info"], ["spam", "Spam or noise"], ["name", "Offensive name"], ["other", "Something else"]];
+function blockedMap() { try { const o = JSON.parse(localStorage.getItem(BKEY) || "{}"); return o && typeof o === "object" ? o : {}; } catch (e) { return {}; } }
+function saveBlocked(o) { try { localStorage.setItem(BKEY, JSON.stringify(o)); } catch (e) {} }
+/** Tell the server about blocks made on this phone (once per page; it may have restarted since). */
+function syncBlocks() {
+  if (synced) return; synced = true;
+  const ks = Object.keys(blockedMap()).slice(0, 100);
+  if (ks.length) L.api("/lv/block", { list: ks, on: true }, { timeout: 10000 }).catch(() => { synced = false; });
+}
+V.blocked = () => { const o = blockedMap(); return Object.keys(o).map((k) => ({ k, name: o[k].n || "Player", at: o[k].at || 0 })); };
+V.block = async function (k, name, on) {
+  if (!k) { toast("Can't block this player on an old app version. Mute them instead."); return false; }
+  const o = blockedMap();
+  if (on === false) delete o[k]; else o[k] = { n: String(name || "Player").slice(0, 40), at: Date.now() };
+  saveBlocked(o);
+  try { await L.api("/lv/block", { k, on: on !== false, code: C ? C.code : "" }, { timeout: 10000 }); } catch (e) {}
+  if (on !== false) { const x = roster.find((r) => r.k === k); if (x) { closePeer(x.id); roster = roster.filter((r) => r.id !== x.id); } }
+  render();
+  return true;
+};
+function toggleMute(id) {
+  const x = roster.find((r) => r.id === id);
+  if (mutedByMe.has(id)) { mutedByMe.delete(id); toast(`${x ? x.name : "Player"} unmuted`); } else { mutedByMe.add(id); toast(`${x ? x.name : "Player"} muted for you`); }
+  const p = peers.get(id); if (p && p.audio) p.audio.muted = mutedByMe.has(id);
+  render();
+}
+function closeSheet() { const s = document.getElementById("vsheet"); if (s) s.remove(); }
+/** Options for one player (voice bubble or the player list): mute for me, block, report. */
+V.sheet = function (x) {
+  if (!x || !x.id || (C && x.id === C.myId)) return;
+  closeSheet();
+  const inV = roster.some((r) => r.id === x.id);
+  const s = document.createElement("div");
+  s.id = "vsheet"; s.className = "vsheet"; s.setAttribute("role", "dialog"); s.setAttribute("aria-label", "Options for " + x.name);
+  const main = () => `<div class="vsh-card"><div class="vsh-who"><span class="va">${esc(x.avatar || "🙂")}</span><b>${esc(x.name)}</b></div>
+    ${inV ? `<button data-s="mute">${mutedByMe.has(x.id) ? "🔈 Unmute for me" : "🔇 Mute for me"}</button>` : ""}
+    <button data-s="block">🚫 Block<span>You won't hear each other in any game</span></button>
+    <button data-s="report">🚩 Report<span>Tell us about bad behaviour</span></button>
+    <button data-s="x" class="vsh-cancel">Cancel</button></div>`;
+  const rep = () => `<div class="vsh-card"><div class="vsh-who"><b>Report ${esc(x.name)}</b></div><div class="vsh-sub">What happened?</div>
+    <div class="vsh-reasons">${REASONS.map(([k, t]) => `<label><input type="radio" name="vr" value="${k}"> ${t}</label>`).join("")}</div>
+    <textarea id="vnote" maxlength="300" rows="2" placeholder="Anything else? (optional)"></textarea>
+    <label class="vsh-also"><input type="checkbox" id="valso" checked> Also block ${esc(x.name)}</label>
+    <button data-s="send" class="vsh-go">Send report</button><button data-s="x" class="vsh-cancel">Cancel</button></div>`;
+  s.innerHTML = main();
+  s.addEventListener("click", async (e) => {
+    if (e.target === s) return closeSheet();
+    const b = e.target.closest("button"); if (!b) return;
+    const a = b.dataset.s;
+    if (a === "x") return closeSheet();
+    if (a === "mute") { closeSheet(); return toggleMute(x.id); }
+    if (a === "block") { closeSheet(); if (await V.block(x.k, x.name, true)) toast(`${x.name} blocked. You won't hear each other in any game. Unblock in Profile.`); return; }
+    if (a === "report") { s.innerHTML = rep(); return; }
+    if (a === "send") {
+      const r = s.querySelector('input[name="vr"]:checked');
+      if (!r) { toast("Pick what happened"); return; }
+      const note = (s.querySelector("#vnote").value || "").trim().slice(0, 300), also = s.querySelector("#valso").checked;
+      b.disabled = true;
+      try {
+        if (!C) throw new Error("This game has ended.");
+        await L.api("/lv/r/" + C.code + "/report", { t: C.token, to: x.id, reason: r.value, note }, { timeout: 12000 });
+        if (also) await V.block(x.k, x.name, true);
+        closeSheet();
+        toast(also ? `Thanks. ${x.name} is reported and blocked.` : `Thanks. ${x.name} is reported. We review every report.`);
+      } catch (err) { b.disabled = false; toast(err.message || "Couldn't send the report. Try again."); }
+    }
+  });
+  document.body.appendChild(s);
+};
+// v3.9.0: back online after a drop: give every "couldn't connect" player a fresh try and ask the server who is in voice
+window.addEventListener("online", () => {
+  if (!C) return;
+  peers.forEach((p) => { if (p.state === "fail") { p.tries = 0; p.state = "connecting"; warned.delete(p.id); if (p.init) start(p).catch(() => trouble(p)); else send(p.id, { k: "hello" }); } });
+  poll(); render();
+});
 
 /* ---------- public ---------- */
 /** Called on every knockout-room state; cheap and idempotent. */
@@ -353,7 +439,7 @@ V.attach = function (o) {
   if (C && (C.code !== o.code || C.token !== o.token)) V.detach();
   if (C) { C.conn = o.conn; return; }
   C = { code: o.code, token: o.token, myId: o.myId, conn: o.conn };
-  roster = []; needTap = false; micDenied = false;
+  roster = []; needTap = false; micDenied = false; banned = false; mutedByMe.clear();
   render();
   clearInterval(levelT); levelT = setInterval(levels, 200);
   // long-poll fallback: when the live stream is not SSE, fetch voice messages every 1.5 s; a slow safety net otherwise
@@ -374,6 +460,7 @@ V.detach = function (keepalive) {
   leave(keepalive);
   clearInterval(levelT); clearInterval(pollT); clearInterval(slowT);
   C = null; roster = [];
+  closeSheet();
   render();
 };
 V.state = () => ({ on: !!C, pref: prefOn(), inVoice, micOn, micDenied, roster: roster.map((x) => x.id), peers: [...peers.values()].map((p) => ({ id: p.id, state: p.state, pc: p.pc ? p.pc.connectionState : "none", mutedByMe: mutedByMe.has(p.id) })) });

@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.8.5";
+window.BA_V = "3.9.0";
 
 // ---------- v3.8.3: opt-in rewarded ads (Android app 1.4.0+ only; the website shows nothing new) ----------
 // The app tells the page it can play ads: its launch URL carries baads=1 (Chrome / TWA path, remembered for this tab only),
@@ -158,9 +158,31 @@ function confetti(n) {
 }
 
 // ---------- API ----------
+// v3.9: the same random phone id as live-common.js (x-ba-d), so a Block works in every room
+function deviceId() {
+  try {
+    let d = localStorage.getItem("ba:did");
+    if (!d || !/^[A-Za-z0-9_-]{22,64}$/.test(d)) {
+      const b = new Uint8Array(18); crypto.getRandomValues(b);
+      d = btoa(String.fromCharCode.apply(null, b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      localStorage.setItem("ba:did", d);
+    }
+    return d;
+  } catch (e) { return ""; }
+}
+// v3.9: the same kind-names filter as the server (server/v3/names.ts), so a rude name is caught before it is saved
+function badNm(v) {
+  const BAD = ["fuck", "fuk", "fvck", "bitch", "asshole", "bastard", "pussy", "nigger", "nigga", "whore", "slut", "porn", "hitler", "ashawo", "olosho", "oloshi", "werey", "satanrules", "vagina", "boobs", "bullshit", "motherf"];
+  const WORDS = ["shit", "shitty", "cunt", "rape", "rapist", "nude", "nudes", "dick", "cock", "sex", "sexy", "mumu", "penis", "kill", "killer"];
+  const lower = String(v || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+  const leet = lower.replace(/[@4]/g, "a").replace(/3/g, "e").replace(/[1!|]/g, "i").replace(/0/g, "o").replace(/[5$]/g, "s").replace(/7/g, "t");
+  return [lower, leet].some((s) => { const w = s.replace(/[^a-z]+/g, " ").split(" ").filter(Boolean); const f = w.join(""); return BAD.some((b) => f.indexOf(b) >= 0) || w.some((x) => WORDS.indexOf(x) >= 0); });
+}
+const KIND_NAME = "Please pick a kind name 🙂";
 async function api(path, opts) {
   opts = opts || {};
-  const r = await fetch(path, { method: opts.body ? "POST" : "GET", credentials: "same-origin", headers: { "Content-Type": "application/json", "x-client-platform": "web" }, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  const hd = { "Content-Type": "application/json", "x-client-platform": "web" }; const did = deviceId(); if (did) hd["x-ba-d"] = did;
+  const r = await fetch(path, { method: opts.body ? "POST" : "GET", credentials: "same-origin", headers: hd, body: opts.body ? JSON.stringify(opts.body) : undefined });
   let data = null; try { data = await r.json(); } catch (e) {}
   if (!r.ok) { const err = new Error((data && data.error) || "http_" + r.status); err.status = r.status; err.data = data; throw err; }
   return data;
@@ -264,7 +286,7 @@ function onboarding(after) {
   </div>`);
   $("#tiers").onclick = (e) => { const t = e.target.closest(".tier"); if (!t) return; S.tier = t.dataset.t; $$(".tier").forEach((x) => x.classList.toggle("on", x === t)); sfx.tap(); };
   $("#go").onclick = async () => {
-    S.name = $("#nm").value.trim().slice(0, 40) || "Player";
+    { const n = $("#nm").value.trim().slice(0, 40); if (badNm(n)) { $("#nm").focus(); return toast(KIND_NAME); } S.name = n || "Player"; }
     S.onboarded = true; save(); buzz(15); sfx.ok();
     $("#go").disabled = true; $("#go").textContent = "Opening the gates…";
     await ensureSession();
@@ -993,7 +1015,7 @@ async function joinByCode(code) {
     <a class="btn ghost block" href="#/">Not now</a>
   </div>`);
   $("#jgo").onclick = async () => {
-    if (needName) { const n = $("#nm").value.trim().slice(0, 40); if (!n) { $("#nm").focus(); return toast("Tell us your name first"); } S.name = n; S.onboarded = true; save(); await savePlayer(); }
+    if (needName) { const n = $("#nm").value.trim().slice(0, 40); if (!n) { $("#nm").focus(); return toast("Tell us your name first"); } if (badNm(n)) { $("#nm").focus(); return toast(KIND_NAME); } S.name = n; S.onboarded = true; save(); await savePlayer(); }
     if (!ME.player) await savePlayer(); // so the church page shows their name
     $("#jgo").disabled = true; $("#jgo").textContent = "Joining…";
     try { const r = await api("/api/v3/churches/join", { body: { code } }); syncChurch(r.church); sfx.win(); confetti(60); toast(`Welcome to ${r.church.name} ⛪`); go("#/church/" + r.church.id); }
@@ -1372,6 +1394,7 @@ async function acceptDuel(code) {
     ${v.entries.filter((e) => e.finished).length > 1 ? `<div class="card"><b>Already played</b>${board(v)}</div>` : ""}
   </div>`);
   $("#acc").onclick = async () => {
+    if (needName && badNm($("#nm").value)) { $("#nm").focus(); return toast(KIND_NAME); }
     if (needName) { S.name = ($("#nm").value || "").trim().slice(0, 40) || "Player"; S.church = ($("#ch").value || "").trim().slice(0, 60); S.onboarded = true; save(); await savePlayer(); }
     await loadBank();
     sfx.ok(); buzz(20);
@@ -1469,6 +1492,26 @@ async function ranks(tab) {
 }
 
 // ---------- profile & settings ----------
+// v3.9: players blocked from voice games on this phone (kept in localStorage "bal:blocked" by voice.js, also on the server)
+function blockedList() { try { const o = JSON.parse(localStorage.getItem("bal:blocked") || "{}"); return Object.keys(o).map((k) => ({ k, n: (o[k] && o[k].n) || "Player" })); } catch (e) { return []; } }
+function blockedSheet() {
+  const draw = () => {
+    const L = blockedList();
+    const box = document.getElementById("blksheet") || document.body.appendChild(Object.assign(document.createElement("div"), { id: "blksheet" }));
+    box.style.cssText = "position:fixed;inset:0;z-index:69;background:rgba(3,6,16,.62)";
+    box.innerHTML = `<div class="card col" style="position:fixed;left:12px;right:12px;bottom:12px;max-width:480px;margin:auto;z-index:70;gap:8px;max-height:80vh;overflow:auto"><b>Blocked players</b>
+      ${L.length ? L.map((x) => `<div class="setrow"><div class="grow">${esc(x.n)}</div><button class="chip" data-ub="${esc(x.k)}">Unblock</button></div>`).join("") : `<div class="small muted">No one is blocked.</div>`}
+      <button class="btn ghost" id="blkx">Done</button></div>`;
+    box.onclick = async (e) => {
+      if (e.target.id === "blkx" || e.target === box) { box.remove(); return profile(); }
+      const k = e.target.dataset && e.target.dataset.ub; if (!k) return;
+      try { const o = JSON.parse(localStorage.getItem("bal:blocked") || "{}"); delete o[k]; localStorage.setItem("bal:blocked", JSON.stringify(o)); } catch (x) {}
+      api("/lv/block", { body: { k, on: false } }).catch(() => {});
+      toast("Unblocked"); draw();
+    };
+  };
+  draw();
+}
 async function profile() {
   render(`<div id="pf"></div>${tabbar("me")}`);
   await ensureSession();
@@ -1494,14 +1537,16 @@ async function profile() {
       <div class="setrow"><div class="grow"><div>Game pop-ups</div><div class="small muted">“A live game is starting” or “someone is waiting for a challenger” while you're in the app (max 1 every 2 min)</div></div><button class="switch ${window.BAS && !BAS.muted() ? "on" : ""}" id="pops" aria-label="Challenge pop-ups"></button></div>
       <div class="setrow" id="pushrow"><div class="grow"><div>Phone notifications</div><div class="small muted" id="pushtxt">Checking…</div></div><span id="pushbtn"></span></div>
       <div class="setrow"><div class="grow"><div>Account</div><div class="small muted">${google ? "Signed in with Google ✓ (progress is safe across phones)" : "Guest on this phone. Sign in to keep your progress on any phone."}</div></div>${google ? `<button class="chip" id="out">Sign out</button>` : `<a class="chip on" href="/api/oauth/google/start">Google</a>`}</div>
+      <div class="setrow"><div class="grow"><div>Blocked players</div><div class="small muted" id="blktxt">${blockedList().length ? blockedList().length + " blocked. You won't hear each other in voice." : "No one. Tap a player in a game to mute, block or report."}</div></div>${blockedList().length ? `<button class="chip" id="blk">Manage</button>` : ""}</div>
       <div class="setrow"><div class="grow"><div>Privacy policy</div><div class="small muted">What we keep and why</div></div><a class="chip" href="/privacy">Read</a></div>
       <div class="setrow"><div class="grow"><div>Delete account</div><div class="small muted">Permanently erase your profile, scores and duels</div></div><button class="chip" id="delacct" style="color:#ff8a80">Delete</button></div>
     </div>
     <div class="card"><b>More</b><div class="row" style="flex-wrap:wrap;gap:8px;margin-top:10px"><a class="chip" href="/play">🏛️ Classic app</a>${inAppShell() ? "" : `<a class="chip" href="/download">📱 Android app</a>`}<a class="chip" href="#/ranks?tab=church">⛪ Church League</a></div>
       <p class="small dim" style="margin:12px 0 0">Scripture quotations are from the King James Version (public domain). Every answer carries its reference so you can read it yourself.</p></div>
   </div>`;
-  const ed = async (key, label, max) => { const v = prompt(label, S[key] || ""); if (v == null) return; S[key] = v.trim().slice(0, max); save(); await savePlayer(); profile(); };
+  const ed = async (key, label, max) => { const v = prompt(label, S[key] || ""); if (v == null) return; if (key === "name" && badNm(v)) return toast(KIND_NAME); S[key] = v.trim().slice(0, max); save(); await savePlayer(); profile(); };
   $("#ename").onclick = () => ed("name", "Your name", 40);
+  const blk = $("#blk"); if (blk) blk.onclick = () => blockedSheet();
   $("#etier").onclick = () => tierSheet(() => profile());
   $("#snd").onclick = (e) => { S.sound = !S.sound; save(); e.target.classList.toggle("on", S.sound); sfx.ok(); };
   $("#hap").onclick = (e) => { S.haptics = !S.haptics; save(); e.target.classList.toggle("on", S.haptics); buzz(30); };
