@@ -23,6 +23,7 @@ import { registerSocial, mergeSocial, scheduleKoPush, setReminderDeps, reminderT
 import { publicRooms, liveWinner, publicKo, onKoOpen } from "./live";
 import { badName } from "./names";
 import { initReportStore, registerReport, tallyBooks } from "./report";
+import { initTesterStore, registerTesters } from "./testers";
 import { ST3_ID, EN_ID, story3Apply, story3Ad, endlessApply } from "./story3";
 
 type Tier = "b" | "s" | "t";
@@ -620,6 +621,9 @@ export function registerV3(app: Express): void {
   initReportStore(getDb as any);
   registerReport(app, guard, send, { pool: () => baPool()!, SCH, getPlayer });
   registerSafetyAdmin(app, adminGate, send as any);
+  // ---- v3.11.2 Google Play tester sign-ups: public /test page, owner list at /admin/testers (same admin key) ----
+  initTesterStore(getDb as any, snapshotNow);
+  registerTesters(app, adminGate, send as any);
   registerVerify(app, guard as any, send);
   registerSocial(app, guard as any, send, {
     createDuel: async (creatorOpenId, creatorName, mode, tier) => { const ids = buildSet(mode, tier, code() + Date.now()); return { code: await insertDuel(creatorOpenId, creatorName, mode, tier, ids), ids }; },
