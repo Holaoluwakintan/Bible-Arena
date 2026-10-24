@@ -605,12 +605,10 @@ async function startMode(mode, tier) {
     return runRound({ ids, tier, mode: "sudden", title: "Sudden Death", sudden: true });
   }
   if (mode === "story") {
-    const L = STORY.find((x) => x.k === parseHash().q.get("l")) || STORY[0];
-    const st = storyState().lv[L.i];
-    if (!st.unlocked) { toast("Pass the level before it first."); return go("#/story"); }
-    const ids = bookSet(L.books, STORY_N, tier);
-    if (ids.length < STORY_N) { toast("Not enough questions for this level yet."); return go("#/story"); }
-    return runRound({ ids, tier, mode: "story", title: `Story ${L.i + 1}: ${L.title}`, story: L });
+    if (!ME.player) { try { await ensureSession(); } catch (e) {} }
+    const q = parseHash().q, id = String(q.get("l") || "");
+    if (!/^[0-9a-z]{3}\.(\d{1,2}|b)$/.test(id)) return go("#/story");
+    return stStart(id, q.get("m") === "1");
   }
   if (mode === "book") {
     // v3.10: practise one book (from the weekly report card's "Books to work on")
@@ -653,7 +651,7 @@ function runRound(cfg) {
     show(items[idx]);
   }
   function show(it) {
-    const limit = limitOf(it, tier);
+    const limit = cfg.timeScale && limitOf(it, tier) ? Math.max(6, Math.round(limitOf(it, tier) * cfg.timeScale)) : limitOf(it, tier); // v3.11 story: tighter clock along the journey
     const label = it.m === "gap" ? "Fill in the Gap" : it.m === "who" ? "Who Am I?" : it.m === "myth" ? "Bible or Myth?" : it.k === "who_said" ? "Who said it?" : it.k === "order" ? "Put in order" : (it.cat || "Arena");
     render(`${header()}${limit ? `<div class="timer" id="tm"><i></i></div>` : `<div style="height:20px"></div>`}<div id="adtime"></div>
       <div class="qcard"><div class="qmeta"><span class="tiny">${esc(label)}</span><span class="pill-tier">${TIER[tier].name}</span></div><div id="qbody"></div></div>
@@ -700,7 +698,7 @@ function runRound(cfg) {
     };
     // v3.10 extra-time power-up: solo games and practice only (never the Daily official try, duels, bot or live games),
     // once per round, only inside the Android app (rewarded ad, given only on "reward"). The clock stops while the ad is open.
-    const extraOK = limit && !cfg.duel && cfg.mode !== "daily" && !cfg.extraUsed && !cfg.bonusFrom && BA_ADS.available();
+    const extraOK = limit && !cfg.duel && cfg.mode !== "daily" && !cfg.extraUsed && !cfg.bonusFrom && !cfg.noPower && BA_ADS.available();
     let extraShown = false;
     function offerExtra() {
       if (!extraOK || extraShown || done || cfg.extraUsed) return;
@@ -871,91 +869,269 @@ function runRound(cfg) {
 
 const EXTRA_SECS = 15; // v3.10 extra-time power-up
 
-// ---------- v3.10 Story mode: Genesis to Revelation, 22 levels, unlock in order ----------
-// Each level is 10 questions from its books (existing bank, the player's level first). Pass = 7 of 10; stars at 7 / 9 / 10.
-// Progress: best score per level on the phone (ba3:v1 story) and on the server (players.stats.story, sent with the round).
-const STORY_PASS = 7, STORY_N = 10;
-const STORY = [
-  ["gen", "🌍", "In the Beginning", ["Genesis"]],
-  ["exo", "🌊", "Out of Egypt", ["Exodus"]],
-  ["law", "⛺", "Law and Wilderness", ["Leviticus", "Numbers", "Deuteronomy"]],
-  ["jos", "🏰", "Into the Land", ["Joshua", "Judges"]],
-  ["sam", "🌾", "Ruth and Samuel", ["Ruth", "1 Samuel"]],
-  ["dav", "👑", "King David", ["2 Samuel", "1 Chronicles"]],
-  ["sol", "🏛️", "Solomon and the Kings", ["1 Kings", "2 Chronicles"]],
-  ["eli", "🔥", "Elijah, Elisha and the Fall", ["2 Kings"]],
-  ["ret", "🧱", "Exile and Return", ["Ezra", "Nehemiah", "Esther"]],
-  ["psa", "🎵", "Job and the Psalms", ["Job", "Psalms"]],
-  ["wis", "🦉", "Wisdom", ["Proverbs", "Ecclesiastes", "Song of Solomon"]],
-  ["isa", "📜", "Isaiah and Jeremiah", ["Isaiah", "Jeremiah", "Lamentations"]],
-  ["dan", "🦁", "Ezekiel and Daniel", ["Ezekiel", "Daniel"]],
-  ["twv", "🐋", "The Twelve Prophets", ["Hosea", "Joel", "Amos", "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah", "Malachi"]],
-  ["mat", "⭐", "Matthew", ["Matthew"]],
-  ["mkl", "🐑", "Mark and Luke", ["Mark", "Luke"]],
-  ["jhn", "🍞", "John", ["John"]],
-  ["act", "⛵", "Acts", ["Acts"]],
-  ["rom", "✉️", "Romans and Corinthians", ["Romans", "1 Corinthians", "2 Corinthians"]],
-  ["pau", "🖋️", "Paul's Letters", ["Galatians", "Ephesians", "Philippians", "Colossians", "1 Thessalonians", "2 Thessalonians", "1 Timothy", "2 Timothy", "Titus", "Philemon"]],
-  ["heb", "⚓", "Hebrews to Jude", ["Hebrews", "James", "1 Peter", "2 Peter", "1 John", "2 John", "3 John", "Jude"]],
-  ["rev", "🌅", "Revelation", ["Revelation"]],
-].map(([k, icon, title, books], i) => ({ k, icon, title, books, i, nt: i >= 14 }));
-function storyBest() {
-  const out = Object.assign({}, S.story || {});
-  const srv = ME.player && ME.player.stats && ME.player.stats.story;
-  if (srv) Object.keys(srv).forEach((k) => { out[k] = Math.max(Number(out[k]) || 0, Number(srv[k]) || 0); });
+// ---------- v3.11 Story mode: the whole Bible, book by book (Michael, Oct 24: "nobody should finish it in months") ----------
+// 45 stages (every book; very short books share a stage) = 343 levels + 45 bosses = 388 levels. A level is 10 questions (7 to pass); a boss ends every
+// stage (15 questions, 13 to pass, shorter clock). Stars: 1 = pass, 2 = 9/10 (14/15), 3 = all right with time to spare. Questions follow the book in
+// order (sorted by chapter), mixed with earlier parts of the book, nearby books and the player's own recent misses. Difficulty and clock tighten along
+// the journey. Gates need 2-star levels. Daily energy: 5 new-level attempts a day (+1 from a rewarded ad in the app); replays of passed levels are free.
+// Mastery opens after the Revelation boss: the whole journey again at the hardest level, shorter clock, no power-ups.
+// Progress: stars per level on the phone (ba3:v1 st3) and on the server (players.stats.st3); energy in stats.st3e. Old 3.10 progress is carried over.
+const ST_PASS = 7, ST_N = 10, ST_BOSS_N = 15, ST_BOSS_PASS = 13, ST_ENERGY = 5, ST_AD_MAX = 1;
+const ST_STAGES = [
+  ["gen", "🌍", "Genesis", ["Genesis"], 30, "Law"],
+  ["exo", "🌊", "Exodus", ["Exodus"], 13, "Law"],
+  ["lev", "⛺", "Leviticus and Numbers", ["Leviticus", "Numbers"], 5, "Law"],
+  ["deu", "📜", "Deuteronomy", ["Deuteronomy"], 2, "Law"],
+  ["jos", "🏰", "Joshua", ["Joshua"], 7, "History"],
+  ["jdg", "⚔️", "Judges", ["Judges"], 10, "History"],
+  ["rut", "🌾", "Ruth", ["Ruth"], 4, "History"],
+  ["1sa", "👑", "1 Samuel", ["1 Samuel"], 17, "History"],
+  ["2sa", "🎯", "2 Samuel", ["2 Samuel"], 9, "History"],
+  ["1ki", "🏛️", "1 Kings", ["1 Kings"], 12, "History"],
+  ["2ki", "🔥", "2 Kings", ["2 Kings"], 11, "History"],
+  ["chr", "📚", "1 Chronicles and 2 Chronicles", ["1 Chronicles", "2 Chronicles"], 2, "History"],
+  ["ezr", "🧱", "Ezra and Nehemiah", ["Ezra", "Nehemiah"], 3, "History"],
+  ["est", "💍", "Esther", ["Esther"], 4, "History"],
+  ["job", "🌪️", "Job", ["Job"], 3, "Poetry and Wisdom"],
+  ["psa", "🎵", "Psalms", ["Psalms"], 16, "Poetry and Wisdom"],
+  ["pro", "🦉", "Proverbs", ["Proverbs"], 8, "Poetry and Wisdom"],
+  ["ecc", "⏳", "Ecclesiastes and Song of Solomon", ["Ecclesiastes", "Song of Solomon"], 3, "Poetry and Wisdom"],
+  ["isa", "🕊️", "Isaiah", ["Isaiah"], 9, "Major Prophets"],
+  ["jer", "😢", "Jeremiah and Lamentations", ["Jeremiah", "Lamentations"], 5, "Major Prophets"],
+  ["ezk", "👁️", "Ezekiel", ["Ezekiel"], 2, "Major Prophets"],
+  ["dan", "🦁", "Daniel", ["Daniel"], 6, "Major Prophets"],
+  ["hos", "💔", "Hosea and Joel", ["Hosea", "Joel"], 2, "Minor Prophets"],
+  ["amo", "🦗", "Amos and Obadiah", ["Amos", "Obadiah"], 2, "Minor Prophets"],
+  ["jon", "🐋", "Jonah", ["Jonah"], 4, "Minor Prophets"],
+  ["mic", "⚖️", "Micah, Nahum and Habakkuk", ["Micah", "Nahum", "Habakkuk"], 3, "Minor Prophets"],
+  ["zep", "🏗️", "Zephaniah, Haggai, Zechariah and Malachi", ["Zephaniah", "Haggai", "Zechariah", "Malachi"], 2, "Minor Prophets"],
+  ["mat", "⭐", "Matthew", ["Matthew"], 28, "Gospels"],
+  ["mrk", "🏃", "Mark", ["Mark"], 6, "Gospels"],
+  ["luk", "🩺", "Luke", ["Luke"], 22, "Gospels"],
+  ["jhn", "🍞", "John", ["John"], 23, "Gospels"],
+  ["act", "⛵", "Acts", ["Acts"], 27, "The Early Church"],
+  ["rom", "✉️", "Romans", ["Romans"], 6, "Paul's Letters"],
+  ["1co", "⛪", "1 Corinthians", ["1 Corinthians"], 3, "Paul's Letters"],
+  ["2co", "💪", "2 Corinthians and Galatians", ["2 Corinthians", "Galatians"], 4, "Paul's Letters"],
+  ["eph", "🛡️", "Ephesians", ["Ephesians"], 3, "Paul's Letters"],
+  ["php", "😊", "Philippians", ["Philippians"], 3, "Paul's Letters"],
+  ["col", "🌱", "Colossians, 1 Thessalonians and 2 Thessalonians", ["Colossians", "1 Thessalonians", "2 Thessalonians"], 2, "Paul's Letters"],
+  ["tim", "🧭", "1 Timothy and 2 Timothy", ["1 Timothy", "2 Timothy"], 4, "Paul's Letters"],
+  ["tit", "🤝", "Titus and Philemon", ["Titus", "Philemon"], 2, "Paul's Letters"],
+  ["heb", "⚓", "Hebrews", ["Hebrews"], 4, "Letters to Everyone"],
+  ["jas", "🔨", "James", ["James"], 3, "Letters to Everyone"],
+  ["pet", "🪨", "1 Peter and 2 Peter", ["1 Peter", "2 Peter"], 2, "Letters to Everyone"],
+  ["joh", "❤️", "1 John, 2 John, 3 John and Jude", ["1 John", "2 John", "3 John", "Jude"], 3, "Letters to Everyone"],
+  ["rev", "🌅", "Revelation", ["Revelation"], 4, "Revelation"]
+].map(([k, icon, title, books, n, sec], si) => ({ k, icon, title, books, n, sec, si }));
+const ST_NT = ST_STAGES.findIndex((s) => s.k === "mat");
+const ST_GATES = { job: { pct: 40, scope: "before", label: "Poetry and Wisdom" }, mat: { pct: 60, scope: "ot", label: "the New Testament" }, rev: { pct: 70, scope: "before", label: "Revelation" } };
+const ST_RANKS = [[0, "Seeker", "🔎"], [5, "Explorer", "🧭"], [15, "Pathfinder", "🥾"], [30, "Student", "📖"], [50, "Scholar", "🎓"], [70, "Sage", "🦉"], [90, "Expert", "💎"], [100, "Master", "🏆"]];
+const ST_LEGACY = { gen: ["gen"], exo: ["exo"], law: ["lev", "deu"], jos: ["jos", "jdg"], sam: ["rut", "1sa"], dav: ["2sa", "chr"], sol: ["1ki"], eli: ["2ki"], ret: ["ezr", "est"], psa: ["job", "psa"], wis: ["pro", "ecc"], isa: ["isa", "jer"], dan: ["ezk", "dan"], twv: ["hos", "amo", "jon", "mic", "zep"], mat: ["mat"], mkl: ["mrk", "luk"], jhn: ["jhn"], act: ["act"], rom: ["rom", "1co", "2co"], pau: ["eph", "php", "col", "tim", "tit"], heb: ["heb", "jas", "pet", "joh"], rev: ["rev"] };
+const BOOK_ORDER = ST_STAGES.reduce((a, s) => a.concat(s.books), []);
+const lagosToday = () => new Date(Date.now() + 3600e3).toISOString().slice(0, 10);
+let ST_LV = null;
+function stLevels() {
+  if (ST_LV) return ST_LV;
+  const out = [];
+  ST_STAGES.forEach((s) => { for (let i = 1; i <= s.n; i++) out.push({ id: s.k + "." + i, s, i, boss: false }); out.push({ id: s.k + ".b", s, i: s.n + 1, boss: true }); });
+  out.forEach((L, gi) => { L.gi = gi; L.p = gi / (out.length - 1); });
+  return (ST_LV = out);
+}
+const stTier = (L, m) => (m ? "t" : L.p < 0.2 ? "b" : L.p < 0.55 ? "s" : "t");
+const stScale = (L, m) => Math.round((m ? 0.6 : 1 - 0.3 * L.p) * (L.boss ? 0.85 : 1) * 100) / 100;
+function refKey(r) { const b = bookOf(r); const m = String(r || "").match(/(\d+)(?::(\d+))?/g) || []; const nums = String(r || "").slice(b.length).match(/\d+/g) || []; return [BOOK_ORDER.indexOf(b), Number(nums[0]) || 0, Number(nums[1]) || 0]; }
+const ST_POOL = {};
+function stPool(s) {
+  if (ST_POOL[s.k]) return ST_POOL[s.k];
+  const want = new Set(s.books);
+  const items = BANK.items.filter((i) => want.has(bookOf(i.r)) && i.k !== "order").map((i) => ({ i, key: refKey(i.r) }));
+  items.sort((a, b) => a.key[0] - b.key[0] || a.key[1] - b.key[1] || a.key[2] - b.key[2] || (a.i.id < b.i.id ? -1 : 1));
+  return (ST_POOL[s.k] = items.map((x) => x.i));
+}
+const prefTier = (arr, tier) => arr.filter((i) => i.tiers.indexOf(tier) >= 0).concat(arr.filter((i) => i.tiers.indexOf(tier) < 0));
+function stFocus(L) { const pool = stPool(L.s); const per = Math.max(1, Math.ceil(pool.length / L.s.n)); const start = ((L.i - 1) * per) % Math.max(1, pool.length); return { pool, per, start, focus: pool.slice(start, start + per) }; }
+function stLabel(L) {
+  if (L.boss) return "Boss";
+  const { focus } = stFocus(L); if (!focus.length) return L.s.title;
+  const a = refKey(focus[0].r), b = refKey(focus[focus.length - 1].r), bk = BOOK_ORDER[a[0]], bk2 = BOOK_ORDER[b[0]];
+  if (bk !== bk2) return `${bk} ${a[1]} – ${bk2} ${b[1]}`;
+  return a[1] === b[1] ? `${bk} ${a[1]}` : `${bk} ${a[1]}–${b[1]}`;
+}
+/** The question ids for a level: same base set for everyone (seeded by level id), plus up to 2 of this player's recent misses. */
+function stQuestions(L, m) {
+  const tier = stTier(L, m), seed = (m ? "m" : "") + "st3:" + L.id, N = L.boss ? ST_BOSS_N : ST_N;
+  const pick = []; const has = new Set();
+  const take = (arr, n) => { for (const it of arr) { if (n <= 0 || pick.length >= N) break; if (it && !has.has(it.id)) { has.add(it.id); pick.push(it.id); n--; } } };
+  const { pool, per, start, focus } = stFocus(L);
+  const own = Math.min(L.boss ? 11 : 8, Math.ceil(pool.length * 0.7)); // short books: leave room so levels differ
+  if (L.boss) take(prefTier(shuffled(pool, seed), tier), own);
+  else { take(focus, Math.min(5, own)); take(prefTier(shuffled(pool.slice(0, start), seed + "r"), tier), Math.min(3, own - pick.length)); }
+  take(stMisses().map((id) => BY[id]).filter((it) => it && it.k !== "order"), 2);
+  if (!L.boss) take(prefTier(shuffled(pool, seed + "b"), tier), own - pick.length); // more of this book before nearby books
+  const near = []; const si = L.s.si;
+  for (let d = 1; d <= 3; d++) { const a = ST_STAGES[si - d], b = ST_STAGES[si + d]; if (a) near.push(...stPool(a)); if (b && d === 1 && b.sec === L.s.sec) near.push(...stPool(b)); }
+  take(prefTier(shuffled(near, seed + "n"), tier), N - pick.length);
+  if (pick.length < N) take(prefTier(shuffled(pool.slice(start + per), seed + "a"), tier), N - pick.length);
+  if (pick.length < N) take(prefTier(shuffled(BANK.items.filter((i) => i.k !== "order"), seed + "z"), tier), N - pick.length);
+  return shuffled(pick, seed + "o");
+}
+window.__baStory = { levels: () => stLevels().map((L) => L.id), sets: () => stLevels().map((L) => ({ id: L.id, ids: stQuestions(L, false), tier: stTier(L), scale: stScale(L), label: stLabel(L) })) }; // for tests
+function stMisses() { return Array.isArray(S.stMiss) ? S.stMiss : []; }
+function stLegacyBest() {
+  const old = Object.assign({}, S.story || {}); const srv = ME.player && ME.player.stats && ME.player.stats.story;
+  if (srv) Object.keys(srv).forEach((k) => { old[k] = Math.max(Number(old[k]) || 0, Number(srv[k]) || 0); });
+  const out = {};
+  Object.keys(old).forEach((k) => { const sc = Number(old[k]) || 0; if (sc < ST_PASS || !ST_LEGACY[k]) return; const stars = sc >= 10 ? 3 : sc >= 9 ? 2 : 1; ST_LEGACY[k].forEach((sk) => { out[sk + ".1"] = stars; out[sk + ".2"] = stars; }); });
   return out;
 }
-function storyStars(best) { return best >= 10 ? 3 : best >= 9 ? 2 : best >= STORY_PASS ? 1 : 0; }
-function storyState() {
-  const best = storyBest(); let open = true; let done = 0, stars = 0, current = null;
-  const lv = STORY.map((L) => { const b = Number(best[L.k]) || 0; const passed = b >= STORY_PASS; const st = { L, best: b, passed, stars: storyStars(b), unlocked: open }; if (passed) { done++; stars += st.stars; } if (open && !passed && !current) current = st; open = open && passed; return st; });
-  return { lv, done, stars, current };
+function stBest() {
+  const out = stLegacyBest();
+  const add = (o) => o && Object.keys(o).forEach((k) => { out[k] = Math.max(Number(out[k]) || 0, Number(o[k]) || 0); });
+  add(S.st3); add(ME.player && ME.player.stats && ME.player.stats.st3);
+  return out;
+}
+function stEnergy() {
+  const d = lagosToday(); const loc = S.st3e && S.st3e.d === d ? S.st3e : { u: 0, a: 0 };
+  const srv0 = ME.player && ME.player.stats && ME.player.stats.st3e; const srv = srv0 && srv0.d === d ? srv0 : { u: 0, a: 0 };
+  const u = Math.max(Number(loc.u) || 0, Number(srv.u) || 0), a = Math.min(ST_AD_MAX, Math.max(Number(loc.a) || 0, Number(srv.a) || 0));
+  return { d, u, a, max: ST_ENERGY + a, left: Math.max(0, ST_ENERGY + a - u) };
+}
+function stRank(pct, mastered) { if (mastered) return ["Grand Master", "🌟"]; let r = ST_RANKS[0]; ST_RANKS.forEach((x) => { if (pct >= x[0]) r = x; }); return [r[1], r[2]]; }
+/** The whole journey's state: per-level stars/unlock, gates, the current level, rank. m = Mastery. */
+function stState(m) {
+  const best = stBest(), LV = stLevels(), pre = m ? "m" : "";
+  let open = true, done = 0, stars = 0, two = 0, cur = null, gate = null;
+  const otIds = LV.filter((L) => L.s.si < ST_NT);
+  const lv = LV.map((L) => {
+    const st = Number(best[pre + L.id]) || 0;
+    let g = null;
+    if (!m && L.i === 1 && ST_GATES[L.s.k]) {
+      const G = ST_GATES[L.s.k]; const scope = G.scope === "ot" ? otIds : LV.slice(0, L.gi);
+      const have = scope.filter((x) => (Number(best[x.id]) || 0) >= 2).length; const pct = Math.floor((100 * have) / Math.max(1, scope.length));
+      g = { ...G, have: pct, need: G.pct, ok: pct >= G.pct, count: Math.ceil((G.pct * scope.length) / 100) - have };
+      if (open && !g.ok) { open = false; gate = { L, g }; }
+    }
+    const x = { L, stars: st, passed: st >= 1, open: open, gate: g };
+    if (x.passed) { done++; stars += st; if (st >= 2) two++; }
+    if (open && !x.passed && !cur) cur = x;
+    if (!x.passed) open = false;
+    return x;
+  });
+  const pct = Math.floor((100 * done) / LV.length);
+  const mastered = !m && LV.every((L) => (Number(best["m" + L.id]) || 0) >= 1);
+  const masteryOpen = (Number(best["rev.b"]) || 0) >= 1;
+  return { lv, done, stars, two, cur, gate, pct, total: LV.length, rank: stRank(pct, mastered), masteryOpen };
 }
 function storyCardHTML() {
-  const s = storyState(); const c = s.current;
+  if (!BANK) return `<a class="card way storycard" href="#/story" style="text-decoration:none;color:inherit"><div class="row" style="gap:12px"><div class="wayico">🗺️</div><div class="grow"><b class="wayt">Story mode</b><div class="small muted">The whole Bible, book by book. 388 levels.</div></div><div class="gold">›</div></div></a>`;
+  const s = stState(false), e = stEnergy(), c = s.cur;
   return `<a class="card way storycard" href="#/story" style="text-decoration:none;color:inherit">
-    <div class="row" style="gap:12px"><div class="wayico">🗺️</div><div class="grow"><b class="wayt">Story mode</b><div class="small muted">Genesis to Revelation in ${STORY.length} levels. Pass each one to unlock the next.</div></div><div class="gold">›</div></div>
-    <div class="xpbar" style="margin-top:12px"><i style="width:${Math.round((s.done / STORY.length) * 100)}%"></i></div>
-    <div class="small muted" style="margin-top:6px">${s.done ? `${s.done}/${STORY.length} levels · ${s.stars}★` : "Start in Genesis"}${c ? ` · Next: <b class="gold">${esc(c.L.title)}</b>` : s.done === STORY.length ? " · All done! 🎉" : ""}</div></a>`;
+    <div class="row" style="gap:12px"><div class="wayico">${s.rank[1]}</div><div class="grow"><b class="wayt">Story mode · ${esc(s.rank[0])}</b><div class="small muted">The whole Bible, book by book: ${s.total} levels. ${s.done}/${s.total} done · ${s.stars} ★</div></div><div class="energy small">⚡ ${e.left}/${e.max}</div></div>
+    <div class="xpbar" style="margin-top:12px"><i style="width:${Math.max(2, s.pct)}%"></i></div>
+    <div class="small muted" style="margin-top:8px">${c ? `Next: <b class="gold">${esc(c.L.s.title)} ${c.L.boss ? "· Boss" : c.L.i}</b> · ${esc(stLabel(c.L))}` : s.gate ? `🔒 ${esc(s.gate.g.label)} needs 2★ on ${s.gate.g.need}% of levels (you have ${s.gate.g.have}%)` : "Journey complete! Mastery is open 🏆"}</div></a>`;
+}
+function stTimeToMidnight() { const now = Date.now() + 3600e3; const m = 86400e3 - (now % 86400e3); const h = Math.floor(m / 3600e3), mi = Math.floor((m % 3600e3) / 60e3); return h ? `${h}h ${mi}m` : `${mi}m`; }
+function stEnergyHTML(e) {
+  const ad = e.left === 0 && e.a < ST_AD_MAX && BA_ADS.available();
+  return `<div class="card row stenergy" style="gap:10px"><div style="font-size:24px">⚡</div><div class="grow"><b>${e.left} of ${e.max} new-level tries left today</b><div class="small muted">${e.left ? "Replays of levels you've passed are free." : `Refills in ${stTimeToMidnight()}. Replays of passed levels are still free.`}</div></div>${ad ? `<button class="chip on" id="stad">+1 ⚡ (short ad)</button>` : ""}</div>`;
+}
+async function stWatchAd(redraw) {
+  const b = $("#stad"); if (b) { b.disabled = true; b.textContent = "Opening…"; }
+  const r = await BA_ADS.showRewarded("story_energy");
+  if (r === "reward") {
+    const e = stEnergy(); S.st3e = { d: e.d, u: e.u, a: Math.min(ST_AD_MAX, e.a + 1) }; save();
+    try { const x = await api("/api/v3/story/energy-ad", { body: {} }); if (ME.player && x && x.energy) { ME.player.stats = ME.player.stats || {}; ME.player.stats.st3e = { d: e.d, u: x.energy.u, a: x.energy.a }; } } catch (err) {}
+    toast("+1 ⚡ Enjoy!");
+  } else toast(r === "dismiss" ? "The ad was closed early, so no extra try this time." : "No ad available right now.");
+  if (redraw) redraw();
 }
 async function storyMap() {
   render(`<div id="sm"></div>${tabbar("home")}`);
   await Promise.all([loadBank(), ME.player ? null : ensureSession()]);
   const el = $("#sm"); if (!el) return;
-  const s = storyState();
-  let html = `<div class="col" style="gap:12px">
-    <div class="row between"><a class="iconbtn" href="#/" aria-label="Back">‹</a><div class="center grow"><div class="tiny gold">Story mode</div><b>Genesis to Revelation</b></div><span style="width:42px"></span></div>
-    <div class="card center"><div class="row between"><span class="small muted">${s.done}/${STORY.length} levels</span><span class="gold" style="font-weight:800">${s.stars}/${STORY.length * 3} ★</span></div><div class="xpbar" style="margin-top:8px"><i style="width:${Math.round((s.done / STORY.length) * 100)}%"></i></div><div class="small dim" style="margin-top:6px">10 questions a level · get ${STORY_PASS} right to pass</div></div>
-    <div class="path">`;
-  s.lv.forEach((x, n) => {
-    if (n === 0) html += `<div class="pathsec">📖 Old Testament</div>`;
-    if (n === 14) html += `<div class="pathsec">✝️ New Testament</div>`;
-    const cur = s.current && s.current.L.k === x.L.k;
-    const side = n % 2 ? "r" : "l";
-    html += `<button class="node ${side} ${x.passed ? "done" : ""} ${cur ? "cur" : ""} ${x.unlocked ? "" : "lock"}" data-lv="${x.L.k}" ${x.unlocked ? "" : `aria-disabled="true"`}>
-      <span class="nico">${x.unlocked ? x.L.icon : "🔒"}</span>
-      <span class="ntxt"><b>${n + 1}. ${esc(x.L.title)}</b><small>${esc(x.L.books.length > 3 ? x.L.books[0] + " – " + x.L.books[x.L.books.length - 1] : x.L.books.join(", "))}</small>
-      <small class="nst">${x.passed ? "★".repeat(x.stars) + "☆".repeat(3 - x.stars) + ` · best ${x.best}/10` : cur ? "▶ Play" : x.unlocked ? (x.best ? `best ${x.best}/10` : "Open") : "Locked"}</small></span></button>`;
+  const q = parseHash().q, m = q.get("m") === "1";
+  const s = stState(m), e = stEnergy();
+  if (m && !s.masteryOpen) return go("#/story");
+  const curStage = q.get("s") || (s.cur ? s.cur.L.s.k : s.gate ? s.gate.L.s.k : ST_STAGES[0].k);
+  const bySt = {}; s.lv.forEach((x) => (bySt[x.L.s.k] = bySt[x.L.s.k] || []).push(x));
+  let html = `<div class="row between" style="margin-bottom:10px"><a class="chip" href="#/">‹ Home</a><b>${m ? "Mastery" : "Story mode"}</b><span class="small gold">${s.stars} ★</span></div>
+    <div class="hero center strank"><div style="font-size:38px">${s.rank[1]}</div><h2 style="margin:4px 0;font-family:var(--serif)">${esc(m ? "Mastery" : s.rank[0])}</h2>
+      <div class="small muted">${s.done} of ${s.total} levels${m ? " at Master level" : ""} · ${s.two} with 2★ or more</div><div class="xpbar" style="margin-top:10px"><i style="width:${Math.max(2, s.pct)}%"></i></div>
+      <div class="tiny muted" style="margin-top:6px">${m ? "The whole journey at the hardest level, shorter clock, no power-ups." : "Seeker → Explorer → Pathfinder → Student → Scholar → Sage → Expert → Master"}</div></div>
+    ${s.masteryOpen ? `<div class="row" style="gap:8px;margin:10px 0"><a class="chip ${m ? "" : "on"}" href="#/story">Journey</a><a class="chip ${m ? "on" : ""}" href="#/story?m=1">🏆 Mastery</a></div>` : ""}
+    ${stEnergyHTML(e)}`;
+  let sec = "";
+  ST_STAGES.forEach((st) => {
+    if (st.sec !== sec) { sec = st.sec; html += `<div class="pathsec stsec">${st.si === ST_NT ? "New Testament · " : st.si === 0 ? "Old Testament · " : ""}${esc(sec)}</div>`; }
+    const xs = bySt[st.k], dn = xs.filter((x) => x.passed).length, str = xs.reduce((a, x) => a + x.stars, 0), opened = xs.some((x) => x.open), g = xs[0].gate;
+    const exp = st.k === curStage;
+    html += `<button class="stage ${dn === xs.length ? "done" : opened ? "open" : "lock"} ${exp ? "exp" : ""}" data-st="${st.k}"><span class="sico">${st.icon}</span><span class="stxt"><b>${esc(st.title)}</b><small>${dn}/${xs.length} levels · ${str} ★${g && !g.ok ? ` · 🔒 needs 2★ on ${g.need}% (${g.have}%)` : ""}</small></span><span class="gold">${exp ? "▾" : "›"}</span></button>`;
+    if (exp) {
+      if (g && !g.ok) html += `<div class="card small stgate">🔒 <b>${esc(g.label)}</b> opens when ${g.need}% of ${g.scope === "ot" ? "Old Testament" : "earlier"} levels have 2★ or more. You have ${g.have}% (${g.count} more to go). Replay passed levels for free to earn stars.</div>`;
+      html += `<div class="path">` + xs.map((x, n) => `<button class="node ${n % 2 ? "r" : "l"} ${x.passed ? "done" : x.open ? "cur" : "lock"} ${x.L.boss ? "boss" : ""}" data-lv="${x.L.id}" ${x.open || x.passed ? "" : 'aria-disabled="true"'}>
+          <span class="nico">${x.L.boss ? "⚔️" : x.passed ? "✓" : x.open ? "▶" : "🔒"}</span>
+          <span class="ntxt"><b>${x.L.boss ? `${esc(st.title)} boss` : `Level ${x.L.i}`}</b><small>${esc(x.L.boss ? `15 questions, 13 to pass, shorter clock` : stLabel(x.L))}</small><small class="nst">${x.stars ? "★".repeat(x.stars) + "☆".repeat(3 - x.stars) : x.open ? "Play" : ""}</small></span></button>`).join("") + `</div>`;
+    }
   });
-  html += `</div></div>`;
   el.innerHTML = html;
-  const curEl = $(".node.cur"); if (curEl) setTimeout(() => curEl.scrollIntoView({ block: "center", behavior: "smooth" }), 150);
-  $$(".node").forEach((b) => (b.onclick = () => {
-    const x = s.lv.find((v) => v.L.k === b.dataset.lv); if (!x) return;
-    if (!x.unlocked) { buzz(20); return toast(`Pass level ${x.L.i} first to open this one.`); }
-    sfx.tap(); go("#/play/story?l=" + x.L.k);
+  const ad = $("#stad"); if (ad) ad.onclick = () => stWatchAd(() => storyMap());
+  $$("[data-st]", el).forEach((b) => (b.onclick = () => { sfx.tap(); go(`#/story?${m ? "m=1&" : ""}s=${b.dataset.st === curStage ? "_" : b.dataset.st}`); }));
+  $$(".node", el).forEach((b) => (b.onclick = () => {
+    const x = s.lv.find((y) => y.L.id === b.dataset.lv); if (!x) return;
+    if (!x.open && !x.passed) { buzz(20); return toast(x.gate && !x.gate.ok ? `Needs 2★ on ${x.gate.need}% of levels first.` : "Pass the level before it first."); }
+    sfx.tap(); go(`#/play/story?l=${x.L.id}${m ? "&m=1" : ""}`);
   }));
+  const cur = $(".node.cur", el) || $(".stage.exp", el); if (cur && cur.scrollIntoView) setTimeout(() => cur.scrollIntoView({ block: "center" }), 60);
 }
-function storyResultHTML(cfg, correct) {
-  const L = cfg.story, pass = correct >= STORY_PASS, stars = storyStars(correct);
-  const next = STORY[L.i + 1];
+/** Starting a level: checks unlock + energy, builds the questions. */
+function stStart(id, m) {
+  const s = stState(m); const x = s.lv.find((y) => y.L.id === id);
+  if (!x) { toast("That level doesn't exist."); return go("#/story"); }
+  if (!x.open && !x.passed) { toast("Pass the level before it first."); return go("#/story" + (m ? "?m=1" : "")); }
+  const L = x.L, tier = stTier(L, m), scale = stScale(L, m);
+  if (!x.passed) {
+    const e = stEnergy();
+    if (e.left <= 0) { toast(`Out of ⚡ for today. Refills in ${stTimeToMidnight()}. Replays of passed levels are free.`, 4000); return go("#/story" + (m ? "?m=1" : "")); }
+    S.st3e = { d: e.d, u: e.u + 1, a: e.a }; save();
+  }
+  const ids = stQuestions(L, m);
+  const limitSum = ids.reduce((a, id) => a + (Math.round((limitOf(BY[id], tier) || 40) * scale) || 40), 0);
+  return runRound({ ids, tier, mode: "story", title: `${m ? "Mastery · " : ""}${L.s.title} · ${L.boss ? "Boss" : "Level " + L.i}`, story: { id: (m ? "m" : "") + L.id, L, m, limitSum, replay: x.passed }, timeScale: scale, noPower: m });
+}
+function stAfterRound(cfg, r, answers, correct, total) {
+  const st = cfg.story; const L = st.L;
+  const need = L.boss ? ST_BOSS_PASS : ST_PASS, N = L.boss ? ST_BOSS_N : ST_N;
+  const fast = st.fast;
+  let stars = total === N && correct >= need ? (correct >= N ? (fast ? 3 : 2) : correct >= N - 1 ? 2 : 1) : 0;
+  const out = r && r.story3 && r.story3.energyOut;
+  if (r && r.story3) stars = r.story3.stars;
+  if (!out && stars) { S.st3 = S.st3 || {}; S.st3[st.id] = Math.max(Number(S.st3[st.id]) || 0, stars); }
+  if (r && r.story3 && r.story3.energy) S.st3e = { d: lagosToday(), u: Math.max(stEnergy().u, r.story3.energy.u), a: r.story3.energy.a };
+  // misses come back in later levels; a right answer clears it
+  const miss = stMisses().slice();
+  answers.forEach((a) => { const i = miss.indexOf(a.id); if (a.correct) { if (i >= 0) miss.splice(i, 1); } else if (i < 0) miss.unshift(a.id); });
+  S.stMiss = miss.slice(0, 60); save();
+  st.stars = stars; st.out = out;
+}
+function storyResultHTML(cfg, correct, total) {
+  const st = cfg.story, L = st.L, m = st.m;
+  const need = L.boss ? ST_BOSS_PASS : ST_PASS;
+  const s = stState(m), x = s.lv.find((y) => y.L.id === L.id), nx = s.lv[L.gi + 1];
+  const e = stEnergy();
+  const pass = st.stars > 0;
+  const nextOk = pass && nx && (nx.open || nx.passed);
+  const msg = st.out ? `Out of ⚡ for today, so this try didn't count. Refills in ${stTimeToMidnight()}.` : pass ? `${"★".repeat(st.stars)}${"☆".repeat(3 - st.stars)} ${st.stars === 3 ? "Perfect and quick!" : st.stars === 2 ? (correct >= total ? "All right! Be a bit quicker for 3★." : "Great! Get them all for more stars.") : "Passed!"}` : `${correct}/${total}. You need ${need} to pass.`;
+  const retryFree = x && x.passed;
   return `<div class="card gold center storyres">
-    <div class="tiny gold">Story · level ${L.i + 1} of ${STORY.length}</div>
-    <div style="font-size:34px;margin:6px 0">${pass ? "★".repeat(stars) + "☆".repeat(3 - stars) : L.icon}</div>
-    <b style="font-size:18px">${pass ? (next ? `Level passed! ${next.icon} ${esc(next.title)} is open.` : "You finished the whole story! 🎉") : `${correct}/10. You need ${STORY_PASS} to pass.`}</b>
-    <div class="row" style="gap:8px;margin-top:12px">${pass && next ? `<button class="btn primary grow" data-go="#/play/story?l=${next.k}">▶ Next level</button>` : `<button class="btn primary grow" data-go="#/play/story?l=${L.k}">🔁 Try again</button>`}<button class="btn ghost grow" data-go="#/story">🗺️ Map</button></div></div>`;
+    <div class="tiny gold">${m ? "Mastery · " : ""}${esc(L.s.title)} · ${L.boss ? "Boss" : "Level " + L.i}</div>
+    <div style="font-size:34px;margin:4px 0">${L.boss ? "⚔️" : L.s.icon}</div>
+    <div><b>${msg}</b></div>
+    ${nextOk && nx.gate && !nx.gate.ok ? `<div class="small muted" style="margin-top:6px">Next: 🔒 ${esc(nx.gate.label)} needs 2★ on ${nx.gate.need}% of levels.</div>` : ""}
+    ${nx && nx.L.s.k !== L.s.k && pass ? `<div class="small gold" style="margin-top:6px">🎉 ${esc(L.s.title)} complete! Next: ${esc(nx.L.s.title)}</div>` : ""}
+    <div class="small muted" style="margin-top:6px">⚡ ${e.left}/${e.max} new-level tries left today${retryFree ? " · this level is free to replay" : ""}</div>
+    <div class="row" style="gap:8px;margin-top:12px">${nextOk ? `<button class="btn primary grow" data-go="#/play/story?l=${nx.L.id}${m ? "&m=1" : ""}">▶ Next level</button>` : `<button class="btn primary grow" data-go="#/play/story?l=${L.id}${m ? "&m=1" : ""}">🔁 Try again</button>`}<button class="btn ghost grow" data-go="#/story?${m ? "m=1&" : ""}s=${L.s.k}">🗺️ Map</button></div></div>`;
 }
-
 
 // ---------- v3.10 voice answers (Web Speech API) ----------
 // A 🎤 button under quiz questions with options (multiple choice, who-am-I, who-said, fact or myth). The mic only starts when the
@@ -1051,10 +1227,11 @@ function voiceBar(it, box, isDone, pick) {
 async function results(cfg, answers, local) {
   render(`<div class="boot"><div class="boot-mark">✦</div><div class="boot-sub">Scoring your round…</div></div>`);
   const payload = answers.map((a) => ({ id: a.id, choice: a.choice, ms: a.ms, clues: a.clues }));
+  if (cfg.story) cfg.story.fast = answers.length > 0 && answers.every((a) => a.correct) && answers.reduce((s, a) => s + (a.ms || 0), 0) <= 0.6 * cfg.story.limitSum * 1000; // v3.11: 3 stars need time to spare
   let r = null, err = null;
   try {
     if (cfg.duel) r = await api("/api/v3/duels/" + cfg.duel.code + "/submit", { body: { name: S.name, church: S.church, answers: payload } });
-    else r = await api("/api/v3/round", { body: { mode: cfg.mode, tier: cfg.tier, answers: payload, level: cfg.story ? cfg.story.k : undefined } });
+    else r = await api("/api/v3/round", { body: { mode: cfg.mode, tier: cfg.tier, answers: payload, level: cfg.story ? cfg.story.id : undefined, fast: cfg.story ? !!cfg.story.fast : undefined } });
     if (r.player) ME.player = r.player;
     if (r.streakSaved) setTimeout(() => toast("🛡️ Streak save used. Your streak lives on!", 3500), 900);
     else if (r.saveEarned) setTimeout(() => toast("🛡️ 7 days in a row! You earned a streak save.", 3500), 900);
@@ -1062,7 +1239,7 @@ async function results(cfg, answers, local) {
   if (cfg.duel && r && r.duel) return duelResult(r.duel, r, cfg);
   const score = r ? r.score : local.score, correct = r ? r.correct : local.correct, total = r ? r.total : local.total;
   const perfect = total > 0 && correct === total;
-  if (cfg.story) { S.story = S.story || {}; S.story[cfg.story.k] = Math.max(Number(S.story[cfg.story.k]) || 0, correct); save(); }
+  if (cfg.story) stAfterRound(cfg, r, answers, correct, total);
   render(`
   <div class="col" style="gap:14px">
     <div class="center" style="padding-top:10px">
@@ -1071,7 +1248,7 @@ async function results(cfg, answers, local) {
       <div class="muted">${perfect ? "A perfect round. Rightly dividing the word of truth! 👑" : correct / Math.max(1, total) >= 0.7 ? "Strong round. The Word is in you." : correct / Math.max(1, total) >= 0.4 ? "Good effort. Every verse you missed is now one you know." : "Tough set! Read the references and come back stronger."}</div>
     </div>
     <div id="pushask"></div>
-    ${cfg.story ? storyResultHTML(cfg, correct) : ""}
+    ${cfg.story ? storyResultHTML(cfg, correct, total) : ""}
     <div class="stats3"><div class="stat"><b>${correct}/${total}</b><span>Correct</span></div><div class="stat"><b>x${local.bestCombo}</b><span>Best streak</span></div><div class="stat"><b class="gold">+${fmt(r ? r.xp : 0)}</b><span>XP</span></div></div>
     ${r && r.player ? `<div class="card"><div class="row between"><b>${esc(r.player.rank.name)} ${r.player.rank.division}</b><span class="small muted">${fmt(r.player.xp)} XP</span></div><div class="xpbar" style="margin-top:8px"><i id="xpb" style="width:${Math.round((r.rankBefore ? r.rankBefore.progress : 0) * 100)}%"></i></div><div class="small dim" style="margin-top:6px">${r.player.rank.next ? `${fmt(r.player.rank.nextXp - r.player.xp)} XP to ${r.player.rank.next}` : "You've reached Apostle"} · 🔥 ${r.player.streak}-day streak</div></div>` : ""}
     ${r && !cfg.duel ? `<div id="reschurch"></div>` : ""}

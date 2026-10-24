@@ -23,6 +23,7 @@ import { registerSocial, mergeSocial, scheduleKoPush, setReminderDeps, reminderT
 import { publicRooms, liveWinner, publicKo, onKoOpen } from "./live";
 import { badName } from "./names";
 import { initReportStore, registerReport, tallyBooks } from "./report";
+import { ST3_ID, story3Apply, story3Ad } from "./story3";
 
 type Tier = "b" | "s" | "t";
 type Mode = "arena" | "myth" | "who" | "gap";
@@ -221,7 +222,7 @@ function guard(fn: (req: Request, res: Response, me: { openId: string; name: str
   };
 }
 
-async function applyRound(openId: string, fallbackName: string, opts: { mode: string; tier: Tier; scored: ReturnType<typeof scoreRound>; daily?: boolean; story?: string; duel?: "sent" | "played" | "won" | "rematch"; won?: number; drawn?: number }) {
+async function applyRound(openId: string, fallbackName: string, opts: { mode: string; tier: Tier; scored: ReturnType<typeof scoreRound>; daily?: boolean; story?: string; story3?: { id: string; fast: boolean }; duel?: "sent" | "played" | "won" | "rematch"; won?: number; drawn?: number }) {
   const pool = baPool()!;
   const { scored, tier } = opts;
   const perfect = scored.count > 0 && scored.correct === scored.count;
@@ -255,6 +256,8 @@ async function applyRound(openId: string, fallbackName: string, opts: { mode: st
     if (st[opts.story] != null || Object.keys(st).length < 40) st[opts.story] = Math.max(Number(st[opts.story]) || 0, scored.correct);
     (s as any).story = st;
   }
+  // v3.11 deep story mode: stars per level + daily energy (server/v3/story3.ts)
+  const st3 = opts.story3 ? story3Apply(s, opts.story3.id, scored.count, scored.correct, opts.story3.fast, today) : null;
   if (opts.duel === "sent") s.duelsSent++;
   if (opts.duel === "played") s.duelsPlayed++;
   if (opts.won) s.duelsWon += opts.won;
@@ -273,7 +276,7 @@ async function applyRound(openId: string, fallbackName: string, opts: { mode: st
     [openId, newXp, streak, bestStreak, today, JSON.stringify(s), JSON.stringify(merged), opts.mode, tier, scored.total, scored.correct, scored.count, xp],
   )).rows[0];
   tallyBooks(openId, scored.results, (id) => BY_ID.get(id)?.r); // v3.10 weekly report card (per-book tallies in the server SQLite)
-  return { xp, perfect, newAchievements: merged.filter((a) => !before.includes(a)), player: publicPlayer(fresh), rankBefore: rankOf(p.xp), rankAfter: rankOf(newXp), streakSaved: useSave, saveEarned: earnSave };
+  return { xp, perfect, newAchievements: merged.filter((a) => !before.includes(a)), player: publicPlayer(fresh), rankBefore: rankOf(p.xp), rankAfter: rankOf(newXp), streakSaved: useSave, saveEarned: earnSave, story3: st3 };
 }
 
 async function bumpStat(openId: string, key: string, by = 1) {
@@ -450,8 +453,19 @@ export function registerV3(app: Express): void {
     const scored = scoreRound(daily ? "s" : tier, answers);
     if (!scored.count) return send(res, 400, { error: "no_answers" });
     const story = mode === "story" && /^[a-z0-9]{2,8}$/.test(String(b.level || "")) ? String(b.level) : undefined;
-    const applied = await applyRound(me.openId, me.name, { mode, tier: daily ? "s" : tier, scored, daily, story });
+    const story3 = mode === "story" && ST3_ID.test(String(b.level || "")) ? { id: String(b.level), fast: b.fast === true } : undefined;
+    const applied = await applyRound(me.openId, me.name, { mode, tier: daily ? "s" : tier, scored, daily, story, story3 });
     send(res, 200, { score: scored.total, correct: scored.correct, total: scored.count, bestCombo: scored.bestCombo, results: scored.results, ...applied });
+  }));
+
+  // v3.11 story energy: +1 after a rewarded ad (Android app, solo only), once a day
+  app.post("/api/v3/story/energy-ad", limitWrites, guard(async (_req, res, me) => {
+    const p = await getPlayer(me.openId);
+    if (!p) return send(res, 404, { error: "no_player" });
+    const st = { ...(p.stats || {}) };
+    const r = story3Ad(st, lagosDay());
+    if (r.ok) await baPool()!.query(`update ${SCH}.players set stats=$2, updated_at=now() where open_id=$1`, [me.openId, JSON.stringify(st)]);
+    send(res, 200, r);
   }));
 
   // ---- duels (challenge links) ----
