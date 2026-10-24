@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.10.2";
+window.BA_V = "3.10.3";
 
 // ---------- v3.8.3: opt-in rewarded ads (Android app 1.4.0+ only; the website shows nothing new) ----------
 // The app tells the page it can play ads: its launch URL carries baads=1 (Chrome / TWA path, remembered for this tab only),
@@ -893,7 +893,7 @@ async function results(cfg, answers, local) {
   </div>`);
   countUp($("#big"), score);
   if (r && !cfg.duel) resultsChurchLine(score);
-  pushAsk("#pushask");
+  if (cfg.mode === "daily") dailyRemindAsk("#pushask"); else pushAsk("#pushask");
   setTimeout(() => { const b = $("#xpb"); if (b && r && r.player) b.style.width = Math.round((r.rankAfter && r.rankAfter.index > r.rankBefore.index ? 1 : r.player.rank.progress) * 100) + "%"; }, 300);
   if (perfect) { confetti(80); sfx.win(); } else sfx.ok();
   if (r && r.rankAfter && r.rankBefore && r.rankAfter.index > r.rankBefore.index) setTimeout(() => rankUp(r.rankAfter), 900);
@@ -1269,6 +1269,18 @@ async function pushAsk(sel) {
   box.innerHTML = s === "ios-install" ? `<div class="card small"><b>🔔 Get notified when people are looking for players</b><div class="muted" style="margin-top:4px">On iPhone: tap Share ⬆️ then “Add to Home Screen”, open Bible Arena from there and turn on notifications in Me → Settings.</div></div>`
     : `<div class="card gold row" style="gap:12px"><div style="font-size:26px">🔔</div><div class="grow"><b>Get notified when people are looking for players?</b><div class="small muted">One tap. Max 3 a day, never 10 pm to 7 am.</div></div><button class="chip on" data-push>Yes</button></div>`;
   bindPush(box, () => { box.innerHTML = ""; });
+}
+// v3.10.3: after the Daily Challenge, a soft ask for the 7 PM reminder (players without notifications; at most once a week)
+async function dailyRemindAsk(sel) {
+  const box = $(sel); if (!box || !window.BAS) return;
+  try { const at = Number(localStorage.getItem("ba3:dailyask") || 0); if (Date.now() - at < 7 * 864e5) return; } catch (e) { return; }
+  let s = "off"; try { s = await BAS.push.state(); } catch (e) {}
+  if ((s !== "off" && s !== "ios-install") || !$(sel)) return;
+  try { localStorage.setItem("ba3:dailyask", String(Date.now())); localStorage.setItem("ba3:pushask", String(Date.now())); } catch (e) {}
+  box.innerHTML = s === "ios-install" ? `<div class="card small"><b>⏰ Want a 7 PM reminder for tomorrow's challenge?</b><div class="muted" style="margin-top:4px">On iPhone: tap Share ⬆️ then “Add to Home Screen”, open Bible Arena from there and turn on notifications in Me → Settings.</div></div>`
+    : `<div class="card gold row" style="gap:12px"><div style="font-size:26px">⏰</div><div class="grow"><b>Remind you at 7 PM tomorrow?</b><div class="small muted">Only if you haven't played the Daily Challenge yet. Turn it off any time in Me.</div></div><button class="chip on" data-push>Yes</button><button class="chip" data-nopush>No</button></div>`;
+  bindPush(box, () => { box.innerHTML = ""; });
+  const no = $("[data-nopush]", box); if (no) no.onclick = () => { box.innerHTML = ""; };
 }
 function bindPush(el, redraw) {
   $$("[data-push]", el).forEach((b) => (b.onclick = async () => {
@@ -1711,6 +1723,7 @@ async function profile() {
       <div class="setrow"><div>Vibration</div><button class="switch ${S.haptics ? "on" : ""}" id="hap" aria-label="Vibration"></button></div>
       <div class="setrow"><div class="grow"><div>Game pop-ups</div><div class="small muted">“A live game is starting” or “someone is waiting for a challenger” while you're in the app (max 1 every 2 min)</div></div><button class="switch ${window.BAS && !BAS.muted() ? "on" : ""}" id="pops" aria-label="Challenge pop-ups"></button></div>
       <div class="setrow" id="pushrow"><div class="grow"><div>Phone notifications</div><div class="small muted" id="pushtxt">Checking…</div></div><span id="pushbtn"></span></div>
+      <div class="setrow" id="remrow"><div class="grow"><div>Daily 7 PM reminder</div><div class="small muted" id="remtxt">If you haven't played the Daily Challenge by 7 PM (Lagos time)</div></div><button class="switch" id="rem" aria-label="Daily 7 PM reminder"></button></div>
       <div class="setrow"><div class="grow"><div>Account</div><div class="small muted">${google ? "Signed in with Google ✓ (progress is safe across phones)" : "Guest on this phone. Sign in to keep your progress on any phone."}</div></div>${google ? `<button class="chip" id="out">Sign out</button>` : `<a class="chip on" href="/api/oauth/google/start">Google</a>`}</div>
       <div class="setrow"><div class="grow"><div>Blocked players</div><div class="small muted" id="blktxt">${blockedList().length ? blockedList().length + " blocked. You won't hear each other in voice." : "No one. Tap a player in a game to mute, block or report."}</div></div>${blockedList().length ? `<button class="chip" id="blk">Manage</button>` : ""}</div>
       <div class="setrow"><div class="grow"><div>Privacy policy</div><div class="small muted">What we keep and why</div></div><a class="chip" href="/privacy">Read</a></div>
@@ -1737,6 +1750,23 @@ async function profile() {
     const te = $("#ptest"); if (te) te.onclick = async () => { try { const r = await BAS.push.test(); toast(r.sent ? "Test sent. Check your notifications 🔔" : "Couldn't send a test right now."); } catch (e) { toast(e.status === 429 ? "Wait a few minutes before another test." : "Couldn't send a test right now."); } };
   };
   drawPushRow();
+  // v3.10.3 daily reminder switch: on by default once notifications are on
+  const drawRem = async () => {
+    const sw = $("#rem"), tx = $("#remtxt"); if (!sw || !window.BAS) return;
+    const s = await BAS.push.state().catch(() => "off"); let p = { daily: true };
+    if (s === "on") { try { p = await api("/api/v3/push/prefs"); } catch (e) {} }
+    if (!$("#rem")) return;
+    sw.classList.toggle("on", s === "on" && !!p.daily);
+    tx.textContent = s === "on" ? (p.daily ? "On: a nudge at 7 PM if you haven't played today's Daily Challenge" : "Off") : "Turn on phone notifications to get it";
+    sw.onclick = async () => {
+      sw.disabled = true;
+      if (s !== "on") { const r = await BAS.push.enable().catch(() => "off"); if (r !== "on") { sw.disabled = false; return toast(r === "denied" ? "Notifications are blocked in your browser settings." : "Couldn't turn on notifications here."); } drawPushRow(); }
+      const want = s === "on" ? !p.daily : true;
+      try { await api("/api/v3/push/prefs", { body: { daily: want } }); toast(want ? "Daily 7 PM reminder on ⏰" : "Daily reminder off"); } catch (e) { toast("Couldn't save that. Try again."); }
+      sw.disabled = false; drawRem();
+    };
+  };
+  drawRem();
   $("#delacct").onclick = async () => {
     if (!confirm("Delete your Bible Arena account? This permanently erases your profile, scores, rounds and the duels you created. It cannot be undone.")) return;
     try { await api("/api/v3/account/delete", { body: { confirm: "DELETE" } }); } catch (e) { toast("Couldn't delete right now. Try again, or use bible-arena.onrender.com/delete-account"); return; }

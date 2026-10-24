@@ -33,6 +33,11 @@ export interface SocialDeps {
   /** v3.7.0: public knockout rooms with someone in them now (lobbies first). */
   publicKo?(): KoInfo[];
 }
+/** v3.10.3: who has played today's Daily Challenge, and each player's streak (for the 7 PM reminder). */
+export interface ReminderDeps {
+  playedDaily(openIds: string[], day: string): Promise<Set<string>>;
+  streaks(openIds: string[]): Promise<Map<string, { streak: number; lastDay: string | null }>>;
+}
 export interface KoInfo { code: string; host: string; auto: boolean; n: number; here: number; left: number; phase: string; round: number; final: boolean; game: number; startsIn: number | null; openedAt: number; max: number }
 
 // ---------- clock (injectable for tests) ----------
@@ -194,10 +199,12 @@ export function deleteSocialData(openId: string): number {
   for (const w of waits.values()) if (w.openId === openId && w.status === "waiting") { w.status = "gone"; w.endedAt = nowFn(); }
   const p = byOpen.get(openId); if (p) { pres.delete(p.key); byOpen.delete(openId); }
   for (const [c, r] of running) if (r.ids.includes(openId)) running.delete(c); // its duel is deleted with the account
+  try { prefs().prepare("DELETE FROM v3_push_prefs WHERE open_id = ?").run(openId); } catch {}
   try { return Number(db().prepare("DELETE FROM v3_push_subs WHERE open_id = ?").run(openId).changes || 0); } catch { return 0; }
 }
 export function mergeSocial(fromOpenId: string, toOpenId: string) {
   try { db().prepare("UPDATE v3_push_subs SET open_id = ? WHERE open_id = ?").run(toOpenId, fromOpenId); } catch {}
+  try { prefs().prepare("UPDATE OR IGNORE v3_push_prefs SET open_id = ? WHERE open_id = ?").run(toOpenId, fromOpenId); } catch {}
 }
 
 /** May this subscription get a push now? (quiet hours, 3 a day, 1 an hour). */
@@ -225,6 +232,86 @@ async function deliver(rows: SubRow[], data: Record<string, unknown>) {
   };
   await Promise.all(Array.from({ length: Math.min(6, rows.length) }, worker));
 }
+
+// ---------- v3.10.3 daily 7 PM reminder (Michael, Oct 24: "a daily 7 PM reminder to play") ----------
+// Every subscribed player who has not played today's Daily Challenge gets one push between 19:00 and 21:59 Lagos time
+// (quiet hours start at 22:00). It counts toward the 3-a-day cap and the 1-an-hour gap like every other push, so a player
+// who just got a challenge push gets it later in the window. Once per player per day. Players can turn it off
+// (Me > Settings > Daily 7 PM reminder; on by default for subscribers). Runs from a 1-minute timer in the server and from
+// every keep-alive ping (pg_cron GET /api/v3/health every 10 min), so it still happens after the server wakes up.
+export const REMIND_LINES = [
+  "Today's Daily Challenge is waiting. Keep your streak alive 🔥",
+  "Your Daily Challenge is ready: 10, 15 or 20 questions. How far can you get?",
+  "Same questions as everyone today. Can you top the board? 🌍",
+  "Today's challenge closes at midnight. Jump in ⏰",
+  "Got 5 minutes? Today's Daily Challenge is ready ☀️",
+];
+export function reminderText(day: string, streak: number, lastDay: string | null): { title: string; body: string } {
+  const n = Math.floor(Date.parse(day + "T00:00:00Z") / 86_400_000);
+  const yesterday = new Date(Date.parse(day + "T00:00:00Z") - 86_400_000).toISOString().slice(0, 10);
+  const live = streak > 0 && (lastDay === yesterday || lastDay === day);
+  if (live && streak >= 2 && n % 2 === 0) return { title: `🔥 ${streak}-day streak`, body: `Day ${lastDay === day ? streak : streak + 1} is waiting. Play today's Daily Challenge.` };
+  const line = REMIND_LINES[((n % REMIND_LINES.length) + REMIND_LINES.length) % REMIND_LINES.length];
+  return { title: live && streak >= 2 ? `Bible Arena · 🔥 ${streak}` : "Bible Arena ☀️", body: line };
+}
+function prefs() {
+  const d = db();
+  d.exec(`CREATE TABLE IF NOT EXISTS v3_push_prefs (open_id TEXT PRIMARY KEY, daily INTEGER NOT NULL DEFAULT 1, reminded_day TEXT NOT NULL DEFAULT '');`);
+  return d;
+}
+export function dailyReminderOn(openId: string): boolean { const r = prefs().prepare("SELECT daily FROM v3_push_prefs WHERE open_id = ?").get(openId) as any; return r ? !!r.daily : true; }
+export function setDailyReminder(openId: string, on: boolean) {
+  prefs().prepare("INSERT INTO v3_push_prefs (open_id, daily) VALUES (?, ?) ON CONFLICT(open_id) DO UPDATE SET daily = excluded.daily").run(openId, on ? 1 : 0);
+}
+export const reminderWindow = (t: number) => { const h = lagosHour(t); return h >= 19 && h < 22; };
+let reminderDeps: ReminderDeps | null = null;
+let reminderBusy = false, reminderLastTick = 0;
+const reminderStats = { runs: 0, sent: 0, lastRun: "", lastSent: 0, skippedPlayed: 0, skippedOff: 0 };
+/** One pass: remind every eligible subscribed player once today. Safe to call often (idempotent per player per day). */
+export async function runDailyReminder(now = nowFn(), deps: ReminderDeps | null = reminderDeps): Promise<{ sent: number; eligible: number; reason?: string }> {
+  if (!deps) return { sent: 0, eligible: 0, reason: "no_deps" };
+  if (!reminderWindow(now)) return { sent: 0, eligible: 0, reason: "not_time" };
+  if (!vapidPublicKey() && pushImpl === sendPush) return { sent: 0, eligible: 0, reason: "push_not_configured" };
+  if (reminderBusy) return { sent: 0, eligible: 0, reason: "busy" };
+  reminderBusy = true;
+  try {
+    const day = lagosDay(now); const d = prefs();
+    const rows = (d.prepare(`SELECT s.* FROM v3_push_subs s LEFT JOIN v3_push_prefs p ON p.open_id = s.open_id
+      WHERE COALESCE(p.daily, 1) = 1 AND COALESCE(p.reminded_day, '') <> ?`).all(day) as any[]) as SubRow[];
+    const ids = [...new Set(rows.map((r) => r.open_id))];
+    reminderStats.runs++; reminderStats.lastRun = new Date(now).toISOString();
+    if (!ids.length) return { sent: 0, eligible: 0 };
+    const played = await deps.playedDaily(ids, day);
+    const mark = d.prepare("INSERT INTO v3_push_prefs (open_id, reminded_day) VALUES (?, ?) ON CONFLICT(open_id) DO UPDATE SET reminded_day = excluded.reminded_day");
+    for (const id of played) mark.run(id, day); // played already: no reminder today
+    reminderStats.skippedPlayed += played.size;
+    const todo = ids.filter((id) => !played.has(id) && !isOnline(id, now));
+    const st = await deps.streaks(todo);
+    let sent = 0;
+    for (const id of todo) {
+      const subs = rows.filter((r) => r.open_id === id && pushAllowed(r, now));
+      if (!subs.length) continue; // cap or 1-hour gap: try again on a later tick in the window
+      const s = st.get(id) || { streak: 0, lastDay: null };
+      const txt = reminderText(day, s.streak, s.lastDay);
+      const before = stats.pushSent;
+      await deliver(subs, { title: txt.title, body: txt.body, url: "/#/play/daily", tag: "ba-daily" });
+      mark.run(id, day);
+      if (stats.pushSent > before) sent++;
+    }
+    reminderStats.sent += sent; reminderStats.lastSent = sent;
+    if (sent) logger.info("v3_daily_reminder", { day, sent, eligible: todo.length });
+    return { sent, eligible: todo.length };
+  } finally { reminderBusy = false; }
+}
+/** Called by the 1-minute timer and by every keep-alive health ping; runs at most once a minute. */
+export function reminderTick(now = nowFn()) {
+  if (!reminderWindow(now) || now - reminderLastTick < 55_000) return;
+  reminderLastTick = now;
+  void runDailyReminder(now).catch((e) => logger.warn("v3_daily_reminder_failed", { error: e instanceof Error ? e.message : String(e) }));
+}
+export function setReminderDeps(deps: ReminderDeps) { reminderDeps = deps; }
+export function reminderStatus() { return { ...reminderStats, window: "19:00-21:59 Africa/Lagos" }; }
+
 /** Phone notifications for an open challenge that nobody took within 15 s: everyone subscribed who is not in the app. */
 export async function pushForWait(w: Wait) {
   if (!vapidPublicKey() || w.status !== "waiting" || w.pushed) return 0;
@@ -289,7 +376,7 @@ export function _reset() { pres.clear(); byOpen.clear(); waits.clear(); running.
 
 export function registerSocial(app: Express, guard: Guard, send: Send, d: SocialDeps): void {
   deps = d;
-  setInterval(() => { try { prune(nowFn()); } catch {} }, 60_000).unref?.();
+  setInterval(() => { try { prune(nowFn()); } catch {} try { reminderTick(); } catch {} }, 60_000).unref?.();
 
   // heartbeat: presence + online count + (optionally) the Live now list + a pop-up + my waiting entry
   app.post("/api/v3/social/hb", guard(async (req, res, me) => {
@@ -417,5 +504,13 @@ export function registerSocial(app: Express, guard: Guard, send: Send, d: Social
     for (let i = 0; i < rows.length; i++) if (results[i].gone) db().prepare("DELETE FROM v3_push_subs WHERE endpoint = ?").run(rows[i].endpoint);
     send(res, 200, { devices: rows.length, sent: results.filter((r) => r.ok).length, statuses: results.map((r) => r.status) });
   }));
+  // v3.10.3: the daily 7 PM reminder switch (on by default for anyone with notifications on)
+  app.get("/api/v3/push/prefs", guard(async (_req, res, me) => { send(res, 200, { daily: dailyReminderOn(me.openId), devices: subsOf(me.openId).length }); }));
+  app.post("/api/v3/push/prefs", guard(async (req, res, me) => {
+    if (!allow("pref:" + me.openId, 20, 600_000)) return send(res, 429, { error: "slow_down" });
+    setDailyReminder(me.openId, !!(req.body || {}).daily);
+    send(res, 200, { daily: dailyReminderOn(me.openId) });
+  }));
+  app.get("/api/v3/push/reminder-status", (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.json(reminderStatus()); });
   app.get("/api/v3/social/status", (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.json(socialStatus()); });
 }

@@ -84,6 +84,7 @@ const PRIVACY = shell("Privacy Policy", `
 <li><b>Game-room entries</b>: the nickname, team and answers you use when you join a quiz night, a challenge or a live game room.</li>
 <li><b>A guest ID</b>: if you play without signing in, we create a guest account with a random ID, kept in a sign-in cookie on your phone, so your progress is saved.</li>
 <li><b>A random phone ID for safety</b>: a random code made on your phone (not your name, number or advertising ID). We keep only a scrambled version of it, so a player you block stays blocked in every game.</li>
+<li><b>Phone notifications (optional)</b>: if you turn them on, your browser gives us a push address (from Google's or your browser's push service) and two keys to encrypt the message. We use it only to tell you when someone is waiting for a challenger, when a live game is starting, and for the daily 7 PM reminder if you haven't played the Daily Challenge yet. Max 3 a day, never 10 pm to 7 am (Lagos time). Turn them, or just the 7 PM reminder, off in Me → Settings; the address is deleted when you turn notifications off or delete your account.</li>
 <li><b>Reports</b>: if you report a player, we keep the game code, your nickname, their nickname, the reason and any note you write, so we can review it.</li>
 <li><b>Technical data</b>: a sign-in cookie that keeps you logged in, and your IP address, which is used briefly in memory to stop abuse (rate limiting) and is not stored with your profile.</li>
 </ul>

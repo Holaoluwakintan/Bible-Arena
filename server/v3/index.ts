@@ -19,7 +19,7 @@ import { registerLegal } from "./legal";
 import { registerAds } from "./ads";
 import { sentryBrowserTags } from "../_core/sentry-lite";
 import { registerChurches, registerVerify, teamNameFor, mergeChurchMembership, previewForOg, adminGate } from "./churches";
-import { registerSocial, mergeSocial, scheduleKoPush } from "./social";
+import { registerSocial, mergeSocial, scheduleKoPush, setReminderDeps, reminderTick } from "./social";
 import { publicRooms, liveWinner, publicKo, onKoOpen } from "./live";
 import { badName } from "./names";
 import { initReportStore, registerReport, tallyBooks } from "./report";
@@ -221,7 +221,7 @@ function guard(fn: (req: Request, res: Response, me: { openId: string; name: str
   };
 }
 
-async function applyRound(openId: string, fallbackName: string, opts: { mode: string; tier: Tier; scored: ReturnType<typeof scoreRound>; daily?: boolean; duel?: "sent" | "played" | "won" | "rematch"; won?: number; drawn?: number }) {
+async function applyRound(openId: string, fallbackName: string, opts: { mode: string; tier: Tier; scored: ReturnType<typeof scoreRound>; daily?: boolean; story?: string; duel?: "sent" | "played" | "won" | "rematch"; won?: number; drawn?: number }) {
   const pool = baPool()!;
   const { scored, tier } = opts;
   const perfect = scored.count > 0 && scored.correct === scored.count;
@@ -249,6 +249,12 @@ async function applyRound(openId: string, fallbackName: string, opts: { mode: st
   if (opts.daily) s.dailies++;
   s.streakSaves = saves0 - (useSave ? 1 : 0) + (earnSave ? 1 : 0);
   if (useSave) s.savesUsed = (Number(s.savesUsed) || 0) + 1;
+  // v3.10 story mode: best score per level (a full 10-question level), kept in players.stats.story so it follows a signed-in player.
+  if (opts.story && scored.count >= 10) {
+    const st: Record<string, number> = { ...((s as any).story || {}) };
+    if (st[opts.story] != null || Object.keys(st).length < 40) st[opts.story] = Math.max(Number(st[opts.story]) || 0, scored.correct);
+    (s as any).story = st;
+  }
   if (opts.duel === "sent") s.duelsSent++;
   if (opts.duel === "played") s.duelsPlayed++;
   if (opts.won) s.duelsWon += opts.won;
@@ -389,7 +395,11 @@ export function registerV3(app: Express): void {
 
   registerLive(app, () => BANK as any, WEB_DIR);
   shutdownHooks.push(flushLive);
-  app.get("/api/v3/health", (_req, res) => send(res, 200, { ok: true, bank: BANK.length, storage: !!baPool() }));
+  app.get("/api/v3/health", (_req, res) => { try { reminderTick(); } catch {} send(res, 200, { ok: true, bank: BANK.length, storage: !!baPool() }); }); // v3.10.3: the keep-alive ping also runs the 7 PM reminder
+  setReminderDeps({
+    playedDaily: async (ids, day) => new Set((await baPool()!.query(`select distinct open_id from ${SCH}.rounds where mode='daily' and day=$1 and open_id = any($2)`, [day, ids])).rows.map((r: any) => String(r.open_id))),
+    streaks: async (ids) => new Map((await baPool()!.query(`select open_id, streak, last_day from ${SCH}.players where open_id = any($1)`, [ids])).rows.map((r: any) => [String(r.open_id), { streak: Number(r.streak) || 0, lastDay: r.last_day ? new Date(r.last_day).toISOString().slice(0, 10) : null }])),
+  });
   // v3.8.3: opt-in rewarded ads relay (app only, practice rewards only)
   registerAds(app, rateLimit({ windowMs: 60_000, max: 30, name: "v3-ads-post" }), rateLimit({ windowMs: 60_000, max: 240, name: "v3-ads-get" }));
 
@@ -439,7 +449,8 @@ export function registerV3(app: Express): void {
     }
     const scored = scoreRound(daily ? "s" : tier, answers);
     if (!scored.count) return send(res, 400, { error: "no_answers" });
-    const applied = await applyRound(me.openId, me.name, { mode, tier: daily ? "s" : tier, scored, daily });
+    const story = mode === "story" && /^[a-z0-9]{2,8}$/.test(String(b.level || "")) ? String(b.level) : undefined;
+    const applied = await applyRound(me.openId, me.name, { mode, tier: daily ? "s" : tier, scored, daily, story });
     send(res, 200, { score: scored.total, correct: scored.correct, total: scored.count, bestCombo: scored.bestCombo, results: scored.results, ...applied });
   }));
 
