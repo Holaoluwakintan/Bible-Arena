@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.10.5";
+window.BA_V = "3.11.0";
 
 // ---------- v3.8.3: opt-in rewarded ads (Android app 1.4.0+ only; the website shows nothing new) ----------
 // The app tells the page it can play ads: its launch URL carries baads=1 (Chrome / TWA path, remembered for this tab only),
