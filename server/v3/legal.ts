@@ -12,7 +12,7 @@ import { deleteChurchData } from "./churches";
 import { deleteSocialData } from "./social";
 import { deleteReportData } from "./report";
 
-const CONTACT = process.env.SUPPORT_EMAIL || "michaelolaoluwagab@gmail.com";
+const CONTACT = process.env.SUPPORT_EMAIL || "blossomingapp@gmail.com";
 const UPDATED = "24 October 2026";
 
 function readCookie(req: Request, name: string): string | undefined {
