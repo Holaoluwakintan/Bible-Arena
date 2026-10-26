@@ -19,3 +19,26 @@ appengine-generated/
 # SQLite database (local dev)
 *.sqlite
 *.db
+
+# Added by Tab backup 2026-10-26
+.env.*
+*.env
+!.env.example
+*.jks
+*.keystore
+*.p12
+*.pem
+keystore.properties
+local.properties
+google-services.json
+*service-account*.json
+dist-web/
+node_modules
+build/
+.gradle/
+*.apk
+*.aab
+*.mp4
+*.mov
+*.zip
+*.tgz
