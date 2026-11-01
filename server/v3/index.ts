@@ -22,7 +22,9 @@ import { registerChurches, registerVerify, teamNameFor, mergeChurchMembership, p
 import { registerSocial, mergeSocial, scheduleKoPush, setReminderDeps, reminderTick } from "./social";
 import { publicRooms, liveWinner, publicKo, onKoOpen } from "./live";
 import { badName } from "./names";
-import { initReportStore, registerReport, tallyBooks } from "./report";
+import { initReportStore, registerReport, tallyBooks, mergeReport } from "./report";
+import { mergePlayerRows } from "./merge";
+import { renewSession } from "../_core/session-renew";
 import { initTesterStore, registerTesters } from "./testers";
 import { ST3_ID, EN_ID, story3Apply, story3Ad, endlessApply } from "./story3";
 
@@ -223,7 +225,7 @@ function guard(fn: (req: Request, res: Response, me: { openId: string; name: str
   };
 }
 
-async function applyRound(openId: string, fallbackName: string, opts: { mode: string; tier: Tier; scored: ReturnType<typeof scoreRound>; daily?: boolean; story?: string; story3?: { id: string; fast: boolean }; duel?: "sent" | "played" | "won" | "rematch"; won?: number; drawn?: number }) {
+export async function applyRound(openId: string, fallbackName: string, opts: { mode: string; tier: Tier; scored: ReturnType<typeof scoreRound>; daily?: boolean; story?: string; story3?: { id: string; fast: boolean }; duel?: "sent" | "played" | "won" | "rematch"; won?: number; drawn?: number }) {
   const pool = baPool()!;
   const { scored, tier } = opts;
   const perfect = scored.count > 0 && scored.correct === scored.count;
@@ -323,12 +325,11 @@ export async function mergeGuestInto(guestOpenId: string, googleOpenId: string):
     if (!t) {
       await pool.query(`update ${SCH}.players set open_id=$2, updated_at=now() where open_id=$1`, [guestOpenId, googleOpenId]);
     } else {
-      const s: any = { ...(t.stats || {}) };
-      for (const [k, v] of Object.entries(g.stats || {})) s[k] = k === "bestCombo" ? Math.max(Number(s[k] || 0), Number(v || 0)) : Number(s[k] || 0) + Number(v || 0);
-      const ach = Array.from(new Set([...(t.achievements || []), ...(g.achievements || [])]));
+      // v3.12.0: merge without ever lowering the account's record (server/v3/merge.ts); the old per-key "+" wiped story stars (NaN -> null).
+      const m = mergePlayerRows(t, g);
       await pool.query(
-        `update ${SCH}.players set xp=xp+$2, best_streak=greatest(best_streak,$3), streak=greatest(streak,$4), rounds=rounds+$5, stats=$6, achievements=$7, name=coalesce(nullif(name,'Player'),$8), church=coalesce(church,$9), updated_at=now() where open_id=$1`,
-        [googleOpenId, g.xp, g.best_streak, g.streak, g.rounds, JSON.stringify(s), JSON.stringify(ach), g.name, g.church],
+        `update ${SCH}.players set xp=$2, best_streak=$3, streak=$4, last_day=$5, rounds=$6, stats=$7, achievements=$8, name=$9, church=$10, updated_at=now() where open_id=$1`,
+        [googleOpenId, m.xp, m.best_streak, m.streak, m.last_day, m.rounds, JSON.stringify(m.stats), JSON.stringify(m.achievements), m.name, m.church],
       );
       await pool.query(`delete from ${SCH}.players where open_id=$1`, [guestOpenId]);
     }
@@ -338,6 +339,7 @@ export async function mergeGuestInto(guestOpenId: string, googleOpenId: string):
     await pool.query(`update ${SCH}.duels set creator_open_id=$2 where creator_open_id=$1`, [guestOpenId, googleOpenId]);
     mergeChurchMembership(guestOpenId, googleOpenId);
     mergeSocial(guestOpenId, googleOpenId);
+    mergeReport(guestOpenId, googleOpenId);
   } catch (error) {
     logger.warn("v3_merge_failed", { error: error instanceof Error ? error.message : String(error) });
   }
@@ -407,8 +409,9 @@ export function registerV3(app: Express): void {
   // v3.8.3: opt-in rewarded ads relay (app only, practice rewards only)
   registerAds(app, rateLimit({ windowMs: 60_000, max: 30, name: "v3-ads-post" }), rateLimit({ windowMs: 60_000, max: 240, name: "v3-ads-get" }));
 
-  app.get("/api/v3/me", guard(async (_req, res, me) => {
+  app.get("/api/v3/me", guard(async (req, res, me) => {
     if (!me) return send(res, 200, { user: null, player: null });
+    await renewSession(req, res); // v3.12.0: sliding session, so a player is never silently turned into a new guest after 30 days
     send(res, 200, { user: { openId: me.openId.startsWith("guest_") ? "guest" : "google", name: me.name }, player: publicPlayer(await getPlayer(me.openId)) });
   }, false));
 

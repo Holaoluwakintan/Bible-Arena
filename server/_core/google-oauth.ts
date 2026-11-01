@@ -9,6 +9,7 @@ import { COOKIE_NAME } from "../../shared/const";
 import { ENV } from "./env";
 import { rateLimit } from "./rate-limit";
 import { logger } from "./logger";
+import { SESSION_MS } from "./session-renew";
 
 /**
  * Google OAuth 2.0 (authorization code flow, server side).
@@ -21,7 +22,7 @@ const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
 const STATE_COOKIE = "ba_google_state";
 const STATE_TTL_SECONDS = 600;
-const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const SESSION_MAX_AGE_MS = SESSION_MS; // v3.12.0: was 30 days and never renewed (now 1 year, renewed on every open by /api/v3/me)
 
 function clientId() { return process.env.GOOGLE_CLIENT_ID?.trim() || ""; }
 function clientSecret() { return process.env.GOOGLE_CLIENT_SECRET?.trim() || ""; }

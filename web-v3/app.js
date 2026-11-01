@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.11.2";
+window.BA_V = "3.12.0";
 
 // ---------- v3.8.3: opt-in rewarded ads (Android app 1.4.0+ only; the website shows nothing new) ----------
 // The app tells the page it can play ads: its launch URL carries baads=1 (Chrome / TWA path, remembered for this tab only),
@@ -192,7 +192,24 @@ async function ensureSession() {
   if (!ME.user) {
     try { await api("/api/auth/guest", { body: {} }); ME = await api("/api/v3/me"); } catch (e) {}
   }
+  adoptAccount();
   return ME;
+}
+// v3.12.0: a signed-in (Google) player's name, church and level live on the server; after a reinstall or on a new phone this
+// phone takes them from the account (before, the name typed at the new welcome screen showed, and a later save could blank the church).
+function isGoogle() { return !!(ME.user && ME.user.openId === "google"); }
+function isGuest() { return !!(ME.user && ME.user.openId === "guest"); }
+function adoptAccount() {
+  if (!isGoogle() || !ME.player) return;
+  const p = ME.player;
+  if (p.name) S.name = p.name;
+  S.church = p.church || "";
+  if (["b", "s", "t"].includes(p.tier)) S.tier = p.tier;
+  S.onboarded = true; S.imported = true; save();
+}
+// v3.12.0: the guest note (guests only; hidden once signed in with Google)
+function guestNoteHTML() {
+  return isGuest() ? `<div class="card small row guestnote" style="gap:10px;align-items:center"><div class="grow">💾 Playing as a guest — sign in with Google to keep your progress if you change or reset your phone.</div><a class="chip on" href="/api/oauth/google/start" style="white-space:nowrap">Sign in</a></div>` : "";
 }
 async function loadBank() {
   if (BANK) return BANK;
@@ -280,6 +297,7 @@ function onboarding(after) {
     <div class="card gold col">
       <div class="field"><label for="nm">What should we call you?</label><input id="nm" maxlength="40" placeholder="e.g. Michael" value="${esc(S.name)}"></div>
     </div>
+    <a class="btn ghost block" href="/api/oauth/google/start" id="gback">Played before? Sign in with Google to get your progress back</a>
     <div class="col" style="gap:8px">
       <div class="tiny muted">Choose your level</div>
       <div class="tiers" id="tiers">${["b", "s", "t"].map((k) => `<button class="tier ${S.tier === k ? "on" : ""}" data-t="${k}"><div style="font-size:22px">${TIER[k].icon}</div><b>${TIER[k].name}</b><small>${TIER[k].sub}</small></button>`).join("")}</div>
@@ -295,7 +313,7 @@ function onboarding(after) {
     $("#go").disabled = true; $("#go").textContent = "Opening the gates…";
     await ensureSession();
     const imp = !S.imported && lx && lx.xp && !(ME.player && ME.player.xp) ? lx.xp : 0;
-    await savePlayer(imp ? { importXp: imp } : {});
+    if (!(isGoogle() && ME.player)) await savePlayer(imp ? { importXp: imp } : {}); // v3.12.0: a signed-in account keeps its own profile
     S.imported = true; save();
     if (after) after(); else go("#/");
   };
@@ -387,6 +405,7 @@ async function home() {
   <div class="col" style="gap:14px">
     <div class="row between"><div><div class="small muted">${hello},</div><h2>${esc(S.name || "friend")}</h2><a class="onlinepill" href="#/online" id="onlpill"><i class="dot"></i><span data-online>${onlineText()}</span></a></div>
       <button class="chip on" id="tierchip">${TIER[S.tier].icon} ${TIER[S.tier].name}</button></div>
+    ${guestNoteHTML()}
     <div class="sechead"><b>How do you want to play?</b></div>
     <div class="card way">
       <div class="row" style="gap:12px"><div class="wayico">🎯</div><div class="grow"><b class="wayt">Play solo</b><div class="small muted">Just you and the Word. Pick a game, play as much as you like.</div></div></div>
@@ -2173,7 +2192,7 @@ async function profile() {
       <div class="setrow"><div class="grow"><div>Game pop-ups</div><div class="small muted">“A live game is starting” or “someone is waiting for a challenger” while you're in the app (max 1 every 2 min)</div></div><button class="switch ${window.BAS && !BAS.muted() ? "on" : ""}" id="pops" aria-label="Challenge pop-ups"></button></div>
       <div class="setrow" id="pushrow"><div class="grow"><div>Phone notifications</div><div class="small muted" id="pushtxt">Checking…</div></div><span id="pushbtn"></span></div>
       <div class="setrow" id="remrow"><div class="grow"><div>Daily 7 PM reminder</div><div class="small muted" id="remtxt">If you haven't played the Daily Challenge by 7 PM (Lagos time)</div></div><button class="switch" id="rem" aria-label="Daily 7 PM reminder"></button></div>
-      <div class="setrow"><div class="grow"><div>Account</div><div class="small muted">${google ? "Signed in with Google ✓ (progress is safe across phones)" : "Guest on this phone. Sign in to keep your progress on any phone."}</div></div>${google ? `<button class="chip" id="out">Sign out</button>` : `<a class="chip on" href="/api/oauth/google/start">Google</a>`}</div>
+      <div class="setrow"><div class="grow"><div>Account</div><div class="small muted">${google ? "Signed in with Google ✓ (progress is safe across phones)" : "Playing as a guest — sign in with Google to keep your progress if you change or reset your phone."}</div></div>${google ? `<button class="chip" id="out">Sign out</button>` : `<a class="chip on" href="/api/oauth/google/start">Google</a>`}</div>
       <div class="setrow"><div class="grow"><div>Blocked players</div><div class="small muted" id="blktxt">${blockedList().length ? blockedList().length + " blocked. You won't hear each other in voice." : "No one. Tap a player in a game to mute, block or report."}</div></div>${blockedList().length ? `<button class="chip" id="blk">Manage</button>` : ""}</div>
       <div class="setrow"><div class="grow"><div>Privacy policy</div><div class="small muted">What we keep and why</div></div><a class="chip" href="/privacy">Read</a></div>
       <div class="setrow"><div class="grow"><div>Delete account</div><div class="small muted">Permanently erase your profile, scores and duels</div></div><button class="chip" id="delacct" style="color:#ff8a80">Delete</button></div>
@@ -2231,6 +2250,8 @@ async function profile() {
 (async function boot() {
   if (window.BAS) { BAS.toast = toast; BAS.onJoin = (inv) => go("#/qm?join=" + encodeURIComponent(inv.id)); BAS.onJoinKo = (code) => joinKo(code); BAS.on(() => $$("[data-online]").forEach((e) => (e.textContent = onlineText()))); }
   document.addEventListener("click", () => { const a = audio(); if (a && a.state === "suspended") a.resume(); }, { once: true });
+  // v3.12.0: back from Google sign-in (also from the welcome screen after a reinstall): skip the welcome screen, the account has the profile
+  if (/[?&]signedin=1/.test(location.hash) && !S.onboarded) { S.onboarded = true; S.imported = true; save(); }
   ensureSession().then(() => { if (ME.player) { if (!S.name && ME.player.name) S.name = ME.player.name; if (!S.church && ME.player.church) S.church = ME.player.church; save(); } });
   loadBank().catch(() => {});
   // A sleeping server can take up to a minute to answer. Show the app after 1.5 s at most (the loading screen in index.html covers the wait) and

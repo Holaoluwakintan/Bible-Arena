@@ -21,7 +21,7 @@ const addDays = (day: string, n: number) => new Date(Date.parse(day + "T00:00:00
 const lagosDay = () => new Date(Date.now() + 3600_000).toISOString().slice(0, 10);
 
 export interface BookRow { book: string; right: number; total: number }
-export interface ReportStore { add(openId: string, week: string, rows: BookRow[]): void; get(openId: string, week: string): BookRow[]; prune(beforeWeek: string): void; del(openId: string): number }
+export interface ReportStore { add(openId: string, week: string, rows: BookRow[]): void; get(openId: string, week: string): BookRow[]; prune(beforeWeek: string): void; del(openId: string): number; move?(fromOpenId: string, toOpenId: string): void }
 type SqlDb = { exec(sql: string): void; prepare(sql: string): { run(...a: any[]): any; get(...a: any[]): any; all(...a: any[]): any[] }; transaction?: (fn: any) => any };
 function sqliteStore(getDb: () => SqlDb): ReportStore {
   let ready = false;
@@ -45,6 +45,13 @@ function sqliteStore(getDb: () => SqlDb): ReportStore {
       .map((r) => ({ book: String(r.book), right: Number(r.right_n), total: Number(r.total_n) })),
     prune: (before) => { db().prepare("DELETE FROM v3_book_week WHERE week < ?").run(before); },
     del: (openId) => Number(db().prepare("DELETE FROM v3_book_week WHERE open_id = ?").run(openId)?.changes || 0),
+    // v3.12.0: a guest's weekly tallies follow them when they sign in with Google (added to the account's).
+    move: (from, to) => {
+      const d = db();
+      d.prepare(`INSERT INTO v3_book_week (open_id, week, book, right_n, total_n) SELECT ?, week, book, right_n, total_n FROM v3_book_week WHERE open_id = ? AND true
+        ON CONFLICT(open_id, week, book) DO UPDATE SET right_n = right_n + excluded.right_n, total_n = total_n + excluded.total_n`).run(to, from);
+      d.prepare("DELETE FROM v3_book_week WHERE open_id = ?").run(from);
+    },
   };
 }
 let store: ReportStore | null = null;
@@ -52,6 +59,12 @@ let lastPrune = 0;
 export function initReportStore(getDb: () => SqlDb) { store = sqliteStore(getDb); }
 /** Tests: swap the storage. */
 export function _setReportStore(s: ReportStore) { store = s; }
+
+/** v3.12.0: move a guest's per-book tallies onto the account they signed in to. Never throws. */
+export function mergeReport(fromOpenId: string, toOpenId: string) {
+  if (!store || !store.move || !fromOpenId || !toOpenId || fromOpenId === toOpenId) return;
+  try { store.move(fromOpenId, toOpenId); } catch {}
+}
 
 /** After a server-scored round: add each answered question to its book's tally for this week. Never throws. */
 export function tallyBooks(openId: string, results: Array<{ id: string; correct: boolean }>, refOf: (id: string) => string | undefined, day = lagosDay()) {

@@ -5,6 +5,7 @@ import { getSessionCookieOptions } from "./cookies";
 import * as db from "../db";
 import { COOKIE_NAME } from "../../shared/const";
 import { rateLimit } from "./rate-limit";
+import { SESSION_MS } from "./session-renew";
 
 const GUEST_OPEN_ID_PREFIX = "guest_";
 
@@ -13,9 +14,9 @@ export function registerGuestAuth(app: Express): void {
     try {
       const openId = `${GUEST_OPEN_ID_PREFIX}${randomUUID()}`;
       await db.upsertUser({ openId, name: "Guest Player", loginMethod: "guest", lastSignedIn: new Date() });
-      const token = await sdk.createSessionToken(openId, { name: "Guest Player" });
+      const token = await sdk.createSessionToken(openId, { name: "Guest Player", expiresInMs: SESSION_MS });
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: 30 * 24 * 60 * 60 * 1000 });
+      res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: SESSION_MS }); // v3.12.0: was 30 days and never renewed (now 1 year, renewed on every open)
       const user = await db.getUserByOpenId(openId);
       const isWeb = req.headers["x-client-platform"] === "web";
       res.json({ ok: true, ...(isWeb ? {} : { token }), user });
