@@ -1,7 +1,7 @@
 /* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.12.0";
+window.BA_V = "3.12.1";
 
 // ---------- v3.8.3: opt-in rewarded ads (Android app 1.4.0+ only; the website shows nothing new) ----------
 // The app tells the page it can play ads: its launch URL carries baads=1 (Chrome / TWA path, remembered for this tab only),
@@ -195,7 +195,7 @@ async function ensureSession() {
   adoptAccount();
   return ME;
 }
-// v3.12.0: a signed-in (Google) player's name, church and level live on the server; after a reinstall or on a new phone this
+// v3.12: a signed-in (Google) player's name, church and level live on the server; after a reinstall or on a new phone this
 // phone takes them from the account (before, the name typed at the new welcome screen showed, and a later save could blank the church).
 function isGoogle() { return !!(ME.user && ME.user.openId === "google"); }
 function isGuest() { return !!(ME.user && ME.user.openId === "guest"); }
@@ -207,7 +207,7 @@ function adoptAccount() {
   if (["b", "s", "t"].includes(p.tier)) S.tier = p.tier;
   S.onboarded = true; S.imported = true; save();
 }
-// v3.12.0: the guest note (guests only; hidden once signed in with Google)
+// v3.12: the guest note (guests only; hidden once signed in with Google)
 function guestNoteHTML() {
   return isGuest() ? `<div class="card small row guestnote" style="gap:10px;align-items:center"><div class="grow">💾 Playing as a guest — sign in with Google to keep your progress if you change or reset your phone.</div><a class="chip on" href="/api/oauth/google/start" style="white-space:nowrap">Sign in</a></div>` : "";
 }
@@ -313,7 +313,7 @@ function onboarding(after) {
     $("#go").disabled = true; $("#go").textContent = "Opening the gates…";
     await ensureSession();
     const imp = !S.imported && lx && lx.xp && !(ME.player && ME.player.xp) ? lx.xp : 0;
-    if (!(isGoogle() && ME.player)) await savePlayer(imp ? { importXp: imp } : {}); // v3.12.0: a signed-in account keeps its own profile
+    if (!(isGoogle() && ME.player)) await savePlayer(imp ? { importXp: imp } : {}); // v3.12: a signed-in account keeps its own profile
     S.imported = true; save();
     if (after) after(); else go("#/");
   };
@@ -2250,7 +2250,7 @@ async function profile() {
 (async function boot() {
   if (window.BAS) { BAS.toast = toast; BAS.onJoin = (inv) => go("#/qm?join=" + encodeURIComponent(inv.id)); BAS.onJoinKo = (code) => joinKo(code); BAS.on(() => $$("[data-online]").forEach((e) => (e.textContent = onlineText()))); }
   document.addEventListener("click", () => { const a = audio(); if (a && a.state === "suspended") a.resume(); }, { once: true });
-  // v3.12.0: back from Google sign-in (also from the welcome screen after a reinstall): skip the welcome screen, the account has the profile
+  // v3.12: back from Google sign-in (also from the welcome screen after a reinstall): skip the welcome screen, the account has the profile
   if (/[?&]signedin=1/.test(location.hash) && !S.onboarded) { S.onboarded = true; S.imported = true; save(); }
   ensureSession().then(() => { if (ME.player) { if (!S.name && ME.player.name) S.name = ME.player.name; if (!S.church && ME.player.church) S.church = ME.player.church; save(); } });
   loadBank().catch(() => {});
