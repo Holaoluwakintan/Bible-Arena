@@ -121,7 +121,7 @@ export function createApp() {
   // Android app (Trusted Web Activity): Digital Asset Links so the app opens full screen with no URL bar.
   const androidPackage = process.env.ANDROID_PACKAGE_NAME || "com.holaoluwakintan.biblearena";
   const androidCertSha256 = (process.env.ANDROID_CERT_SHA256 || "C7:DB:5D:12:4B:86:E5:4F:F7:42:F0:0F:7E:EE:DC:A6:2E:FF:9F:81:2A:A8:05:8E:95:39:EC:63:39:A3:B6:29")
-    .split(",").map((s) => s.trim()).filter(Boolean);
+    .split(",").map((s: string) => s.trim()).filter(Boolean);
   app.get("/.well-known/assetlinks.json", (_req, res) => {
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.json([

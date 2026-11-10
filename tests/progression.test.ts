@@ -7,9 +7,9 @@ const empty: ProgressionSnapshot = { totalXp: 0, currentStreak: 0, bestStreak: 0
 describe("Bible Arena progression", () => {
   it("maps XP to level names and next threshold distance", () => {
     expect(getLevelForXp(0)).toBe(1);
-    expect(getLevelName(1)).toBe("Scripture Seeker");
+    expect(getLevelName(1)).toBe("Seeker");
     expect(getLevelForXp(500)).toBe(2);
-    expect(getXpToNextLevel(500)).toBe(700);
+    expect(getXpToNextLevel(500)).toBe(1100);
   });
 
   it("awards completion and correct-answer rewards exactly once", () => {

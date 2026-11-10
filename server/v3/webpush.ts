@@ -112,7 +112,7 @@ export async function sendPush(sub: PushSub, data: Record<string, unknown>, opts
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), 10_000);
   try {
-    const r = await (opts?.fetchImpl || fetch)(sub.endpoint, { method: "POST", headers, body, signal: ctl.signal });
+    const r = await (opts?.fetchImpl || fetch)(sub.endpoint, { method: "POST", headers, body: new Uint8Array(body), signal: ctl.signal });
     return { ok: r.status >= 200 && r.status < 300, status: r.status, gone: r.status === 404 || r.status === 410 };
   } catch {
     return { ok: false, status: 0, gone: false };

@@ -72,7 +72,7 @@ describe("device tags, blocks, reports (in-memory store)", () => {
 
 describe("HTTP: voice rooms with block and report", () => {
   let base = "", srv: any;
-  const bank = JSON.parse(fs.readFileSync(new URL("../web-v3/bank.json", import.meta.url), "utf8")).items;
+  const bank = JSON.parse(fs.readFileSync(new URL("../web-v3/bank.json", import.meta.url).pathname, "utf8")).items;
   beforeAll(async () => {
     S._setStore(S.memoryStore());
     const app = express(); app.use(express.json());

@@ -654,7 +654,7 @@ export function registerV3(app: Express): void {
       if (baPool()) {
         const v = await duelView(c);
         if (v) {
-          const creator = v.entries.find((e) => e.isCreator && e.finished);
+          const creator = v.entries.find((e: { isCreator: boolean; finished: boolean }) => e.isCreator && e.finished);
           title = creator
             ? `${v.creator.name} scored ${creator.score.toLocaleString("en-US")} on Bible Arena. Can you beat it?`
             : `${v.creator.name} challenges you on Bible Arena`;
