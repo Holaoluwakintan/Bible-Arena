@@ -191,3 +191,26 @@ export function advancePairing(pairing: PartnerPairing, portion?: ReadingPortion
   }
   return { ok: true, value: { ...pairing, state: to } };
 }
+
+// ---- Daily split ----
+
+export interface DayReading {
+  day: number;          // 1-based
+  startChapter: number;
+  endChapter: number;   // below startChapter means a catch-up day with no chapters
+}
+
+// Spreads the portion's chapters over its days. Earlier days take the extra chapters,
+// so the days stay in order with no gaps: day 1 starts at the first chapter, the last day ends at the last.
+export function dailySplit(p: ReadingPortion): DayReading[] {
+  const out: DayReading[] = [];
+  let cursor = p.startChapter;
+  for (let d = 1; d <= p.lengthDays; d++) {
+    const remainingChapters = p.endChapter - cursor + 1;
+    const remainingDays = p.lengthDays - d + 1;
+    const n = remainingChapters > 0 ? Math.ceil(remainingChapters / remainingDays) : 0;
+    out.push({ day: d, startChapter: cursor, endChapter: cursor + n - 1 });
+    cursor += n;
+  }
+  return out;
+}

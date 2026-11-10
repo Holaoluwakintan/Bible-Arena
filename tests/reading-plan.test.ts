@@ -7,6 +7,7 @@ import {
   advancePairing,
   createPairing,
   createReadingPortion,
+  dailySplit,
   isQuizReady,
   nextPairingState,
   portionError,
@@ -113,5 +114,38 @@ describe("shared reading: partner pairing", () => {
     if (!b.ok) throw new Error("accept should work");
     expect(acceptInvite(b.value, "c").ok).toBe(false);
     expect(acceptInvite(b.value, "b").ok).toBe(true);
+  });
+});
+
+describe("shared reading: daily split", () => {
+  it("covers every chapter once, in order, for each length", () => {
+    for (const lengthDays of [3, 7, 14, 30]) {
+      const r = createReadingPortion({ book: "Matthew", startChapter: 1, endChapter: 28, lengthDays });
+      if (!r.ok) throw new Error(r.error);
+      const days = dailySplit(r.value);
+      expect(days).toHaveLength(lengthDays);
+      expect(days[0].startChapter).toBe(1);
+      expect(days[days.length - 1].endChapter).toBe(28);
+      let next = 1;
+      for (const d of days) {
+        expect(d.startChapter).toBe(next);
+        next = d.endChapter + 1;
+      }
+      expect(days.reduce((n, d) => n + Math.max(0, d.endChapter - d.startChapter + 1), 0)).toBe(28);
+    }
+  });
+
+  it("gives the extra chapters to the earlier days", () => {
+    const r = createReadingPortion({ book: "Matthew", startChapter: 1, endChapter: 10, lengthDays: 3 });
+    if (!r.ok) throw new Error(r.error);
+    const sizes = dailySplit(r.value).map((d) => d.endChapter - d.startChapter + 1);
+    expect(sizes).toEqual([4, 3, 3]);
+  });
+
+  it("uses catch-up days when there are fewer chapters than days", () => {
+    const r = createReadingPortion({ book: "Jude", startChapter: 1, endChapter: 1, lengthDays: 3 });
+    if (!r.ok) throw new Error(r.error);
+    const days = dailySplit(r.value);
+    expect(days.map((d) => d.endChapter - d.startChapter + 1)).toEqual([1, 0, 0]);
   });
 });
