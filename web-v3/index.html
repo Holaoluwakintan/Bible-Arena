@@ -112,6 +112,8 @@ setInterval(check,150);
 try{new MutationObserver(check).observe(document.getElementById("app"),{childList:true,subtree:true})}catch(e){}
 window.BALoader={finish:finish};
 })();</script>
+<script>window.BA_FLAGS={sharedReading:true};</script>
+<script src="/v3/reading-screens.js?v=pv1" defer></script>
 <script src="/v3/social.js?v=3.12.5" defer></script>
 <script src="/v3/app.js?v=3.12.5" defer></script>
 <script>if("serviceWorker"in navigator)addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").catch(function(){})});</script>

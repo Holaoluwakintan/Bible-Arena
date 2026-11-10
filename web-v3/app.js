@@ -271,6 +271,13 @@ async function route() {
   if (a === "bot") return playBot(MODES[q.get("mode")] ? q.get("mode") : "mixed", TIER[q.get("tier")] ? q.get("tier") : S.tier);
   if (a === "play") return startMode(b || q.get("mode") || "arena", q.get("tier") || S.tier);
   if (a === "duels") return duelsScreen();
+  if (a === "reading") {
+    // Shared reading (preview): only when the flag is on and the screens file loaded.
+    if (!(window.BA_FLAGS && window.BA_FLAGS.sharedReading) || !window.BAReading) return home();
+    render('<div id="reading-root"></div>');
+    window.BAReading.mount(document.getElementById("reading-root"), {});
+    return;
+  }
   if (a === "duel" && b === "new") return newDuel(q.get("from"));
   if (a === "d" && b) return acceptDuel(b.toUpperCase());
   if (a === "ranks") return ranks(q.get("tab") || "week");
