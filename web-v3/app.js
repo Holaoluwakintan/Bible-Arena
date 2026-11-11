@@ -416,6 +416,17 @@ function topbar() {
     <div class="flame" title="Daily streak">🔥 ${p.streak || 0}${saves(p) ? `<small class="saves" title="Streak saves">🛡️${saves(p)}</small>` : ""}</div>
   </div>`;
 }
+// Chever preview entries on the home screen. Each shows only when its flag is on and its script has loaded (see featureScripts).
+// Nothing sets the flags, so on the live site neither card renders. Icons are inline SVG; no emoji.
+function chevrMenuHTML() {
+  const f = window.BA_FLAGS || {};
+  const ico = (d) => `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const wrap = (href, icon, title, sub) => `<a class="card row slim" href="${href}" style="text-decoration:none;color:inherit"><div class="gold" style="width:40px;height:40px;display:grid;place-items:center;flex:0 0 auto">${icon}</div><div class="grow"><b>${title}</b><div class="small muted">${sub}</div></div><div class="gold">›</div></a>`;
+  let out = "";
+  if (f.sharedReading === true && window.BAReading) out += wrap("#/reading", ico(`<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M8 8h9M8 11.5h9"/>`), "Shared reading", "One reading plan for your family, friends or church. Up to 50 people, one code.");
+  if (duelV2()) out += wrap("#/duels", ico(`<path d="M4.5 4.5 14 14"/><path d="M19.5 4.5 10 14"/><path d="M9.5 14.5 5 19"/><path d="M14.5 14.5 19 19"/>`), "Duels and ranked", "Play a friend's set, join with a code, or find an opponent.");
+  return out ? `<div class="col" style="gap:10px">${out}</div>` : "";
+}
 async function home() {
   render(`${topbar()}<div id="h"></div>${tabbar("home")}`);
   onLeave(lenPickerWire());
@@ -435,6 +446,7 @@ async function home() {
       <div class="row" style="gap:12px"><div class="wayico">🎯</div><div class="grow"><b class="wayt">Play solo</b><div class="small muted">Just you and the Word. Pick a game, play as much as you like.</div></div></div>
       <div class="row" style="gap:8px;margin-top:12px"><a class="btn primary grow" href="#/play/mixed">▶ Play now</a><button class="btn ghost grow" data-more>Choose a game ↓</button></div>
     </div>
+    ${chevrMenuHTML()}
     ${storyCardHTML()}
     <div id="homelive">${liveCardHTML()}</div>
     <div class="card way gold">
@@ -2371,8 +2383,23 @@ async function profile() {
   const out = $("#out"); if (out) out.onclick = async () => { await api("/api/auth/logout", { body: {} }).catch(() => {}); ME = { user: null, player: null }; await ensureSession(); toast("Signed out"); profile(); };
 }
 
+// ---------- Chever preview scripts. Each file loads only when its flag is set on window.BA_FLAGS; nothing sets the flags, so on
+// the live site neither file is requested and boot does not wait. Returns a promise only when something is loading.
+function featureScripts() {
+  const f = window.BA_FLAGS || {};
+  const want = [];
+  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.12.5");
+  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.12.5");
+  if (!want.length) return null;
+  return Promise.all(want.map((src) => new Promise((done) => {
+    const s = document.createElement("script"); s.src = src; s.onload = done; s.onerror = done; document.head.appendChild(s);
+  })));
+}
+
 // ---------- boot ----------
 (async function boot() {
+  const loading = featureScripts();
+  if (loading) await loading;
   if (window.BAS) { BAS.toast = toast; BAS.onJoin = (inv) => go("#/qm?join=" + encodeURIComponent(inv.id)); BAS.onJoinKo = (code) => joinKo(code); BAS.on(() => $$("[data-online]").forEach((e) => (e.textContent = onlineText()))); }
   document.addEventListener("click", () => { const a = audio(); if (a && a.state === "suspended") a.resume(); }, { once: true });
   // v3.12: back from Google sign-in (also from the welcome screen after a reinstall): skip the welcome screen, the account has the profile
