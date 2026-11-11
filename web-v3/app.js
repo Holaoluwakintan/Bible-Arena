@@ -1968,6 +1968,7 @@ async function acceptDuel(code) {
   const mine = v.entries.find((e) => e.isMe);
   if (mine && mine.finished) return duelResult(v, null, null);
   if (v.creator.isMe && !mine) return duelResult(v, null, null);
+  if (duelV2()) return duelScreenV2(v);
   const creator = v.entries.find((e) => e.isCreator && e.finished);
   const needName = !S.onboarded;
   render(`<div class="col" style="gap:16px;padding-top:2vh">
@@ -1998,7 +1999,106 @@ function board(v) {
   const pos = new Map(); done.forEach((e, i) => pos.set(e, i && duelCmp(e, done[i - 1]) === 0 ? pos.get(done[i - 1]) : i + 1));
   return [...done, ...v.entries.filter((e) => !e.finished && e.progress)].map((e) => `<div class="lb ${e.isMe ? "me" : ""}"><div class="pos ${e.finished ? "p" + pos.get(e) : ""}">${e.finished ? pos.get(e) : "…"}</div><div class="grow"><b>${esc(e.name)}</b>${e.isCreator ? ` <span class="small gold">challenger</span>` : ""}<div class="small muted">${e.finished ? `${e.correct}/${e.total} · ${secs(e.timeMs)}` : `playing… ${e.progress}/${v.ids.length}`}${e.church ? " · " + esc(e.church) : ""}</div></div><div class="gold serif" style="font-weight:800">${fmt(e.score)}</div></div>`).join("");
 }
+
+// ---------- Chever duel, ranked/join and results screens (preview). Flag-gated: window.BA_FLAGS.chever2Duels, with
+// web-v3/duel-screens.js loaded. Nothing sets the flag, so the live screens below are unchanged when it is off.
+function duelV2() { return !!(window.BA_FLAGS && window.BA_FLAGS.chever2Duels && window.BADuel); }
+function duelBoardV2(v) {
+  const L = BADuel.logic;
+  const done = v.entries.filter((e) => e.finished).sort((a, b) => duelCmp(b, a));
+  const pos = new Map(); done.forEach((e, i) => pos.set(e, i && duelCmp(e, done[i - 1]) === 0 ? pos.get(done[i - 1]) : i + 1));
+  const rows = [...done, ...v.entries.filter((e) => !e.finished && e.progress)].map((e) => ({
+    pos: e.finished ? pos.get(e) : "…", name: e.name, me: !!e.isMe, tag: e.isCreator ? "challenger" : "",
+    sub: e.finished ? `${e.correct}/${e.total} · ${secs(e.timeMs)}` : `playing… ${e.progress}/${v.ids.length}`, score: fmt(e.score) }));
+  return BADuel.renderBoard(rows);
+}
+function duelScreenV2(v) {
+  BADuel.ensureStyle();
+  const creator = v.entries.find((e) => e.isCreator && e.finished);
+  const finished = v.entries.filter((e) => e.finished).length;
+  render(BADuel.renderDuel({
+    code: v.code, modeName: modeName(v.mode), tierName: TIER[v.tier].name, count: v.ids.length,
+    creatorName: BADuel.logic.plainName(v.creator.name), scoreToBeat: creator ? creator.score : null,
+    needName: !S.onboarded, nameVal: S.name, churchVal: S.church,
+    boardHTML: finished > 1 ? duelBoardV2(v) : "", tabbarHTML: readingTabbar("community") }), "cv2 cv2-duel");
+  $("#acc").onclick = async () => {
+    if (!S.onboarded && badNm($("#nm").value)) { $("#nm").focus(); return toast(KIND_NAME); }
+    if (!S.onboarded) { S.name = ($("#nm").value || "").trim().slice(0, 40) || "Player"; S.church = ($("#ch").value || "").trim().slice(0, 60); S.onboarded = true; save(); await savePlayer(); }
+    await loadBank();
+    sfx.ok(); buzz(20);
+    runRound({ ids: v.ids, tier: v.tier, mode: "duel", title: "Duel vs " + v.creator.name, duel: { code: v.code, creator: false, mode: v.mode } });
+  };
+}
+function duelResultV2(v, r, cfg) {
+  const L = BADuel.logic; BADuel.ensureStyle();
+  if (location.hash !== "#/d/" + v.code) history.replaceState(null, "", "#/d/" + v.code);
+  const me = v.entries.find((e) => e.isMe);
+  const others = v.entries.filter((e) => !e.isMe && e.finished);
+  const opp = v.creator.isMe ? others[0] : others.find((e) => e.isCreator) || others[0];
+  const state0 = L.duelState(me, opp);
+  const state = state0 === "play" ? "waiting" : state0; // my set not in yet: the results screen shows the waiting state
+  const quick = !!(cfg && cfg.duel && cfg.duel.quick);
+  const n = v.ids.length;
+  const botDuel = v.entries.some((e) => /Arena Bot/.test(e.name));
+  const fin = v.entries.filter((e) => e.finished).sort((a, b) => duelCmp(b, a));
+  const topWin = fin.length >= 2 && duelCmp(fin[0], fin[1]) !== 0 ? fin[0] : null;
+  const chwLabel = !botDuel && topWin ? (topWin.isMe ? "Winner stays on: take on all comers" : `Challenge the winner (${L.firstName(topWin.name)})`) : "";
+  const oppName = opp ? opp.name : (v.creator.isMe ? "" : v.creator.name);
+  const hl = L.headlineFor(state, { oppName: oppName || "your opponent", tie: !!(me && opp && me.score === opp.score), gap: opp && me ? L.gapLabel(me.timeMs, opp.timeMs) : "", quick });
+  const codeCard = state === "waiting" && v.creator.isMe ? `<section class="cvd-card cvd-code"><div class="cvd-kick">Challenge code</div><div class="cvd-bigcode">${esc(v.code)}</div><p class="cvd-hint">They tap your link, or enter this code in Chever.</p></section>` : "";
+  const xpLine = r && r.xp ? `+${fmt(r.xp)} XP${r.player ? " · " + r.player.rank.name + " " + r.player.rank.division : ""}` : "";
+  const achievementsHTML = r && r.newAchievements && r.newAchievements.length ? r.newAchievements.map((a) => ACH[a] ? `<section class="cvd-card"><div class="cvd-kick">Achievement</div><b>${esc(ACH[a][1])}</b><div class="cvd-hint">${esc(ACH[a][2])}</div></section>` : "").join("") : "";
+  const url = origin() + "/d/" + v.code;
+  render(BADuel.renderResults({
+    code: v.code, outcome: state, headline: hl.title, sub: hl.sub, count: n,
+    me: { score: me ? me.score : 0, correct: me ? me.correct : 0, total: n, time: me ? L.secsLabel(me.timeMs) : "" },
+    opp: opp ? { score: opp.score, correct: opp.correct, total: n, time: L.secsLabel(opp.timeMs) } : null,
+    oppName: opp ? opp.name : "", myGrid: me ? L.gridOf(me.answers, n) : [], oppGrid: opp ? L.gridOf(opp.answers, n) : [],
+    waHref: waLink(duelText(v.code, me ? me.score : null, v.tier, v.mode)),
+    rematch: !!(me && opp && !botDuel), chwLabel, chwId: "chw", qm: !!(botDuel && me && opp),
+    xpLine, achievementsHTML, extraHTML: codeCard,
+    boardHTML: v.entries.filter((e) => e.finished).length ? duelBoardV2(v) : "", tabbarHTML: readingTabbar("community") }), "cv2 cv2-res");
+  if (state === "won") { confetti(90); sfx.win(); }
+  $("#cp").onclick = async () => { try { await navigator.clipboard.writeText(url); toast("Link copied"); } catch (e) { prompt("Copy this link:", url); } };
+  $("#sh").onclick = () => shareCard({ score: me ? me.score : 0, correct: me ? me.correct : 0, total: n, tier: v.tier, title: "Challenge", url, text: duelText(v.code, me ? me.score : null, v.tier, v.mode), cta: state === "won" ? "I won this duel. Your turn?" : state === "draw" ? "We drew this duel. Can you break the tie?" : "Can you beat me?" });
+  const chb = $("#chw"); if (chb) chb.onclick = () => { sfx.tap(); go("#/qm?duel=" + v.code + "&tier=" + v.tier + "&mode=" + v.mode); };
+  const qr = $("#qmreal"); if (qr) qr.onclick = () => { sfx.tap(); go("#/qm?tier=" + v.tier + "&mode=" + v.mode); };
+  const rm = $("#rm"); if (rm) rm.onclick = async () => {
+    rm.disabled = true;
+    try { await loadBank(); const d = await api("/api/v3/duels", { body: { mode: v.mode, tier: v.tier, name: S.name, parent: v.code } }); runRound({ ids: d.ids, tier: v.tier, mode: "duel", title: "Rematch · " + (MODES[v.mode] ? MODES[v.mode].name : ""), duel: { code: d.code, creator: true, mode: v.mode } }); }
+    catch (e) { toast("Couldn't start the rematch."); rm.disabled = false; }
+  };
+  if (!me || !opp) { const t = setInterval(async () => { try { const nv = await api("/api/v3/duels/" + v.code); if (nv.entries.filter((e) => e.finished).length !== v.entries.filter((e) => e.finished).length) { clearInterval(t); duelResult(nv, null, cfg); } } catch (e) {} }, quick ? 3000 : 8000); onLeave(() => clearInterval(t)); }
+}
+async function duelsScreenV2() {
+  BADuel.ensureStyle();
+  render(`<div class="cvd cvd-rj"><div class="cvd-kick">Loading</div></div>`, "cv2 cv2-rj");
+  await ensureSession();
+  let r = null; try { r = await api("/api/v3/duels/mine"); } catch (e) {}
+  const status = (d) => {
+    const es = d.entries || []; const me = es.find((e) => e.me); const others = es.filter((e) => !e.me && e.finished);
+    const best = others.sort((a, b) => duelCmp(b, a))[0];
+    const c = me && me.finished && best ? duelCmp(me, best) : null;
+    return !me || !me.finished ? ["Your turn", true] : !best ? ["Waiting for opponent", false] : c === 1 ? ["You lead", true] : c === 0 ? ["Draw", false] : [`${best.name} leads`, false];
+  };
+  const sets = r ? (r.duels.length ? r.duels.map((d) => {
+    const [s, on] = status(d);
+    return `<a class="cvd-card cvd-setrow" href="#/d/${d.code}"><div class="cvd-badge">${BADuel.ico("users")}</div><div class="cvd-grow"><b>${esc(d.mine ? "Your challenge" : "From " + BADuel.logic.plainName(d.creator_name))}</b><div class="cvd-hint">${esc(TIER[d.tier] ? TIER[d.tier].name : "")} · ${esc(modeName(d.mode))} · ${d.players} played</div></div><div class="cvd-status ${on ? "on" : ""}">${esc(BADuel.logic.plainName(s))}</div></a>`;
+  }).join("") : `<div class="cvd-card cvd-hint">No challenges yet. Challenge a friend: create one, send the link, and the last one standing wins.</div>`) : `<div class="cvd-card cvd-hint">Couldn't load your challenges. Check your connection.</div>`;
+  render(BADuel.renderRankedJoin({
+    rankLabel: ME.player && ME.player.rank ? `${ME.player.rank.name} ${ME.player.rank.division}` : "Seeker",
+    xpLabel: ME.player ? `${fmt(ME.player.xp)} XP · play online to climb` : "Play online to climb",
+    setsHTML: sets, tabbarHTML: readingTabbar("community") }), "cv2 cv2-rj");
+  const form = $("#cvj");
+  if (form) form.onsubmit = (e) => {
+    e.preventDefault(); sfx.tap();
+    const raw = form.elements.c.value; const q = BADuel.logic.normalizeCode(raw);
+    if (!q.ok) { $("#cvj-err").textContent = q.message; return; }
+    $("#cvj-err").textContent = ""; goCode(raw);
+  };
+}
 function duelResult(v, r, cfg) {
+  if (duelV2()) return duelResultV2(v, r, cfg);
   if (location.hash !== "#/d/" + v.code) history.replaceState(null, "", "#/d/" + v.code);
   const me = v.entries.find((e) => e.isMe);
   const others = v.entries.filter((e) => !e.isMe && e.finished);
@@ -2049,6 +2149,7 @@ function duelResult(v, r, cfg) {
   if (!me || !opp) { const t = setInterval(async () => { try { const nv = await api("/api/v3/duels/" + v.code); if (nv.entries.filter((e) => e.finished).length !== v.entries.filter((e) => e.finished).length) { clearInterval(t); duelResult(nv, null, cfg); } } catch (e) {} }, cfg && cfg.duel && cfg.duel.quick ? 3000 : 8000); onLeave(() => clearInterval(t)); }
 }
 async function duelsScreen() {
+  if (duelV2()) return duelsScreenV2();
   render(`<div class="row between" style="margin-bottom:14px"><h2>Challenges</h2><a class="btn primary" href="#/ko/new" style="min-height:42px">⚔️ New</a></div>
     <div class="card col" style="gap:10px;margin-bottom:14px"><div class="small muted">Got a code from someone? Enter it to join.</div>${codeBoxHTML("dcode")}<div class="row" style="gap:8px"><a class="btn ghost grow sm" href="#/live">🌍 Play online</a><a class="btn ghost grow sm" href="#/duel/new">📨 Send a set to beat</a></div></div>
     <div class="sechead"><b>Your sets to beat</b></div><div id="dl" class="col"><div class="muted small">Loading your challenges…</div></div>${tabbar("duels")}`);
