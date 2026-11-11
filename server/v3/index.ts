@@ -18,6 +18,7 @@ import { initSafetyStore, registerSafetyAdmin } from "./safety";
 import { registerLegal } from "./legal";
 import { registerAds } from "./ads";
 import { sentryBrowserTags } from "../_core/sentry-lite";
+import { registerReading } from "./reading";
 import { registerChurches, registerVerify, teamNameFor, mergeChurchMembership, previewForOg, adminGate } from "./churches";
 import { registerSocial, mergeSocial, scheduleKoPush, setReminderDeps, reminderTick } from "./social";
 import { publicRooms, liveWinner, publicKo, onKoOpen } from "./live";
@@ -618,6 +619,8 @@ export function registerV3(app: Express): void {
 
   // ---- Church League (teams, invite codes, weekly + all-time boards) ----
   registerChurches(app, guard as any, send);
+  // ---- Chever shared reading plans (up to 50 members per plan; the web reading screens are behind their flag) ----
+  registerReading(app, guard as any, send);
   // ---- v3.9.0 player safety: report/block storage in the server SQLite + owner review at /admin/reports ----
   initSafetyStore(getDb as any, snapshotNow);
   // ---- v3.10 weekly report card ----
