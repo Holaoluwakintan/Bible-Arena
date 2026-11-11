@@ -1,4 +1,4 @@
-// Bible Arena v3.5.0: Live Multiplayer Social. Open, on-demand multiplayer discovery (no scheduled shows):
+// Chever v3.5.0: Live Multiplayer Social. Open, on-demand multiplayer discovery (no scheduled shows):
 //  - presence ("🟢 N online now"): clients heartbeat about every 25 s while the app is open and in use; online = seen in the last 75 s
 //  - "Live now": open challenges (people waiting for an opponent), quick-match duels being played (anyone can join the
 //    same questions), and Live rooms whose host listed them as public (late join, up to 200)
@@ -252,7 +252,7 @@ export function reminderText(day: string, streak: number, lastDay: string | null
   const live = streak > 0 && (lastDay === yesterday || lastDay === day);
   if (live && streak >= 2 && n % 2 === 0) return { title: `🔥 ${streak}-day streak`, body: `Day ${lastDay === day ? streak : streak + 1} is waiting. Play today's Daily Challenge.` };
   const line = REMIND_LINES[((n % REMIND_LINES.length) + REMIND_LINES.length) % REMIND_LINES.length];
-  return { title: live && streak >= 2 ? `Bible Arena · 🔥 ${streak}` : "Bible Arena ☀️", body: line };
+  return { title: live && streak >= 2 ? `Chever · 🔥 ${streak}` : "Chever ☀️", body: line };
 }
 function prefs() {
   const d = db();
@@ -353,7 +353,7 @@ export async function pushForKo(code: string) {
   if (!rows.length) return 0;
   for (const s of rows) koPushAt.set(s.open_id, now);
   if (koPushAt.size > 20_000) for (const [k, t] of koPushAt) if (now - t > CFG.koPushGapMs) koPushAt.delete(k);
-  await deliver(rows, { title: "⚔️ Players wanted", body: `${r.host} is looking for players on Bible Arena. Join now!`, url: "/j/" + code, tag: "ba-ko" });
+  await deliver(rows, { title: "⚔️ Players wanted", body: `${r.host} is looking for players on Chever. Join now!`, url: "/j/" + code, tag: "ba-ko" });
   logger.info("social_ko_push", { devices: rows.length, sent: stats.pushSent });
   return rows.length;
 }
@@ -500,7 +500,7 @@ export function registerSocial(app: Express, guard: Guard, send: Send, d: Social
     if (!allow("ptest:" + me.openId, 3, 600_000)) return send(res, 429, { error: "slow_down" });
     if (!vapidPublicKey()) return send(res, 503, { error: "push_not_configured" });
     const rows = subsOf(me.openId);
-    const results = await Promise.all(rows.map((r) => pushImpl({ endpoint: r.endpoint, p256dh: r.p256dh, auth: r.auth }, { title: "Bible Arena 🔔", body: "Notifications are on. We'll tell you when a challenger is waiting.", url: "/#/live", tag: "ba-test" }, { ttl: 300, urgency: "high" })));
+    const results = await Promise.all(rows.map((r) => pushImpl({ endpoint: r.endpoint, p256dh: r.p256dh, auth: r.auth }, { title: "Chever 🔔", body: "Notifications are on. We'll tell you when a challenger is waiting.", url: "/#/live", tag: "ba-test" }, { ttl: 300, urgency: "high" })));
     for (let i = 0; i < rows.length; i++) if (results[i].gone) db().prepare("DELETE FROM v3_push_subs WHERE endpoint = ?").run(rows[i].endpoint);
     send(res, 200, { devices: rows.length, sent: results.filter((r) => r.ok).length, statuses: results.map((r) => r.status) });
   }));

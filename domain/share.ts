@@ -27,7 +27,7 @@ export function generateShareMessage(options: ShareResultOptions): string {
   const quote = options.customQuote ?? getInspirationalVerse(score);
 
   const lines = [
-    "⚔️ Bible Arena — Session Result ⚔️",
+    "⚔️ Chever — Session Result ⚔️",
     `Mode: ${modeName}`,
     `Score: ${score.toLocaleString()} pts · Accuracy: ${accuracy}%`,
   ];
@@ -49,7 +49,7 @@ export function generateShareMessage(options: ShareResultOptions): string {
   lines.push("");
   lines.push(quote);
   lines.push("");
-  lines.push("Can you beat my score? Download & play Bible Arena:");
+  lines.push("Can you beat my score? Download & play Chever:");
   lines.push("https://biblearena.app");
 
   return lines.join("\n");

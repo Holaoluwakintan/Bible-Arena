@@ -1,4 +1,4 @@
-/* Bible Arena voice chat (v3.8.0): talk to the other players in a group (knockout) game.
+/* Chever voice chat (v3.8.0): talk to the other players in a group (knockout) game.
    WebRTC audio, phone to phone (full mesh, up to 8 in voice). The server only relays the small signaling
    messages over the game's own live stream. Mic is OFF until the player taps it; "Voice off" = no mic, no audio.
    Nothing here can block the quiz: every step is async, wrapped, and failures only show a short note. */
@@ -226,7 +226,7 @@ async function micToggle() {
         const oldAppView = appV.length === 2 && (appV[0] < 1 || (appV[0] === 1 && appV[1] < 3));
         const appView = appV.length === 2 && !oldAppView;
         toast(oldAppView ? "Talking needs Chrome on this phone. You can still listen here."
-          : e && e.name === "NotAllowedError" ? (appView ? "Microphone blocked. Allow it for Bible Arena in your phone settings (Apps > Bible Arena > Permissions) to talk. You can still listen." : "Microphone blocked. Allow it for this site in your browser settings to talk. You can still listen.")
+          : e && e.name === "NotAllowedError" ? (appView ? "Microphone blocked. Allow it for Chever in your phone settings (Apps > Chever > Permissions) to talk. You can still listen." : "Microphone blocked. Allow it for this site in your browser settings to talk. You can still listen.")
           : "Couldn't start your microphone. You can still listen.");
         return;
       }

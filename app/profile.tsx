@@ -39,7 +39,7 @@ export default function ProfileScreen() {
   const mastery = useMemo(() => getAllMastery(arena), [arena]);
   const unlockedKeys = new Set(state.achievements.map((a) => a.key));
   const isGuestAccount = user?.loginMethod === "guest";
-  const displayName = state.displayName || (user?.name && !isGuestAccount ? user.name : "") || "Bible Arena player";
+  const displayName = state.displayName || (user?.name && !isGuestAccount ? user.name : "") || "Chever player";
   const initial = displayName.trim().charAt(0).toUpperCase() || "B";
 
   const stats = [

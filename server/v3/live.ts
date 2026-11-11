@@ -1,4 +1,4 @@
-// Bible Arena Live: church quiz nights. A host screen on a projector, up to 200 phones, no accounts.
+// Chever Live: church quiz nights. A host screen on a projector, up to 200 phones, no accounts.
 // Real time without paid services: Server-Sent Events, with long-polling as the fallback for weak
 // mobile data. Rooms live in memory (one Render instance) and are snapshotted to Postgres every few
 // seconds, so a restart or redeploy mid-quiz resumes where it was.
@@ -807,20 +807,20 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
     res.setHeader("Cache-Control", "no-cache");
     res.type("html").send(html);
   };
-  app.get(["/live", "/live/", "/host"], (req, res) => page("live.html", req, res, { title: "Bible Arena Live — church quiz night on the big screen", desc: "Put a Bible quiz on the projector. Up to 200 people play on their phones with a code. Teams, live leaderboard, podium finale. Free.", image: "/v3/og-live.jpg" }));
-  app.get(["/join", "/join/"], (req, res) => page("play.html", req, res, { title: "Join Bible Arena Live", desc: "Enter the code on the screen and play along on your phone. No account needed.", image: "/v3/og-live.jpg" }));
+  app.get(["/live", "/live/", "/host"], (req, res) => page("live.html", req, res, { title: "Chever Live — church quiz night on the big screen", desc: "Put a Bible quiz on the projector. Up to 200 people play on their phones with a code. Teams, live leaderboard, podium finale. Free.", image: "/v3/og-live.jpg" }));
+  app.get(["/join", "/join/"], (req, res) => page("play.html", req, res, { title: "Join Chever Live", desc: "Enter the code on the screen and play along on your phone. No account needed.", image: "/v3/og-live.jpg" }));
   app.get("/j/:code", async (req, res) => {
     const room = await loadRoom(cleanCode(req.params.code)).catch(() => null);
     if (room?.ko) {
       const n = E.activePlayers(room).length;
-      return page("play.html", req, res, { title: `⚔️ ${room.players[room.ko.hostId]?.name || "Someone"} challenges you on Bible Arena`, desc: `Bible knockout: ${n} in so far. Tap to join, no account needed. Lose a round and you watch; last one standing wins.`, image: "/v3/og-duel.jpg?v=3.6.0" });
+      return page("play.html", req, res, { title: `⚔️ ${room.players[room.ko.hostId]?.name || "Someone"} challenges you on Chever`, desc: `Bible knockout: ${n} in so far. Tap to join, no account needed. Lose a round and you watch; last one standing wins.`, image: "/v3/og-duel.jpg?v=3.6.0" });
     }
-    const title = room ? `Join "${room.title}" on Bible Arena Live` : "Join Bible Arena Live";
+    const title = room ? `Join "${room.title}" on Chever Live` : "Join Chever Live";
     page("play.html", req, res, { title, desc: room?.church ? `${room.church} · tap to play along on your phone, no account needed.` : "Tap to play along on your phone. No account needed.", image: "/v3/og-live.jpg" });
   });
   app.get("/live/r/:code", async (req, res) => {
     const code = cleanCode(req.params.code);
-    let title = "Bible Arena Live results", desc = "Church quiz night on Bible Arena Live.";
+    let title = "Chever Live results", desc = "Church quiz night on Chever Live.";
     let image = "/v3/og-live.jpg";
     try {
       const pool = baPool();

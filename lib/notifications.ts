@@ -91,8 +91,8 @@ export async function scheduleDailyStreakReminder(
     await Notifications.scheduleNotificationAsync({
       identifier: STREAK_REMINDER_ID,
       content: {
-        title: "Keep your daily Bible Arena streak",
-        body: "Your daily Bible Arena streak is waiting. Complete 1 quick session to protect your streak and earn today's XP!",
+        title: "Keep your daily Chever streak",
+        body: "Your daily Chever streak is waiting. Complete 1 quick session to protect your streak and earn today's XP!",
         data: { route: "/play" },
         sound: preferences.soundEnabled ? "default" : undefined,
       },

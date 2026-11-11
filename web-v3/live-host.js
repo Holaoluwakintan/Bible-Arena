@@ -1,4 +1,4 @@
-/* Bible Arena Live — host app: quiz setup on the laptop, then the stage show on the projector. */
+/* Chever Live — host app: quiz setup on the laptop, then the stage show on the projector. */
 (function () {
 "use strict";
 const L = window.BALive, { $, $$, esc, fmt, ord, snd } = L;
@@ -21,7 +21,7 @@ async function setup() {
   document.body.classList.remove("onstage");
   if (conn) { conn.stop(); conn = null; }
   snd.stopLoop();
-  app.innerHTML = `<div class="setup"><div class="brand"><div class="logo">BIBLE ARENA</div><span class="livepill">LIVE</span></div>
+  app.innerHTML = `<div class="setup"><div class="brand"><div class="logo">CHEVER</div><span class="livepill">LIVE</span></div>
     <p class="lede">Church quiz night on the big screen. Put this page on the projector, everyone joins on their phone with a code. No app, no accounts, up to 200 players.</p>
     <div class="grid"><div id="left"></div><div id="right"></div></div>
     <div class="launch"><div class="sum" id="sum">Loading the question bank…</div><button class="btn primary big" id="go" disabled>Open the lobby ▶</button></div></div>`;
@@ -52,7 +52,7 @@ function drawSetup() {
       <div style="margin-top:12px">
       <div class="switchrow"><div><b>Instant feedback on phones</b><span>Right or wrong shows the moment they tap. Turn off for strict competitions.</span></div><button class="sw ${cfg.instant ? "on" : ""}" id="sw-instant" aria-label="Instant feedback"></button></div>
       <div class="switchrow"><div><b>Auto-play</b><span>Moves from answer to leaderboard to next question by itself. Off means you press Next (or Space).</span></div><button class="sw ${cfg.auto ? "on" : ""}" id="sw-auto" aria-label="Auto-play"></button></div>
-      <div class="switchrow"><div><b>List in "Live now" 🌍</b><span>Anyone in the Bible Arena app can see this game and jump in, even mid-game (up to 200). Off keeps it to people with the code.</span></div><button class="sw ${cfg.public ? "on" : ""}" id="sw-public" aria-label="List in Live now"></button></div>
+      <div class="switchrow"><div><b>List in "Live now" 🌍</b><span>Anyone in the Chever app can see this game and jump in, even mid-game (up to 200). Off keeps it to people with the code.</span></div><button class="sw ${cfg.public ? "on" : ""}" id="sw-public" aria-label="List in Live now"></button></div>
       </div></section>
     <section class="panel"><h3>📽️ On the night</h3><div class="howto">
       <div><i>1</i><span>Connect this laptop to the projector or TV and open the lobby.</span></div>

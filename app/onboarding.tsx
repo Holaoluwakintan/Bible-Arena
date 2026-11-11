@@ -52,7 +52,7 @@ export default function OnboardingScreen() {
                 <IconSymbol name="book.fill" size={58} color={C.gold} />
               </View>
               <Txt variant="overline" color={C.gold} style={{ marginTop: S.xxl }}>Welcome to</Txt>
-              <Txt variant="display" style={{ fontSize: 40, lineHeight: 46, marginTop: 4 }}>Bible Arena</Txt>
+              <Txt variant="display" style={{ fontSize: 40, lineHeight: 46, marginTop: 4 }}>Chever</Txt>
               <Txt variant="h3" color={C.textDim} style={{ textAlign: "center", marginTop: S.md, fontWeight: "600" }}>Know the Word.{"\n"}Challenge the World.</Txt>
               <View style={styles.catStrip}>
                 {ARENA_CATEGORIES.map((c) => <IconBadge key={c.id} icon={c.icon} color={c.color} tint={c.tint} size={46} radius={16} />)}

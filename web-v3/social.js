@@ -1,4 +1,4 @@
-/* Bible Arena social client (v3.5.0): presence heartbeat ("🟢 N online now"), the Live now list, challenge pop-ups and
+/* Chever social client (v3.5.0): presence heartbeat ("🟢 N online now"), the Live now list, challenge pop-ups and
  * Web Push opt-in. Shared by the app (/) and the Live phone page (/join). Heartbeats only while the page is open, visible
  * and in use (no taps for 5 minutes = not online), so idle tabs never keep the free server awake.
  */

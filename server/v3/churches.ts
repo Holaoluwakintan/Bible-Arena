@@ -1,4 +1,4 @@
-// Bible Arena v3: Church League. Churches, fellowships and campus groups make a team with an invite code/link;
+// Chever v3: Church League. Churches, fellowships and campus groups make a team with an invite code/link;
 // members' round points roll up to a weekly league (Monday 00:00 Lagos time to the next Monday) and an all-time board.
 // Last week's top church is recorded once as the weekly champion (badge + title count).
 //
@@ -295,7 +295,7 @@ export function registerChurches(app: Express, guard: Guard, send: Send): void {
     if (made >= LIMITS.maxCreatesPerDay) return send(res, 429, { error: "too_many", message: "You've created enough churches for today. Try again tomorrow." });
     const key = nameKey(v.name);
     const dup = d.prepare(`SELECT ${COLS} FROM v3_churches WHERE name_key = ? AND lower(city) = lower(?) AND deleted_at IS NULL`).get(key, v.city) as any;
-    if (dup) return send(res, 409, { error: "exists", message: `${dup.name} (${dup.city}) is already on Bible Arena. Ask a member for the invite link to join it.`, church: pub(dup) });
+    if (dup) return send(res, 409, { error: "exists", message: `${dup.name} (${dup.city}) is already on Chever. Ask a member for the invite link to join it.`, church: pub(dup) });
     const id = crypto.randomBytes(6).toString("base64url").replace(/[-_]/g, "x");
     const code = newCode();
     const now = nowFn();
@@ -364,7 +364,7 @@ export function registerChurches(app: Express, guard: Guard, send: Send): void {
 
   app.get("/api/v3/churches/:id", limitRead, guard(async (req, res, me) => {
     const c = churchById(req.params.id);
-    if (!c) return send(res, 404, { error: "not_found", message: "This church isn't on Bible Arena any more." });
+    if (!c) return send(res, 404, { error: "not_found", message: "This church isn't on Chever any more." });
     const champ = await ensureChampion().catch(() => null);
     const [week, all] = await Promise.all([standings("week"), standings("all")]);
     const rows = db().prepare("SELECT open_id, role, joined_at FROM v3_church_members WHERE church_id = ? ORDER BY joined_at ASC").all(c.id) as any[];
@@ -495,7 +495,7 @@ function devAllow(key: string): boolean {
 }
 
 const ADMIN_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
-<title>Bible Arena · Church verification</title><style>
+<title>Chever · Church verification</title><style>
 :root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#070C1A;color:#E8E6DF;font:15px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;padding:16px;max-width:760px;margin:auto}
 h1{font-size:20px;color:#F5B942}.card{background:#111a33;border:1px solid #23305a;border-radius:14px;padding:14px;margin:12px 0}.muted{color:#9aa3b8}.code{font:700 20px monospace;color:#F5B942}
 input,textarea{width:100%;background:#0b1328;color:#fff;border:1px solid #2a3866;border-radius:10px;padding:10px;font:inherit}button{border:0;border-radius:10px;padding:10px 14px;font-weight:700;margin:6px 6px 0 0;cursor:pointer}

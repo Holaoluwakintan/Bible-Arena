@@ -134,7 +134,7 @@ export function ProgressionProvider({ children }: { children: ReactNode }) {
   const joinChallenge = useCallback(async (shareCode: string, opponentName: string) => {
     if (isAuthenticated) {
       const remote = await joinChallengeMutation.mutateAsync({ shareCode: shareCode.trim() });
-      const challenge: FriendChallenge = { id: remote.id, shareCode: remote.shareCode, creatorName: "Bible Arena Player", opponentName, mode: remote.mode as GameMode, status: remote.status, createdAt: new Date(remote.createdAt).getTime(), expiresAt: new Date(remote.expiresAt).getTime() };
+      const challenge: FriendChallenge = { id: remote.id, shareCode: remote.shareCode, creatorName: "Chever Player", opponentName, mode: remote.mode as GameMode, status: remote.status, createdAt: new Date(remote.createdAt).getTime(), expiresAt: new Date(remote.expiresAt).getTime() };
       setState((current) => { const next = { ...current, challenges: [challenge, ...current.challenges.filter((item) => item.id !== challenge.id)] }; void saveProgressState(next); return next; });
       return challenge;
     }

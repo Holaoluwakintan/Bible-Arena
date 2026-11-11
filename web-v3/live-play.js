@@ -1,4 +1,4 @@
-/* Bible Arena Live — phone controller: join with a code, big colour buttons, instant feedback. */
+/* Chever Live — phone controller: join with a code, big colour buttons, instant feedback. */
 (function () {
 "use strict";
 const L = window.BALive, { $, $$, esc, fmt, ord } = L;
@@ -20,12 +20,12 @@ function boot() {
 /* ---------- join ---------- */
 function enterCode(err) {
   try { window.BAVoice && window.BAVoice.detach(); } catch (e) {}
-  app.innerHTML = `<div class="center"><div class="logo">BIBLE ARENA<span>LIVE</span></div>
+  app.innerHTML = `<div class="center"><div class="logo">CHEVER<span>LIVE</span></div>
     <h1 style="margin-top:10px">Enter the game code</h1><p class="muted small" style="margin:0">It's on the big screen.</p>
     <input class="codein" id="code" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="6" placeholder="••••••" value="${esc(code)}">
     <div class="err" id="err">${esc(err || "")}</div>
     <button class="btn primary" id="go">Join</button>
-    <p class="foot">No app, no account. <a href="/">Play Bible Arena</a> · <a href="/live">Host a quiz night</a></p></div>`;
+    <p class="foot">No app, no account. <a href="/">Play Chever</a> · <a href="/live">Host a quiz night</a></p></div>`;
   const inp = $("#code");
   inp.focus();
   inp.oninput = () => { inp.value = inp.value.replace(/\D/g, "").slice(0, 6); if (inp.value.length === 6) go(); };
@@ -51,7 +51,7 @@ async function profile() {
   let avatar = me.avatar && peek.avatars.includes(me.avatar) ? me.avatar : peek.avatars[Math.floor(Math.random() * 12)], team = null;
   app.innerHTML = `<div class="center" style="gap:12px">
     ${peek.ko ? `<div class="tiny" style="color:var(--gold)">⚔️ Bible knockout</div><h2>${esc(peek.ko.host)} challenges you!</h2><p class="muted small" style="margin:0">${peek.n} in so far · ${peek.phase === "lobby" ? "waiting to start" : "game on: you'll watch this one and play the next"}</p>`
-      : `<div class="tiny" style="color:var(--gold)">${esc(peek.church || "Bible Arena Live")}</div><h2>${esc(peek.title)}</h2>`}
+      : `<div class="tiny" style="color:var(--gold)">${esc(peek.church || "Chever Live")}</div><h2>${esc(peek.title)}</h2>`}
     <input class="namein" id="name" maxlength="18" placeholder="Your name" value="${esc(me.name || "")}" autocomplete="nickname" enterkeyhint="go">
     <div class="avs" id="avs">${peek.avatars.map((a) => `<button data-a="${a}" class="${a === avatar ? "on" : ""}" aria-label="avatar ${a}">${a}</button>`).join("")}</div>
     ${peek.teams ? `<div class="tiny muted" style="margin-top:4px">Pick your team</div><div class="teams" id="teams">${peek.teams.map((t) => `<button data-t="${t.id}" style="--tc:${t.color}"><span class="dot"></span>${t.emoji} ${esc(t.name)}</button>`).join("")}</div>` : ""}
@@ -222,7 +222,7 @@ function final(s) {
     <div class="podl">${(f.podium || []).map((p, i) => `<div>${["🥇", "🥈", "🥉"][i]} ${p.avatar} ${esc(p.name)}<b>${fmt(p.score)}</b></div>`).join("")}</div>
     <button class="btn primary" id="share" style="margin-top:6px">📲 Share my result</button>
     ${f.podium && f.podium.length > 1 ? `<a class="btn ghost" id="chw" href="/#/qm?room=${encodeURIComponent(code)}&lt=${encodeURIComponent(sess && sess.token || "")}" style="text-decoration:none;border-color:rgba(245,185,66,.6)">${me.rank === 1 ? "🏆 Winner stays on: take on all comers" : `⚔️ Challenge the winner (${esc(f.podium[0].name)})`}</a>` : ""}
-    <a class="btn ghost" href="/" style="text-decoration:none">Keep playing Bible Arena</a>
+    <a class="btn ghost" href="/" style="text-decoration:none">Keep playing Chever</a>
     <p class="foot"><a href="/live">Host your own quiz night</a></p></div>`;
   $("#share").onclick = () => L.shareCard(f, { name: me.name, rank: me.rank, score: me.score });
   if (!confettiDone && me.rank && me.rank <= 3) { confettiDone = true; setTimeout(() => L.confetti({ count: 140 }), 300); L.buzz([30, 80, 30, 80, 60]); }
@@ -235,7 +235,7 @@ let koAgainBusy = false;
 function koUrl() { return location.origin + "/j/" + code; }
 function koShareText(s) {
   const h = s.ko.host ? s.ko.host.name : "I";
-  return `⚔️ ${h} challenges you on Bible Arena!\nLive Bible knockout: answer fast, lose a round and you're out. Last one standing wins. 📖\nTap to join: ${koUrl()}\nOr enter code ${code} in Bible Arena.`;
+  return `⚔️ ${h} challenges you on Chever!\nLive Bible knockout: answer fast, lose a round and you're out. Last one standing wins. 📖\nTap to join: ${koUrl()}\nOr enter code ${code} in Chever.`;
 }
 let koCdEnd = 0, koAgEnd = 0, koAloneSince = 0, koBoxKey = "";
 function koClock(s) {
@@ -320,7 +320,7 @@ function koShareButtons() {
 }
 function koBindShare(s) {
   const c = $("#kocopy"); if (c) c.onclick = async () => { try { await navigator.clipboard.writeText(koShareText(s)); toast("Link copied. Paste it anywhere 👍"); } catch (e) { toast(koUrl()); } };
-  const w = $("#kowa"); if (w && navigator.share && /Android|iPhone|iPad/i.test(navigator.userAgent)) w.onclick = (e) => { e.preventDefault(); navigator.share({ title: "Bible Arena challenge", text: koShareText(s) }).catch(() => { location.href = "https://wa.me/?text=" + encodeURIComponent(koShareText(s)); }); };
+  const w = $("#kowa"); if (w && navigator.share && /Android|iPhone|iPad/i.test(navigator.userAgent)) w.onclick = (e) => { e.preventDefault(); navigator.share({ title: "Chever challenge", text: koShareText(s) }).catch(() => { location.href = "https://wa.me/?text=" + encodeURIComponent(koShareText(s)); }); };
 }
 async function koAction(action, btn) {
   if (btn) btn.disabled = true;
@@ -333,7 +333,7 @@ function koLobby(s) {
     <div class="tiny" style="color:var(--gold);margin-top:6px">⚔️ Bible knockout${k.game > 1 ? " · game " + k.game : ""}</div>
     <h1>${k.auto ? "Live game lobby" : k.isHost ? "Your challenge is ready" : esc(host.name || "") + "'s challenge"}</h1>
     <div id="kobox" style="width:100%">${koBoxHTML(s)}</div>
-    <div class="card kocode"><div class="tiny muted">Challenge code</div><div class="kc">${esc(code)}</div><div class="small muted">Friends tap your link, or enter this code in Bible Arena.</div></div>
+    <div class="card kocode"><div class="tiny muted">Challenge code</div><div class="kc">${esc(code)}</div><div class="small muted">Friends tap your link, or enter this code in Chever.</div></div>
     ${koShareButtons()}
     ${koPubHTML(s)}
     <div class="card" style="width:100%;text-align:left"><div class="row3"><b><span id="kon">${k.left}</span> joined</b><span class="small muted">up to ${k.max}</span></div><div id="kolist" data-mode="lobby">${koList(s, { lobby: true })}</div></div>
@@ -341,7 +341,7 @@ function koLobby(s) {
       <button class="btn primary" id="kostart"></button>` : k.auto ? "" : `<div class="card" style="width:100%"><div class="tiny muted">Waiting for ${esc(host.name || "the host")} to start</div><div class="small muted" style="margin-top:6px">Keep this screen open. ${host.on === false ? `<a href="#" id="kotake">${esc(host.name || "The host")} left? Start it yourself</a>` : ""}</div></div>`}
     <div class="card small muted" style="width:100%;text-align:left">📜 <b style="color:var(--ivory)">How it works:</b> ${esc(k.rule)}</div>
     <div class="card small muted" style="width:100%;text-align:left">🤝 <b style="color:var(--ivory)">Be kind:</b> no bad language, bullying or asking for personal details. Tap any player to mute, block or report them.</div>
-    <p class="foot"><a href="/">Bible Arena home</a></p></div>`;
+    <p class="foot"><a href="/">Chever home</a></p></div>`;
   koBindShare(s); koBindPub(); koBoxKey = koBoxState(s);
   const st = $("#kostart"); if (st) { koStartBtn(s); st.onclick = () => { L.buzz(15); koAction("start", st); }; }
   const tk = $("#kotake"); if (tk) tk.onclick = (e) => { e.preventDefault(); koAction("start"); };
@@ -396,7 +396,7 @@ function koFinal(s) {
     ${k.isHost ? `<button class="btn primary" id="koagain">🔁 Play again (everyone)</button>` : k.again != null ? "" : `<div class="card small muted" style="width:100%">Waiting for ${esc(k.host ? k.host.name : "the host")} to start the next challenge. ${k.host && k.host.on === false ? `<a href="#" id="kotake">They left? Start it yourself</a>` : ""}</div>`}
     ${koShareButtons()}
     <div class="card" style="width:100%;text-align:left"><div class="row3"><b>Final standings</b><span class="small muted">${k.list.length} players</span></div><div id="kolist" data-mode="">${koList(s)}</div></div>
-    <a class="btn ghost" href="/" style="text-decoration:none">Bible Arena home</a></div>`;
+    <a class="btn ghost" href="/" style="text-decoration:none">Chever home</a></div>`;
   koBindShare(s);
   const a = $("#koagain"); if (a) a.onclick = () => { L.buzz(15); koAction("again", a); };
   const tk = $("#kotake"); if (tk) tk.onclick = (e) => { e.preventDefault(); koAction("again"); };
@@ -434,7 +434,7 @@ async function results(c) {
   let f;
   try { f = await L.api("/lv/results/" + c); } catch (e) { app.innerHTML = `<div class="center"><h2>Results not found</h2><p class="muted">${esc(e.message)}</p><a class="btn primary" href="/live" style="text-decoration:none">Host a quiz night</a></div>`; return; }
   const tw = f.teams && f.teams[0];
-  app.innerHTML = `<div class="center" style="gap:12px"><div class="logo">BIBLE ARENA<span>LIVE</span></div>
+  app.innerHTML = `<div class="center" style="gap:12px"><div class="logo">CHEVER<span>LIVE</span></div>
     <div class="tiny" style="color:var(--gold)">${esc(f.church || "")}</div><h1>${esc(f.title)}</h1>
     <div class="muted small">${new Date(f.at).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · ${f.players} players · ${f.questions} questions</div>
     <div class="medal">🏆</div>

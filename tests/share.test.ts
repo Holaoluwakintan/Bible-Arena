@@ -11,7 +11,7 @@ describe("Viral Share Results Engine", () => {
       level: 4,
     });
 
-    expect(message).toContain("Bible Arena — Session Result");
+    expect(message).toContain("Chever — Session Result");
     expect(message).toContain("Mode: Bible Quiz");
     expect(message).toContain("Score: 850 pts · Accuracy: 90%");
     expect(message).toContain("Streak: 7 Days 🔥");

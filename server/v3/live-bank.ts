@@ -1,4 +1,4 @@
-// Bible Arena Live: turns the v3 question bank (web-v3/bank.json) into projector-friendly
+// Chever Live: turns the v3 question bank (web-v3/bank.json) into projector-friendly
 // multiple-choice questions, and picks sets by category, difficulty and book.
 import type { LQ } from "./live-engine";
 

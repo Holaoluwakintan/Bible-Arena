@@ -1,4 +1,4 @@
-/* Bible Arena Live — phone controller. System fonts and CSS only, so it loads fast on weak data. */
+/* Chever Live — phone controller. System fonts and CSS only, so it loads fast on weak data. */
 :root{--bg:#070C1A;--card:#121C3A;--line:rgba(245,185,66,.18);--line2:rgba(255,255,255,.08);--gold:#F5B942;--gold2:#FFD98A;--gold3:#C98A1B;--ivory:#F6F1E7;--muted:#9AA6C2;--dim:#66729A;--ok:#3DDC97;--bad:#FF5D73}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ivory);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overscroll-behavior:none}

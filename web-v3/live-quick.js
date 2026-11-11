@@ -1,4 +1,4 @@
-/* Bible Arena Live — "quick quiz" text format, so a host can type this Sunday's questions fast.
+/* Chever Live — "quick quiz" text format, so a host can type this Sunday's questions fast.
    One question per block (blank line between). Mark the right answer with * (or ✓). Optional (Ref) at the end of the question.
      Who was swallowed by a great fish? (Jonah 1:17)
      *Jonah

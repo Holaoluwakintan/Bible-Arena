@@ -59,11 +59,11 @@ async function shareText(message: string) {
   try {
     if (Platform.OS === "web" && typeof navigator !== "undefined") {
       const nav = navigator as Navigator & { share?: (d: { text: string; title?: string }) => Promise<void> };
-      if (nav.share) { await nav.share({ text: message, title: "Bible Arena" }); return; }
+      if (nav.share) { await nav.share({ text: message, title: "Chever" }); return; }
       await navigator.clipboard?.writeText(message);
       return;
     }
-    await Share.share({ message, title: "Bible Arena" });
+    await Share.share({ message, title: "Chever" });
   } catch { /* dismissed */ }
 }
 
@@ -463,7 +463,7 @@ function Results({ kind, category, attempts, result, bestCombo, unlocked, totalX
     ...(perfect && kind !== "survival" ? [{ label: "Perfect round", value: 100 }] : []),
     ...(kind === "daily" ? [{ label: "Daily Challenge", value: 100 }] : []),
   ];
-  const share = () => shareText(`I scored ${game.score.toLocaleString()} in Bible Arena (${game.correctAnswers}/${game.totalQuestions} correct${bestCombo >= 3 ? `, ${bestCombo} in a row` : ""}). Can you beat me? https://bible-arena.onrender.com`);
+  const share = () => shareText(`I scored ${game.score.toLocaleString()} in Chever (${game.correctAnswers}/${game.totalQuestions} correct${bestCombo >= 3 ? `, ${bestCombo} in a row` : ""}). Can you beat me? https://bible-arena.onrender.com`);
 
   return (
     <ScreenContainer>

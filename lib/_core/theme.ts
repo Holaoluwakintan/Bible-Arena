@@ -1,4 +1,4 @@
-// Bible Arena v2 "Midnight & Gold": one premium dark palette for both schemes.
+// Chever v2 "Midnight & Gold": one premium dark palette for both schemes.
 export const ThemeColors = {
   primary: { light: "#F5B942", dark: "#F5B942" },
   background: { light: "#0A1020", dark: "#0A1020" },

@@ -1,4 +1,4 @@
-// Bible Arena Live: the quiz-night engine. Pure state transitions (no IO) so it can be tested
+// Chever Live: the quiz-night engine. Pure state transitions (no IO) so it can be tested
 // directly; server/v3/live.ts wires it to HTTP, SSE/long-poll and Postgres snapshots.
 import crypto from "node:crypto";
 import { badName } from "./names";

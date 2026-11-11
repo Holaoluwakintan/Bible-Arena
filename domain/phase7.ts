@@ -28,6 +28,6 @@ export function getPerfectRoundCelebration(score: number, streak: number, refere
     subtitle: streak >= 3 ? `${streak}-day rhythm · every answer landed.` : "Every answer landed. Let the learning settle.",
     verse: getInspirationalVerse(score),
     reference: reference ?? "Psalm 119:105",
-    shareText: `Bible Arena · Perfect round\nScore: ${score.toLocaleString()} pts\n${getInspirationalVerse(score)}\n${reference ?? "Psalm 119:105"}\nKeep building a gentle Scripture rhythm.`,
+    shareText: `Chever · Perfect round\nScore: ${score.toLocaleString()} pts\n${getInspirationalVerse(score)}\n${reference ?? "Psalm 119:105"}\nKeep building a gentle Scripture rhythm.`,
   };
 }

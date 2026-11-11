@@ -1,4 +1,4 @@
-// Bible Arena v3: who won a duel. One rule, used by the API, the rivals board and the tests
+// Chever v3: who won a duel. One rule, used by the API, the rivals board and the tests
 // (web-v3/app.js carries the same rule as duelCmp; tests/duel-outcome.test.ts checks both agree).
 //   1. Higher score wins.
 //   2. Equal scores: the faster total time wins, compared in tenths of a second

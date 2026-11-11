@@ -1,4 +1,4 @@
-// Bible Arena v3 API: server-scored rounds, ranks, achievements, daily challenge, challenges
+// Chever v3 API: server-scored rounds, ranks, achievements, daily challenge, challenges
 // (challenge links), leaderboards (weekly, all-time, Church League, rivals, daily).
 // Durable data lives in Postgres (Supabase schema bible_arena) via ./pg.
 import fs from "node:fs";
@@ -648,7 +648,7 @@ export function registerV3(app: Express): void {
   };
   app.get("/d/:code", async (req, res) => {
     const c = clean(req.params.code, 12).toUpperCase();
-    let title = "You've been challenged on Bible Arena";
+    let title = "You've been challenged on Chever";
     let desc = "Same questions, head to head. Know the Word. Challenge the World.";
     try {
       if (baPool()) {
@@ -656,8 +656,8 @@ export function registerV3(app: Express): void {
         if (v) {
           const creator = v.entries.find((e: { isCreator: boolean; finished: boolean }) => e.isCreator && e.finished);
           title = creator
-            ? `${v.creator.name} scored ${creator.score.toLocaleString("en-US")} on Bible Arena. Can you beat it?`
-            : `${v.creator.name} challenges you on Bible Arena`;
+            ? `${v.creator.name} scored ${creator.score.toLocaleString("en-US")} on Chever. Can you beat it?`
+            : `${v.creator.name} challenges you on Chever`;
           desc = `${MODE_NAME[v.mode] || "Arena"} · ${TIER_NAME[v.tier] || ""} level · ${v.ids.length} questions. Play the same set and see who knows the Word.`;
         }
       }
@@ -665,13 +665,13 @@ export function registerV3(app: Express): void {
     page(req, res, { title, desc, image: "/v3/og-duel.jpg?v=3.6.0" });
   });
   app.get("/c/:code", async (req, res) => {
-    let title = "Join your church on Bible Arena";
-    let desc = "Your church is competing in the Bible Arena Church League. Join the team, play rounds and push your church up the weekly league.";
+    let title = "Join your church on Chever";
+    let desc = "Your church is competing in the Chever Church League. Join the team, play rounds and push your church up the weekly league.";
     try {
       const r = await previewForOg(clean(req.params.code, 12));
-      if (r) { title = `Join ${r.name}${r.verified ? " ✅" : ""} on Bible Arena ⛪`; desc = `${r.name}${r.verified ? " (verified)" : ""}, ${r.city} is in the Church League with ${r.members} member${r.members === 1 ? "" : "s"}. Join the team, play rounds and push your church up the weekly league.`; }
+      if (r) { title = `Join ${r.name}${r.verified ? " ✅" : ""} on Chever ⛪`; desc = `${r.name}${r.verified ? " (verified)" : ""}, ${r.city} is in the Church League with ${r.members} member${r.members === 1 ? "" : "s"}. Join the team, play rounds and push your church up the weekly league.`; }
     } catch {}
     page(req, res, { title, desc, image: "/v3/og-church.jpg" });
   });
-  app.get(["/", "/index.html"], (req, res) => page(req, res, { title: "Bible Arena — Know the Word. Challenge the World.", desc: "Play solo, play online, or challenge your friends with a code: Fill in the Gap, Who Am I, Bible or Myth and more. Every answer with its verse.", image: "/v3/og.jpg?v=3.6.0" }));
+  app.get(["/", "/index.html"], (req, res) => page(req, res, { title: "Chever — Know the Word. Challenge the World.", desc: "Play solo, play online, or challenge your friends with a code: Fill in the Gap, Who Am I, Bible or Myth and more. Every answer with its verse.", image: "/v3/og.jpg?v=3.6.0" }));
 }

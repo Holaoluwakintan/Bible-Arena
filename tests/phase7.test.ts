@@ -14,7 +14,7 @@ describe("phase 7 premium experience primitives", () => {
     const celebration = getPerfectRoundCelebration(100, 7, "John 3:16");
     expect(celebration.title).toBe("Perfect round");
     expect(celebration.reference).toBe("John 3:16");
-    expect(celebration.shareText).toContain("Bible Arena");
+    expect(celebration.shareText).toContain("Chever");
     expect(celebration.shareText).toContain("John 3:16");
   });
 });

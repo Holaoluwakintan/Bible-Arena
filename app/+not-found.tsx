@@ -12,7 +12,7 @@ export default function NotFoundScreen() {
         <Text style={[styles.code, { color: colors.primary }]}>404</Text>
         <Text style={[styles.title, { color: colors.foreground }]}>That page is not in the Arena.</Text>
         <Text style={[styles.body, { color: colors.muted }]}>The link may be outdated or the page may have moved.</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="Return to Bible Arena home" onPress={() => router.replace("/")} style={[styles.button, { backgroundColor: colors.primary }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Return to Chever home" onPress={() => router.replace("/")} style={[styles.button, { backgroundColor: colors.primary }]}>
           <Text style={[styles.buttonText, { color: colors.background }]}>Return home</Text>
         </Pressable>
       </View>

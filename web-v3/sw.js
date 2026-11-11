@@ -1,4 +1,4 @@
-/* Bible Arena service worker (v3.12.5).
+/* Chever service worker (v3.12.5).
  * - Opens instantly on repeat visits, even while the free server is waking up:
  *   the home page is served from the saved copy at once and refreshed in the background;
  *   duel links (/d/...) try the network for 3 s, then fall back to the last saved copy.
@@ -101,7 +101,7 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("push", (event) => {
   let d = {};
   try { d = event.data ? event.data.json() : {}; } catch (e) { d = { body: event.data ? event.data.text() : "" }; }
-  const title = d.title || "Bible Arena";
+  const title = d.title || "Chever";
   event.waitUntil(self.registration.showNotification(title, {
     body: d.body || "Someone is waiting for a challenger. Tap to join!",
     icon: "/v3/icon-192.png", badge: "/v3/icon-192.png", tag: d.tag || "ba", renotify: true,

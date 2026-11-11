@@ -21,7 +21,7 @@ const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
 const schemeFromBundleId = `manus${timestamp}`;
 
 const env = {
-  appName: "Bible Arena",
+  appName: "Chever",
   appSlug: "bible-arena-mobile",
   logoUrl: "",
   scheme: schemeFromBundleId,

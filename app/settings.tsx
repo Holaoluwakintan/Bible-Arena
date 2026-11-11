@@ -63,7 +63,7 @@ export default function SettingsScreen() {
 
   const exportData = async () => {
     const result = await exportQuery.refetch();
-    if (result.data) await Share.share({ title: "Bible Arena data export", message: JSON.stringify(result.data, null, 2) });
+    if (result.data) await Share.share({ title: "Chever data export", message: JSON.stringify(result.data, null, 2) });
   };
 
   const confirmDelete = () => {
@@ -180,13 +180,13 @@ export default function SettingsScreen() {
               <Text style={[styles.status, { color: colors.muted }]}>Ready</Text>
             </View>
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
-            <Pressable accessibilityRole="button" accessibilityLabel="Export my Bible Arena data" disabled={exportQuery.isFetching} onPress={exportData} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Export my Chever data" disabled={exportQuery.isFetching} onPress={exportData} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
               <View style={[styles.rowIcon, { backgroundColor: "#243650" }]}><IconSymbol name="arrow.down.circle" size={19} color={colors.primary} /></View>
               <View style={styles.rowCopy}><Text style={[styles.rowTitle, { color: colors.foreground }]}>Export my data</Text><Text style={[styles.rowSubtitle, { color: colors.muted }]}>Share a copy of your account and progress data</Text></View>
               <Text style={[styles.status, { color: colors.primary }]}>{exportQuery.isFetching ? "Preparing…" : "Export"}</Text>
             </Pressable>
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
-            <Pressable accessibilityRole="button" accessibilityLabel="Delete my Bible Arena account" disabled={deleteMutation.isPending} onPress={confirmDelete} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Delete my Chever account" disabled={deleteMutation.isPending} onPress={confirmDelete} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
               <View style={[styles.rowIcon, { backgroundColor: "#3B2728" }]}><IconSymbol name="trash" size={19} color={colors.error} /></View>
               <View style={styles.rowCopy}><Text style={[styles.rowTitle, { color: colors.error }]}>Delete account</Text><Text style={[styles.rowSubtitle, { color: colors.muted }]}>Permanently remove your cloud data</Text></View>
               <Text style={[styles.status, { color: colors.error }]}>{deleteMutation.isPending ? "Deleting…" : "Delete"}</Text>
@@ -194,7 +194,7 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <Text style={[styles.footer, { color: colors.muted }]}>Bible Arena · Know the Word. Challenge the World.</Text>
+        <Text style={[styles.footer, { color: colors.muted }]}>Chever · Know the Word. Challenge the World.</Text>
       </ScrollView>
     </ScreenContainer>
   );

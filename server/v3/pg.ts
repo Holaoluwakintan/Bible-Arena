@@ -1,6 +1,6 @@
 import pg from "pg";
 
-/** Schema holding Bible Arena data (bible_arena in production; a separate schema for local tests). */
+/** Schema holding Chever data (bible_arena in production; a separate schema for local tests). */
 export const SCH = /^[a-z_]+$/.test(process.env.BA_SCHEMA || "") ? (process.env.BA_SCHEMA as string) : "bible_arena";
 
 let pool: pg.Pool | null = null;

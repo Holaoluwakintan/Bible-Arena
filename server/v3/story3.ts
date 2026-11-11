@@ -1,4 +1,4 @@
-// Bible Arena v3.11.0: deep story mode (server side). Level ids look like "gen.4" (normal) / "gen.b" (boss) / "mgen.4" (Mastery).
+// Chever v3.11.0: deep story mode (server side). Level ids look like "gen.4" (normal) / "gen.b" (boss) / "mgen.4" (Mastery).
 // Progress: players.stats.st3 = { levelId: stars 1..3 }. Daily energy: players.stats.st3e = { d: Lagos day, u: new-level attempts used, a: ads watched }.
 // A new-level attempt (a level not passed before) costs 1 energy; 5 a day plus 1 from a rewarded ad. Replays of passed levels are free.
 // Out of energy: the round still scores (XP, boards) but the level result is not recorded. No schema change (jsonb keys only).

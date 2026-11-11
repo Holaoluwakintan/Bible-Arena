@@ -38,5 +38,5 @@ export function aggregateMultiplayerRankings(matches: MultiplayerMatchLike[], na
     if (match.winnerUserId === null) { host.draws++; guest.draws++; } else if (match.winnerUserId === match.hostUserId) { host.wins++; guest.losses++; } else { guest.wins++; host.losses++; }
     aggregate.set(match.hostUserId, host); aggregate.set(match.guestUserId, guest);
   }
-  return Array.from(aggregate.entries()).map(([userId, stats]) => ({ playerId: String(userId), displayName: names.get(userId) ?? "Bible Arena Player", ...stats, rank: 0, division: getRankedDivision(stats.wins, stats.draws) })).sort((a, b) => b.wins - a.wins || b.xp - a.xp || b.matches - a.matches).map((row, index) => ({ ...row, rank: index + 1 }));
+  return Array.from(aggregate.entries()).map(([userId, stats]) => ({ playerId: String(userId), displayName: names.get(userId) ?? "Chever Player", ...stats, rank: 0, division: getRankedDivision(stats.wins, stats.draws) })).sort((a, b) => b.wins - a.wins || b.xp - a.xp || b.matches - a.matches).map((row, index) => ({ ...row, rank: index + 1 }));
 }

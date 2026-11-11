@@ -21,10 +21,10 @@ export async function shareGameResult(options: ShareResultOptions): Promise<bool
     const result = await Share.share(
       {
         message,
-        title: "My Bible Arena Result",
+        title: "My Chever Result",
       },
       {
-        dialogTitle: "Share your Bible Arena score",
+        dialogTitle: "Share your Chever score",
       }
     );
     return result.action === Share.sharedAction;

@@ -1,4 +1,4 @@
-/* Bible Arena Live — host stage (projector / TV). Sizes scale with --u so 720p, 1080p and 4K all read from the back row. */
+/* Chever Live — host stage (projector / TV). Sizes scale with --u so 720p, 1080p and 4K all read from the back row. */
 :root{--bg:#060A16;--navy:#0D1530;--card:#111B3B;--line:rgba(245,185,66,.18);--line2:rgba(255,255,255,.08);--gold:#F5B942;--gold2:#FFD98A;--gold3:#C98A1B;--ivory:#F6F1E7;--muted:#9AA6C2;--dim:#66729A;--ok:#3DDC97;--bad:#FF5D73;--red:#E5394F;--blue:#2E7CF6;--yel:#E8A317;--grn:#1FA971;--serif:"Cinzel",Georgia,serif;--sans:"Plus Jakarta Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;--u:min(1vw,1.78vh)}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ivory);font-family:var(--sans)}

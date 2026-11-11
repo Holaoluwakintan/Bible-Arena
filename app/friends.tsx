@@ -130,7 +130,7 @@ export default function FriendsScreen() {
               <View style={[styles.emptyCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
                 <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No friends yet</Text>
                 <Text style={[styles.emptyBody, { color: colors.muted }]}>
-                  Search for disciples by username or invite friends to compete in Bible Arena!
+                  Search for disciples by username or invite friends to compete in Chever!
                 </Text>
                 <Pressable
                   onPress={() => setActiveTab("search")}

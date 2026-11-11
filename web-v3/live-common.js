@@ -1,4 +1,4 @@
-/* Bible Arena Live — shared client bits: live transport (SSE → long-poll fallback), sound, confetti, share card. */
+/* Chever Live — shared client bits: live transport (SSE → long-poll fallback), sound, confetti, share card. */
 (function () {
 "use strict";
 const L = (window.BALive = {});
@@ -191,7 +191,7 @@ L.drawCard = async function (s, w, h, me) {
   c.strokeStyle = "rgba(245,185,66,.35)"; c.lineWidth = U * 0.35; rr(c, U * 3, U * 3, w - U * 6, h - U * 6, U * 3); c.stroke();
   c.textAlign = "center"; c.textBaseline = "alphabetic";
   const wide = w / h > 1.4;
-  c.fillStyle = "#F5B942"; c.font = `800 ${U * 3.2}px ${sans}`; c.fillText("✦  BIBLE ARENA LIVE  ✦", w / 2, U * (wide ? 11 : 10));
+  c.fillStyle = "#F5B942"; c.font = `800 ${U * 3.2}px ${sans}`; c.fillText("✦  CHEVER LIVE  ✦", w / 2, U * (wide ? 11 : 10));
   const title = s.title || "Bible Quiz Night";
   const ts = fit(c, title, w - U * 14, U * (wide ? 7.5 : 7.2), 800, serif);
   const gold = c.createLinearGradient(0, U * 12, 0, U * 22); gold.addColorStop(0, "#FFE7AE"); gold.addColorStop(0.6, "#F5B942"); gold.addColorStop(1, "#C98A1B");
@@ -225,7 +225,7 @@ L.drawCard = async function (s, w, h, me) {
 };
 L.shareCard = async function (s, me) {
   const url = location.origin + "/live/r/" + s.code;
-  const text = me ? `I came ${L.ord(me.rank)} at ${s.title}${s.church ? " (" + s.church + ")" : ""} on Bible Arena Live! 🏆 ${url}`
+  const text = me ? `I came ${L.ord(me.rank)} at ${s.title}${s.church ? " (" + s.church + ")" : ""} on Chever Live! 🏆 ${url}`
     : `🏆 ${s.title}${s.church ? " · " + s.church : ""}: the winners!\n${(s.podium || []).map((p, i) => ["🥇", "🥈", "🥉"][i] + " " + p.name + " (" + L.fmt(p.score) + ")").join("\n")}${s.teams && s.teams.length ? "\n" + s.teams[0].emoji + " " + s.teams[0].name + " won the team battle" : ""}\n\nSee the results: ${url}`;
   const cv = await L.drawCard(s, 1080, 1080, me);
   const blob = await new Promise((res) => cv.toBlob(res, "image/png"));

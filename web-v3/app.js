@@ -1,4 +1,4 @@
-/* Bible Arena v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
+/* Chever v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
 window.BA_V = "3.12.5";
@@ -271,6 +271,13 @@ async function route() {
   if (a === "bot") return playBot(MODES[q.get("mode")] ? q.get("mode") : "mixed", TIER[q.get("tier")] ? q.get("tier") : S.tier);
   if (a === "play") return startMode(b || q.get("mode") || "arena", q.get("tier") || S.tier);
   if (a === "duels") return duelsScreen();
+  if (a === "reading") {
+    // Shared reading (preview): only when the flag is on and the screens file loaded.
+    if (!(window.BA_FLAGS && window.BA_FLAGS.sharedReading) || !window.BAReading) return home();
+    render('<div id="reading-root"></div>');
+    window.BAReading.mount(document.getElementById("reading-root"), {});
+    return;
+  }
   if (a === "duel" && b === "new") return newDuel(q.get("from"));
   if (a === "d" && b) return acceptDuel(b.toUpperCase());
   if (a === "ranks") return ranks(q.get("tab") || "week");
@@ -291,7 +298,7 @@ function onboarding(after) {
   <div class="col" style="gap:18px;padding-top:4vh">
     <div class="center" style="position:relative">
       <div class="boot-mark">✦</div>
-      <h1 class="title-gold" style="font-size:34px;letter-spacing:.14em">BIBLE ARENA</h1>
+      <h1 class="title-gold" style="font-size:34px;letter-spacing:.14em">CHEVER</h1>
       <p class="muted" style="margin:6px 0 0">Know the Word. Challenge the World.</p>
     </div>
     <div class="card gold col">
@@ -444,7 +451,7 @@ async function home() {
     <div id="homechurch"></div>
     <a class="card row slim" href="/live" style="text-decoration:none;color:inherit"><div style="font-size:22px">📺</div><div class="grow"><b>Quiz night for a big group</b><div class="small muted">On a projector, up to 200 phones</div></div><div class="gold">›</div></a>
     <div class="card">
-      <div class="row between"><b>Classic modes</b><span class="small dim">from Bible Arena v2</span></div>
+      <div class="row between"><b>Classic modes</b><span class="small dim">from Chever v2</span></div>
       <div class="row" style="flex-wrap:wrap;gap:8px;margin-top:10px">
         <a class="chip" href="/room">🔴 Live Room (classic)</a><a class="chip" href="/ai-battle">🤖 AI Battle</a><a class="chip" href="/quiz?kind=puzzle">🔤 Word Puzzle</a><a class="chip" href="/friends">👥 Friends</a><a class="chip" href="/play">🏛️ Classic Arena</a>
       </div>
@@ -1232,7 +1239,7 @@ async function endlessScreen() {
 // ---------- v3.10 voice answers (Web Speech API) ----------
 // A 🎤 button under quiz questions with options (multiple choice, who-am-I, who-said, fact or myth). The mic only starts when the
 // player taps it, one answer per tap. The browser's speech service turns speech into text (on Android Chrome that is Google's);
-// Bible Arena only gets the text, matches it to the options on the phone and sends nothing extra to our server. Tapping always works.
+// Chever only gets the text, matches it to the options on the phone and sends nothing extra to our server. Tapping always works.
 // Honest limit: speech services mishear Bible names, and accents (Nigerian English included) make it worse, so a weak match is
 // only highlighted for the player to tap; only a clear match answers by itself.
 const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1409,7 +1416,7 @@ function untilReset(ts) {
   return d ? `${d}d ${h}h` : `${h}h ${m}m`;
 }
 function churchLink(code) { return origin() + "/c/" + code; }
-function churchShareText(c) { return `Join ${c.name} on Bible Arena ⛪\nWe're playing in the Church League. Every round you play adds points for our church. Tap to join our team:\n${churchLink(c.code)}\n(Invite code: ${c.code})`; }
+function churchShareText(c) { return `Join ${c.name} on Chever ⛪\nWe're playing in the Church League. Every round you play adds points for our church. Tap to join our team:\n${churchLink(c.code)}\n(Invite code: ${c.code})`; }
 async function shareChurch(c) {
   sfx.tap();
   const text = churchShareText(c);
@@ -1622,7 +1629,7 @@ async function makeCard(o) {
   for (let i = 0; i < 24; i++) { x.rotate(Math.PI / 12); x.beginPath(); x.moveTo(0, 0); x.lineTo(-30, -700); x.lineTo(30, -700); x.closePath(); x.fill(); }
   x.restore(); x.globalAlpha = 1;
   const gold = x.createLinearGradient(0, 120, 0, 900); gold.addColorStop(0, "#FFE7AE"); gold.addColorStop(0.6, "#F5B942"); gold.addColorStop(1, "#C98A1B");
-  x.textAlign = "center"; x.fillStyle = gold; x.font = "800 64px Cinzel, Georgia, serif"; x.fillText("BIBLE ARENA", 540, 170);
+  x.textAlign = "center"; x.fillStyle = gold; x.font = "800 64px Cinzel, Georgia, serif"; x.fillText("CHEVER", 540, 170);
   x.fillStyle = "#9AA6C2"; x.font = "600 36px 'Plus Jakarta Sans', sans-serif"; x.fillText(o.subtitle || `${o.title || "Round"} · ${TIER[o.tier].name}`, 540, 240);
   x.fillStyle = gold; x.font = "800 220px Cinzel, Georgia, serif"; x.fillText(fmt(o.score), 540, 520);
   x.fillStyle = "#F6F1E7"; x.font = "700 46px 'Plus Jakarta Sans', sans-serif"; x.fillText(`${o.correct}/${o.total} correct · ${o.rank || rankOf((ME.player || {}).xp).name}`, 540, 610);
@@ -1632,7 +1639,7 @@ async function makeCard(o) {
   return new Promise((res) => c.toBlob(res, "image/png"));
 }
 async function shareCard(o) {
-  const text = o.text || `📖 I scored ${fmt(o.score)} on Bible Arena (${TIER[o.tier].name}). Can you beat me?\n${o.url || origin()}`;
+  const text = o.text || `📖 I scored ${fmt(o.score)} on Chever (${TIER[o.tier].name}). Can you beat me?\n${o.url || origin()}`;
   try {
     const blob = await makeCard(o);
     const file = new File([blob], "bible-arena.png", { type: "image/png" });
@@ -1642,7 +1649,7 @@ async function shareCard(o) {
   location.href = waLink(text);
 }
 
-// ---------- Verified churches (v3.5.0): proof-based request by the team lead, reviewed by the Bible Arena owner ----------
+// ---------- Verified churches (v3.5.0): proof-based request by the team lead, reviewed by the Chever owner ----------
 async function verifyBox(c) {
   const box = $("#verbox"); if (!box) return;
   let d; try { d = await api("/api/v3/churches/" + encodeURIComponent(c.id) + "/verify"); } catch (e) { return; }
@@ -1723,7 +1730,7 @@ async function pushCardHTML(where) {
   if (!window.BAS) return "";
   let s = "off"; try { s = await BAS.push.state(); } catch (e) {}
   if (s === "on" || s === "unsupported" || s === "unavailable" || s === "denied") return "";
-  if (s === "ios-install") return `<div class="card small"><b>🔔 Get notified on iPhone</b><div class="muted" style="margin-top:4px">Tap Share ⬆️ then “Add to Home Screen”, open Bible Arena from there, and turn on notifications to hear when someone is waiting for a challenger.</div></div>`;
+  if (s === "ios-install") return `<div class="card small"><b>🔔 Get notified on iPhone</b><div class="muted" style="margin-top:4px">Tap Share ⬆️ then “Add to Home Screen”, open Chever from there, and turn on notifications to hear when someone is waiting for a challenger.</div></div>`;
   return `<div class="card row" style="gap:12px"><div style="font-size:26px">🔔</div><div class="grow"><b>Get a notification</b><div class="small muted">${where === "qm" ? "when someone is waiting, even when the app is closed." : "when people are looking for players. Max 3 a day, never 10 pm to 7 am."}</div></div><button class="chip on" data-push>Turn on</button></div>`;
 }
 /** v3.7.0: after a player's first finished game, one card: "Get notified when people are looking for players?" (asked once). */
@@ -1733,7 +1740,7 @@ async function pushAsk(sel) {
   let s = "off"; try { s = await BAS.push.state(); } catch (e) {}
   if ((s !== "off" && s !== "ios-install") || !$(sel)) return;
   try { localStorage.setItem("ba3:pushask", String(Date.now())); } catch (e) {}
-  box.innerHTML = s === "ios-install" ? `<div class="card small"><b>🔔 Get notified when people are looking for players</b><div class="muted" style="margin-top:4px">On iPhone: tap Share ⬆️ then “Add to Home Screen”, open Bible Arena from there and turn on notifications in Me → Settings.</div></div>`
+  box.innerHTML = s === "ios-install" ? `<div class="card small"><b>🔔 Get notified when people are looking for players</b><div class="muted" style="margin-top:4px">On iPhone: tap Share ⬆️ then “Add to Home Screen”, open Chever from there and turn on notifications in Me → Settings.</div></div>`
     : `<div class="card gold row" style="gap:12px"><div style="font-size:26px">🔔</div><div class="grow"><b>Get notified when people are looking for players?</b><div class="small muted">One tap. Max 3 a day, never 10 pm to 7 am.</div></div><button class="chip on" data-push>Yes</button></div>`;
   bindPush(box, () => { box.innerHTML = ""; });
 }
@@ -1744,7 +1751,7 @@ async function dailyRemindAsk(sel) {
   let s = "off"; try { s = await BAS.push.state(); } catch (e) {}
   if ((s !== "off" && s !== "ios-install") || !$(sel)) return;
   try { localStorage.setItem("ba3:dailyask", String(Date.now())); localStorage.setItem("ba3:pushask", String(Date.now())); } catch (e) {}
-  box.innerHTML = s === "ios-install" ? `<div class="card small"><b>⏰ Want a 7 PM reminder for tomorrow's challenge?</b><div class="muted" style="margin-top:4px">On iPhone: tap Share ⬆️ then “Add to Home Screen”, open Bible Arena from there and turn on notifications in Me → Settings.</div></div>`
+  box.innerHTML = s === "ios-install" ? `<div class="card small"><b>⏰ Want a 7 PM reminder for tomorrow's challenge?</b><div class="muted" style="margin-top:4px">On iPhone: tap Share ⬆️ then “Add to Home Screen”, open Chever from there and turn on notifications in Me → Settings.</div></div>`
     : `<div class="card gold row" style="gap:12px"><div style="font-size:26px">⏰</div><div class="grow"><b>Remind you at 7 PM tomorrow?</b><div class="small muted">Only if you haven't played the Daily Challenge yet. Turn it off any time in Me.</div></div><button class="chip on" data-push>Yes</button><button class="chip" data-nopush>No</button></div>`;
   bindPush(box, () => { box.innerHTML = ""; });
   const no = $("[data-nopush]", box); if (no) no.onclick = () => { box.innerHTML = ""; };
@@ -1753,7 +1760,7 @@ function bindPush(el, redraw) {
   $$("[data-push]", el).forEach((b) => (b.onclick = async () => {
     b.disabled = true; b.textContent = "…";
     let r = "off"; try { r = await BAS.push.enable(); } catch (e) {}
-    toast(r === "on" ? "Notifications on ✓" : r === "denied" ? "Notifications are blocked in your browser settings." : r === "ios-install" ? "On iPhone, add Bible Arena to your Home Screen first." : "Couldn't turn on notifications here.");
+    toast(r === "on" ? "Notifications on ✓" : r === "denied" ? "Notifications are blocked in your browser settings." : r === "ios-install" ? "On iPhone, add Chever to your Home Screen first." : "Couldn't turn on notifications here.");
     if (redraw) redraw();
   }));
 }
@@ -1900,8 +1907,8 @@ const secs = (ms) => (Math.round(Math.max(0, Number(ms) || 0) / 100) / 10).toFix
 function duelText(code, score, tier, mode) {
   const url = origin() + "/d/" + code;
   return score != null
-    ? `⚔️ ${S.name || "I"} scored ${fmt(score)} on Bible Arena (${TIER[tier].name} · ${MODES[mode] ? MODES[mode].name : "Arena"}).\nSame questions. Can you beat me? 📖\nTap: ${url}\nOr enter code ${code} in Bible Arena.`
-    : `⚔️ ${S.name || "I"} challenge you to a Bible Arena duel (${TIER[tier].name}). Same questions, head to head. 📖\nTap: ${url}\nOr enter code ${code} in Bible Arena.`;
+    ? `⚔️ ${S.name || "I"} scored ${fmt(score)} on Chever (${TIER[tier].name} · ${MODES[mode] ? MODES[mode].name : "Arena"}).\nSame questions. Can you beat me? 📖\nTap: ${url}\nOr enter code ${code} in Chever.`
+    : `⚔️ ${S.name || "I"} challenge you to a Chever duel (${TIER[tier].name}). Same questions, head to head. 📖\nTap: ${url}\nOr enter code ${code} in Chever.`;
 }
 async function newDuel() {
   let mode = "mixed", tier = S.tier;
@@ -1947,7 +1954,7 @@ async function acceptDuel(code) {
   const creator = v.entries.find((e) => e.isCreator && e.finished);
   const needName = !S.onboarded;
   render(`<div class="col" style="gap:16px;padding-top:2vh">
-    <div class="center"><div class="tiny gold">Bible Arena · Challenge</div></div>
+    <div class="center"><div class="tiny gold">Chever · Challenge</div></div>
     <div class="hero center"><div class="rays"></div>
       <div class="avatar" style="width:72px;height:72px;font-size:28px">${esc((v.creator.name || "?")[0].toUpperCase())}</div>
       <h2 style="font-family:var(--serif)">${esc(v.creator.name)}</h2>
@@ -1988,7 +1995,7 @@ function duelResult(v, r, cfg) {
   else if (cmp === -1) banner = `<h1 style="font-family:var(--serif)">${esc(opp.name)} wins${onTime ? " on time" : ""}</h1>${onTime ? `<p class="muted" style="margin:4px 0 0">Same score. ${esc(opp.name.split(" ")[0])} was ${gap} faster.</p>` : ""}`;
   else if (cmp === 0) banner = `<h1 class="title-gold">It's a draw 🤝</h1><p class="muted" style="margin:4px 0 0">Same score, same time. Honours shared.</p>`;
   else if (me && cfg && cfg.duel && cfg.duel.quick) banner = `<h1 class="title-gold">Nice round!</h1><p class="muted" style="margin:4px 0 0">Your score: <b class="gold">${fmt(me.score)}</b>. Waiting for ${esc(cfg.duel.opp || "your opponent")} to finish…</p>`;
-  else if (me && v.creator.isMe) banner = `<h1 class="title-gold">Now send it!</h1><p class="muted" style="margin:4px 0 0">Your score: <b class="gold">${fmt(me.score)}</b>. Waiting for someone to take your challenge.</p><div class="card center" style="margin-top:12px"><div class="tiny muted">Challenge code</div><div class="bigcode">${esc(v.code)}</div><div class="small muted">They tap your link, or enter this code in Bible Arena.</div></div>`;
+  else if (me && v.creator.isMe) banner = `<h1 class="title-gold">Now send it!</h1><p class="muted" style="margin:4px 0 0">Your score: <b class="gold">${fmt(me.score)}</b>. Waiting for someone to take your challenge.</p><div class="card center" style="margin-top:12px"><div class="tiny muted">Challenge code</div><div class="bigcode">${esc(v.code)}</div><div class="small muted">They tap your link, or enter this code in Chever.</div></div>`;
   const botDuel = v.entries.some((e) => e.name === "Arena Bot 🤖");
   const fin = v.entries.filter((e) => e.finished).sort((a, b) => duelCmp(b, a));
   const topWin = fin.length >= 2 && duelCmp(fin[0], fin[1]) !== 0 ? fin[0] : null;
@@ -2105,7 +2112,7 @@ async function reportCard() {
 }
 function reportText(r) {
   const tw = r.thisWeek, best = r.books && r.books.strong[0];
-  return `My Bible Arena week: ${tw.accuracy == null ? "just getting started" : tw.accuracy + "% right"} on ${tw.answered} questions${r.streak ? `, 🔥 ${r.streak}-day streak` : ""}${best ? `. Strongest book: ${best.book}` : ""}. Can you beat me?`;
+  return `My Chever week: ${tw.accuracy == null ? "just getting started" : tw.accuracy + "% right"} on ${tw.answered} questions${r.streak ? `, 🔥 ${r.streak}-day streak` : ""}${best ? `. Strongest book: ${best.book}` : ""}. Can you beat me?`;
 }
 function reportWaLink(r) { return "https://wa.me/?text=" + encodeURIComponent(reportText(r) + " " + location.origin + "/"); }
 function reportCanvas(r) {
@@ -2114,7 +2121,7 @@ function reportCanvas(r) {
   g.strokeStyle = "rgba(245,185,66,.45)"; g.lineWidth = 6; g.strokeRect(40, 40, W - 80, H - 80);
   const tx = (s, x, y, font, col, al) => { g.font = font; g.fillStyle = col; g.textAlign = al || "center"; g.fillText(s, x, y); };
   const tw = r.thisWeek, lw = r.lastWeek;
-  tx("BIBLE ARENA", W / 2, 150, "800 64px Georgia, serif", "#F5B942");
+  tx("CHEVER", W / 2, 150, "800 64px Georgia, serif", "#F5B942");
   tx(`${(r.name || S.name || "My")}'s week · ${dayLabel(r.week.start)} – ${dayLabel(r.week.end)}`.slice(0, 48), W / 2, 220, "600 38px sans-serif", "#F6F1E7");
   tx(tw.accuracy == null ? "–" : tw.accuracy + "%", W / 2, 420, "800 180px Georgia, serif", "#FFD98A");
   const d = tw.accuracy != null && lw.accuracy != null ? tw.accuracy - lw.accuracy : null;
@@ -2237,7 +2244,7 @@ async function profile() {
   };
   drawRem();
   $("#delacct").onclick = async () => {
-    if (!confirm("Delete your Bible Arena account? This permanently erases your profile, scores, rounds and the duels you created. It cannot be undone.")) return;
+    if (!confirm("Delete your Chever account? This permanently erases your profile, scores, rounds and the duels you created. It cannot be undone.")) return;
     try { await api("/api/v3/account/delete", { body: { confirm: "DELETE" } }); } catch (e) { toast("Couldn't delete right now. Try again, or use bible-arena.onrender.com/delete-account"); return; }
     try { Object.keys(localStorage).forEach((k) => { if (k.indexOf("ba3:") === 0) localStorage.removeItem(k); }); } catch (e) {}
     alert("Your account and all its data have been deleted.");

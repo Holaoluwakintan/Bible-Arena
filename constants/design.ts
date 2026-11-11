@@ -1,6 +1,6 @@
 import { Platform, type TextStyle } from "react-native";
 
-/** Bible Arena v2 design tokens — "Midnight & Gold". */
+/** Chever v2 design tokens — "Midnight & Gold". */
 export const C = {
   bg: "#0A1020",
   bg2: "#0D1526",
