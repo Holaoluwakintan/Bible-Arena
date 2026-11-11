@@ -23,7 +23,14 @@
     ".br-days{padding-left:0;list-style:none}.br-days li{padding:6px 0;border-bottom:1px solid #1b2740}" +
     ".br-done{opacity:.6}.br-tick{display:inline-block;vertical-align:middle;margin-left:4px;color:#c9a54a}" +
     ".br-eyebrow{margin:8px 0 0;color:#0648C2;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}" +
-    ".br-range{margin:2px 0 0;font-size:30px;font-weight:800;color:#0B1F4B}" +
+    ".br-screen .br-range{margin:2px 0 0;font-size:30px;font-weight:800;color:#0B1F4B;line-height:1.15}" +
+    ".br-screen .br-title{margin:6px 0 0;font-size:32px;font-weight:800;color:#0B1F4B;line-height:1.15}" +
+    ".br-sub{margin:4px 0 0;color:#5B6478;font-size:15px}" +
+    ".br-today{margin:16px 0 0;padding:16px}" +
+    ".br-today .br-cta{margin:12px 0 2px}" +
+    ".br-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}" +
+    ".br-pill{display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;background:#EEF4FE;color:#0648C2;font-size:13px;font-weight:700;white-space:nowrap}" +
+    ".br-codecard{cursor:pointer}" +
     ".br-screen .br-cta{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin:14px 0 6px;padding:15px;border:0;border-radius:16px;background:#0648C2;color:#fff;font-weight:800;font-size:17px}" +
     ".br-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}" +
     ".br-card{background:#fff;border:1px solid #E3E8F2;border-radius:16px;padding:14px;margin:10px 0;color:#0B1F4B;box-shadow:0 1px 4px rgba(11,31,75,.04)}" +
@@ -31,7 +38,7 @@
     ".br-ico{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#EEF4FE;color:#0648C2}" +
     ".br-cardlabel{display:block;font-size:13px;color:#5B6478;margin-top:8px}" +
     ".br-cardnum{display:block;font-size:22px;color:#0B1F4B}" +
-    ".br-invite{display:flex;gap:12px;align-items:center}" +
+    ".br-codecard{display:flex;gap:12px;align-items:center}" +
     ".br-code-s{display:block;font-size:24px;letter-spacing:.2em;color:#0B1F4B;margin-top:4px}" +
     ".br-h3{font-size:16px;margin:18px 0 6px;color:#0B1F4B}" +
     ".br-screen .br-bar{background:#E3E8F2;height:8px;margin:8px 0 4px}.br-screen .br-bar span{background:#0648C2}" +
@@ -182,7 +189,9 @@
     function progressHTML(s) {
       var p = s.portion, days = dailySplit(p), done = s.done || [], n = days.filter(function (_, i) { return done[i]; }).length;
       var today = firstOpenDay(days, done), td = days[today];
-      var todayRef = td.endChapter >= td.startChapter ? p.book + " " + (td.startChapter === td.endChapter ? td.startChapter : td.startChapter + "–" + td.endChapter) : "Catch-up day";
+      var chapters = td.endChapter >= td.startChapter ? td.endChapter - td.startChapter + 1 : 0;
+      var todayRef = chapters ? p.book + " " + (td.startChapter === td.endChapter ? td.startChapter : td.startChapter + "–" + td.endChapter) : "Catch-up day";
+      var todayMeta = chapters ? chapters + (chapters === 1 ? " chapter" : " chapters") : "No new chapters today";
       // Long plans: show a window of about 60 days around today, not every day.
       var from = Math.max(0, Math.min(today - 3, days.length - 60)), to = Math.min(days.length, from + 60);
       var rows = days.slice(from, to).map(function (d, k) {
@@ -197,17 +206,25 @@
       var action = s.state === "portion_chosen"
         ? '<button type="button" class="br-cta" data-act="begin">Start reading</button>'
         : '<button type="button" class="br-cta" data-act="day" data-i="' + today + '">' + ICON.check + " Mark as Read</button>";
-      return '<p class="br-eyebrow">Today’s reading</p>' +
-        '<h2 class="br-range">' + esc(todayRef) + "</h2>" +
-        '<p class="br-small">Day ' + (today + 1) + " of " + days.length + " · " + esc(p.version) + " · " + esc(perDayText(p)) + "</p>" +
-        action +
+      // The invite card shows the code the app generated for this device; no code, no card.
+      var invite = s.inviteCode
+        ? '<div class="br-card br-codecard" data-act="copy" role="button" tabindex="0" aria-label="Copy your invite code"><span class="br-ico">' + ICON.share + '</span><div><span class="br-cardlabel">Your invite code</span><b class="br-code-s">' + esc(s.inviteCode) + '</b><span class="br-small">Tap code to copy. Share it with the person you want to read with.</span></div></div>'
+        : "";
+      return '<h2 class="br-title">Reading Plan</h2>' +
+        '<p class="br-sub">Grow your faith. One chapter at a time.</p>' +
+        '<div class="br-card br-today">' +
+          '<p class="br-eyebrow">Today’s reading</p>' +
+          '<h2 class="br-range">' + esc(todayRef) + "</h2>" +
+          '<div class="br-meta"><span class="br-small">' + esc(todayMeta) + '</span><span class="br-pill">Day ' + (today + 1) + " of " + days.length + "</span></div>" +
+          action +
+        "</div>" +
         '<div class="br-cards">' +
-          '<div class="br-card"><span class="br-ico">' + ICON.flame + '</span><span class="br-cardlabel">Current streak</span><b class="br-cardnum">' + streak + (streak === 1 ? " day" : " days") + "</b></div>" +
+          '<div class="br-card"><span class="br-ico">' + ICON.flame + '</span><span class="br-cardlabel">Current streak</span><b class="br-cardnum">' + streak + (streak === 1 ? " day" : " days") + '</b><span class="br-small">Ticked in a row</span></div>' +
           '<div class="br-card"><span class="br-ico">' + ICON.book + '</span><span class="br-cardlabel">Plan progress</span><b class="br-cardnum">' + pct + '%</b><div class="br-bar" aria-hidden="true"><span style="width:' + pct + '%"></span></div><span class="br-small">' + n + " of " + days.length + (days.length === 1 ? " day" : " days") + "</span></div>" +
         "</div>" +
-        '<div class="br-card br-invite"><span class="br-ico">' + ICON.share + '</span><div><span class="br-cardlabel">Your invite code</span><b class="br-code-s">' + esc(s.inviteCode) + '</b><span class="br-small">Share this code with the person you want to read with.</span></div></div>' +
+        invite +
         '<h3 class="br-h3">' + esc(refOf(p)) + " · " + esc(lengthLabelOf(p)) + "</h3>" +
-        "<ol class=\"br-days\">" + rows + "</ol>" + listNote +
+        '<ol class="br-days">' + rows + "</ol>" + listNote +
         '<p class="br-small">Your partner’s progress shows here once pairing is on the server.</p>';
     }
 
@@ -297,6 +314,10 @@
         else { s.portion = p; s.state = "portion_chosen"; s.done = []; save(s); }
       } else if (act === "begin") {
         s.state = "reading"; s.done = dailySplit(s.portion).map(function () { return false; }); save(s);
+      } else if (act === "copy") {
+        var copied = function (ok) { notice = ok ? "Code copied." : "Copying isn't available here. The code is " + s.inviteCode + "."; render(); summary(); };
+        try { navigator.clipboard.writeText(s.inviteCode).then(function () { copied(true); }, function () { copied(false); }); } catch (e) { copied(false); }
+        return;
       } else if (act === "day") {
         var i = Number(t.getAttribute("data-i"));
         s.done[i] = true;

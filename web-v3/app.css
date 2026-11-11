@@ -319,4 +319,13 @@ body.cv2-on .cv2-quiz .ref{color:#0648C2}
 body.cv2-on .cv2-quiz .practicetag{color:#5B6478}
 /* reading plan (preview) */
 body.cv2-on .cv2-reading{padding-top:4px}
+body.cv2-on .cv2-brand{font-family:var(--serif, Georgia, serif);font-size:20px;font-weight:800;color:#0B1F4B;letter-spacing:.02em;margin:4px 0 2px}
 body.cv2-on .cv2-reading .br-screen{max-width:none;padding:0}
+
+/* Reading plan tab bar (Chever look, preview): light bar with icons; the inactive tab is greyed and has no link. */
+body.cv2-on .tabbar nav{background:#fff;border:1px solid #E3E8F2;border-radius:22px;box-shadow:0 -2px 12px rgba(11,31,75,.06);max-width:560px;grid-template-columns:repeat(4,1fr);padding:6px 4px}
+body.cv2-on .tabbar a{color:#5B6478;font-size:12px;font-weight:700;gap:3px}
+body.cv2-on .tabbar a i{font-size:0;line-height:0;height:24px;display:flex;align-items:center}
+body.cv2-on .tabbar a.on{color:#0648C2;background:transparent}
+body.cv2-on .tabbar a.off{opacity:.45;pointer-events:none;cursor:default}
+body.cv2-on .tabbar a:not(.off):focus-visible{outline:2px solid #0648C2}

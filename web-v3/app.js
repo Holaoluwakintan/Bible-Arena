@@ -253,6 +253,21 @@ function tabbar(active) {
   const t = (h, i, l, k) => `<a href="${h}" class="${active === k ? "on" : ""}"><i>${i}</i>${l}</a>`;
   return `<div class="tabbar"><nav>${t("#/", "🏠", "Home", "home")}${t("#/duels", "⚔️", "Duels", "duels")}${t("#/ranks", "🏆", "Ranks", "ranks")}${t("#/me", "👤", "Me", "me")}</nav></div>`;
 }
+// Tab bar for the reading plan (Chever look): icons, not emoji. Only the reading screen uses it. Routes are the app's own:
+// Home = #/, Community = #/duels, Profile = #/me. Library has no route yet, so it stays visibly inactive.
+function readingTabbar(active) {
+  const svg = (d) => `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const ic = {
+    home: svg(`<path d="M3.5 10.5L12 3.5l8.5 7"/><path d="M5.5 9.5V20h4.5v-5.5h4V20h4.5V9.5"/>`),
+    library: svg(`<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5z"/>`),
+    community: svg(`<circle cx="9" cy="8" r="3.2"/><path d="M3 19.5c.6-3.2 3-5 6-5s5.4 1.8 6 5"/><circle cx="16.5" cy="8.5" r="2.6"/><path d="M16 14.5c2.6 0 4.6 1.6 5 4.6"/>`),
+    profile: svg(`<circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5c.9-3.9 3.8-6 7.5-6s6.6 2.1 7.5 6"/>`),
+  };
+  const item = (key, label, href, icon) => href
+    ? `<a href="${href}" class="${active === key ? "on" : ""}"><i>${icon}</i>${label}</a>`
+    : `<a class="off" aria-disabled="true" tabindex="-1"><i>${icon}</i>${label}</a>`;
+  return `<div class="tabbar"><nav>${item("home", "Home", "#/", ic.home)}${item("library", "Library", null, ic.library)}${item("community", "Community", "#/duels", ic.community)}${item("profile", "Profile", "#/me", ic.profile)}</nav></div>`;
+}
 // Every navigation retires the round on screen, so a left-behind timer can never answer for a new round.
 let ROUND_SEQ = 0;
 async function route() {
@@ -276,7 +291,7 @@ async function route() {
   if (a === "reading") {
     // Shared reading (preview): only when the flag is on and the screens file loaded.
     if (!(window.BA_FLAGS && window.BA_FLAGS.sharedReading) || !window.BAReading) return home();
-    render('<div id="reading-root"></div>', "cv2 cv2-reading");
+    render('<div class="cv2-brand">Chever</div><div id="reading-root"></div>' + readingTabbar("home"), "cv2 cv2-reading");
     window.BAReading.mount(document.getElementById("reading-root"), {});
     return;
   }
