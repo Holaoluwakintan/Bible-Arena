@@ -427,7 +427,71 @@ function chevrMenuHTML() {
   if (duelV2()) out += wrap("#/duels", ico(`<path d="M4.5 4.5 14 14"/><path d="M19.5 4.5 10 14"/><path d="M9.5 14.5 5 19"/><path d="M14.5 14.5 19 19"/>`), "Duels and ranked", "Play a friend's set, join with a code, or find an opponent.");
   return out ? `<div class="col" style="gap:10px">${out}</div>` : "";
 }
+// ---------- Chever home guide (preview). Shown only when a Chever preview flag is on (sharedReading or chever2Duels). Nothing sets
+// the flags, so the live home is the one below. The guide says what the app is: solo first, then people, then the reading plan.
+// No emoji on this screen: every icon is an inline SVG.
+function homeGuideOn() { const f = window.BA_FLAGS || {}; return f.sharedReading === true || f.chever2Duels === true; }
+function homeIco(name) {
+  const P = {
+    play: '<path d="M8 5.5v13l10-6.5z"/>',
+    users: '<circle cx="9" cy="8.2" r="3.2"/><path d="M3 19.5c.6-3.2 3-5 6-5s5.4 1.8 6 5"/><circle cx="16.5" cy="8.5" r="2.6"/><path d="M16 14.5c2.6 0 4.6 1.6 5 4.6"/>',
+    trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5.2A2.7 2.7 0 0 0 8 10.5M16 6h2.8A2.7 2.7 0 0 1 16 10.5"/><path d="M12 13v4M8.5 20h7M9.5 17h5"/>',
+    plus: '<rect x="4.5" y="4.5" width="15" height="15" rx="4"/><path d="M12 8.5v7M8.5 12h7"/>',
+    book: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M8 8h9M8 11.5h9"/>',
+    flame: '<path d="M12 3c.5 3.2 4.5 5.2 4.5 9.5A4.5 4.5 0 0 1 12 17a4.5 4.5 0 0 1-4.5-4.5c0-1.9 1-3.2 2-4.2.2 1.4.8 2.3 1.8 2.9C11 8.2 11.4 5.6 12 3z"/>',
+    target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/>',
+    chev: '<path d="M9.5 6 15.5 12l-6 6"/>',
+    home: '<path d="M4 11 12 4.5 20 11"/><path d="M6.5 9.8V20h11V9.8"/>',
+    swords: '<path d="M4.5 4.5 14 14"/><path d="M19.5 4.5 10 14"/><path d="M9.5 14.5 5 19"/><path d="M14.5 14.5 19 19"/>',
+    ranks: '<path d="M7 20V11M12 20V5M17 20v-6"/>',
+    me: '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.8 20c.9-3.7 3.7-5.8 7.2-5.8s6.3 2.1 7.2 5.8"/>',
+  };
+  return `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${P[name] || ""}</svg>`;
+}
+function homeGuideRow(href, icon, title, sub, primary) {
+  return `<a class="gh-row${primary ? " gh-primary" : ""}" href="${href}"><span class="gh-ico">${homeIco(icon)}</span><span class="gh-txt"><b>${title}</b><span>${sub}</span></span><span class="gh-chev">${homeIco("chev")}</span></a>`;
+}
+function homeGuideHTML() {
+  const p = ME.player || {}; const st = p.stats || {};
+  const played = st.duelsPlayed || 0, won = st.duelsWon || 0;
+  const rate = played ? `${Math.round((100 * won) / played)}%` : "0%";
+  const signedIn = !!(ME.user && !isGuest());
+  const reading = !!(window.BA_FLAGS && window.BA_FLAGS.sharedReading === true && window.BAReading);
+  const ranked = duelV2();
+  const readingBlock = reading ? `<section class="gh-sec"><h3>Reading plan</h3><p class="gh-hint">Read the Bible with people. One plan, one code.</p>${
+    signedIn
+      ? homeGuideRow("#/reading", "book", "Continue your daily plan", "Pick up today's reading.")
+        + homeGuideRow("#/reading", "plus", "Create a new plan", "Set the pace and send the code to people.")
+      : homeGuideRow("#/reading", "book", "Go in faith", "Start reading with the plan today.")
+        + homeGuideRow("#/reading", "users", "Join someone", "Enter the code they sent you.")
+        + homeGuideRow("#/reading", "plus", "Create a plan", "Start one and invite people.")
+  }</section>` : "";
+  const tab = (h, icon, label, k) => `<a href="${h}" class="${k === "home" ? "on" : ""}"><i>${homeIco(icon)}</i>${label}</a>`;
+  return `<div class="gh">
+    <header class="gh-top"><div class="cv2-brand">Chever</div>
+      <div class="gh-stats"><span class="gh-stat">${homeIco("flame")}<b>${p.streak || 0}</b> day streak</span><span class="gh-stat">${homeIco("target")}<b>${rate}</b> win rate</span></div></header>
+    <section class="gh-intro"><h1>Know the Word. Challenge the world.</h1>
+      <p>Bible quiz, and every answer comes with its verse. Play a round on your own, go head to head with people, or read the Bible together on a plan people join.</p></section>
+    <section class="gh-sec"><h3>Play a quick round</h3>
+      ${homeGuideRow("#/play/mixed", "play", "Solo match", "Just you and the Word. Start now.", true)}
+      ${homeGuideRow("#/qm", "users", "Match with someone", "Get paired with someone playing now.")}
+      ${ranked ? homeGuideRow("#/duels", "trophy", "Ranked and find match", "Find an opponent at your level.") : ""}
+    </section>
+    <section class="gh-sec"><h3>Play with people</h3>
+      ${homeGuideRow("#/ko/new", "plus", "Create private room", "Get a code, send it, last one standing wins.")}
+      <form class="gh-join" id="homejoin" autocomplete="off"><label for="homecodein">Join with code</label>
+        <div class="gh-joinrow"><input id="homecodein" name="c" inputmode="numeric" maxlength="8" placeholder="6-digit code" autocomplete="one-time-code" enterkeyhint="go"><button type="submit">Join</button></div></form>
+    </section>
+    ${readingBlock}
+    <div class="tabbar"><nav>${tab("#/", "home", "Home", "home")}${tab("#/duels", "swords", "Duels", "duels")}${tab("#/ranks", "ranks", "Ranks", "ranks")}${tab("#/me", "me", "Me", "me")}</nav></div>
+  </div>`;
+}
+function homeGuide() {
+  render(`${homeGuideHTML()}`, "cv2 cv2-home");
+  bindCodeBox("homejoin");
+}
 async function home() {
+  if (homeGuideOn()) return homeGuide();
   render(`${topbar()}<div id="h"></div>${tabbar("home")}`);
   onLeave(lenPickerWire());
   const day = Math.floor((Date.now() + 3600e3) / 864e5);
