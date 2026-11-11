@@ -6,6 +6,29 @@
   var flags = window.BA_FLAGS || {};
   if (flags.sharedReading !== true) return;
 
+  // Minimal look for the four screens, scoped to .br-screen and added only when the flag is on (app.css is not touched).
+  var STYLE = ".br-screen{max-width:520px;margin:0 auto;padding:16px;line-height:1.5}" +
+    ".br-screen h2{margin:0 0 8px;font-size:22px}" +
+    ".br-screen label{display:block;margin:12px 0}" +
+    ".br-row{display:flex;gap:12px}.br-row label{flex:1}" +
+    ".br-screen input,.br-screen select{display:block;width:100%;box-sizing:border-box;margin-top:6px;padding:10px;border-radius:10px;border:1px solid #3a4a6b;background:#0d1730;color:inherit;font:inherit}" +
+    ".br-screen button{margin:12px 0 4px;padding:12px 18px;border-radius:12px;border:0;background:#c9a54a;color:#070C1A;font:inherit;font-weight:700;cursor:pointer}" +
+    ".br-lens{display:flex;gap:8px;flex-wrap:wrap}.br-lens button{margin:8px 0}" +
+    ".br-lens button[aria-pressed=true]{outline:2px solid #c9a54a}" +
+    ".br-code{font-size:32px;letter-spacing:.2em;font-weight:800;margin:12px 0}" +
+    ".br-small{opacity:.7;font-size:14px}" +
+    ".br-note{color:#f3c969;margin-top:12px}" +
+    ".br-bar{height:8px;border-radius:4px;background:#1b2740;overflow:hidden;margin:12px 0}" +
+    ".br-bar span{display:block;height:100%;background:#c9a54a}" +
+    ".br-days{padding-left:0;list-style:none}.br-days li{padding:6px 0;border-bottom:1px solid #1b2740}" +
+    ".br-done{opacity:.6}.br-tick{display:inline-block;vertical-align:middle;margin-left:4px;color:#c9a54a}";
+  if (!document.getElementById("br-style")) {
+    var st = document.createElement("style");
+    st.id = "br-style";
+    st.textContent = STYLE;
+    document.head.appendChild(st);
+  }
+
   var KEY = "ba:reading:v1";
   var LENGTHS = [3, 7, 14, 30];
   var VERSIONS = [{ code: "KJV", quiz: true }, { code: "NLT", quiz: false }, { code: "MSG", quiz: false }];
@@ -117,7 +140,7 @@
       var rows = days.map(function (d, i) {
         var txt = d.endChapter >= d.startChapter ? p.book + " " + (d.startChapter === d.endChapter ? d.startChapter : d.startChapter + "–" + d.endChapter) : "Catch-up day";
         return '<li class="' + (done[i] ? "br-done" : "") + '">Day ' + d.day + ": " + esc(txt) +
-          (done[i] ? " ✓" : "") + "</li>";
+          (done[i] ? ' <span class="br-tick" role="img" aria-label="done"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>' : "") + "</li>";
       }).join("");
       var today = done.indexOf(false) >= 0 ? done.indexOf(false) : days.length - 1;
       var action = s.state === "portion_chosen"
@@ -188,9 +211,8 @@
         if (s.done.every(Boolean)) s.state = "finished";
         save(s);
       } else if (act === "duel") {
-        s.state = "duel_ready"; save(s);
-        if (typeof opts.startDuel === "function") opts.startDuel(s.portion);
-        else notice = "The duel opens once the quiz is connected to this screen.";
+        if (typeof opts.startDuel === "function") { s.state = "duel_ready"; save(s); opts.startDuel(s.portion); }
+        else notice = "The duel is not connected to the quiz yet, so nothing has started.";
       }
       render();
       summary();
