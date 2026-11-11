@@ -282,3 +282,41 @@ a.badge,a.lb{cursor:pointer}
 .energy{flex:none;padding:4px 10px;border-radius:999px;background:rgba(245,185,66,.12);color:var(--gold2);font-weight:800}
 .stenergy{margin-top:10px}
 .strank h2{color:var(--gold2)}
+
+/* ---- Chever look (preview, cv2): light navy/blue screens for the quiz and the reading plan. Scoped to body.cv2-on. ---- */
+body.cv2-on{background:#F4F6FB;color:#0B1F4B}
+body.cv2-on #sky{display:none}
+body.cv2-on #app{max-width:560px;padding-top:12px}
+body.cv2-on .cv2 .playtop{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+body.cv2-on .cv2 .iconbtn{background:#fff;border:1px solid #E3E8F2;color:#0B1F4B;width:40px;height:40px;border-radius:50%}
+body.cv2-on .cv2 .score-pill{color:#0B1F4B;font-family:var(--sans);font-weight:800;font-size:16px}
+body.cv2-on .cv2 .timer{background:#E6E7E9;height:8px;border-radius:99px;margin:6px 0 14px}
+body.cv2-on .cv2 .timer>i{background:linear-gradient(90deg,#0648C2,#1E6BE6)}
+body.cv2-on .cv2 .timer.low>i{background:linear-gradient(90deg,#D64545,#E85B5B)}
+body.cv2-on .cv2-quiz .dots{display:none}
+body.cv2-on .cv2-count{flex:1;font-size:15px;font-weight:800;color:#0B1F4B;text-align:center}
+body.cv2-on .cv2-quiz .playtop{justify-content:space-between}
+body.cv2-on .cv2-quiz .qcard{background:#fff;border:1px solid #E3E8F2;border-radius:20px;box-shadow:0 2px 10px rgba(11,31,75,.06);padding:20px 18px;margin-bottom:14px}
+body.cv2-on .cv2-quiz .qmeta{color:#0648C2;margin-bottom:8px}
+body.cv2-on .cv2-quiz .qmeta .tiny{color:#0648C2;font-weight:800}
+body.cv2-on .cv2-quiz .pill-tier{color:#0648C2;border-color:#C9D9F7;background:#EEF4FE}
+body.cv2-on .cv2-quiz .qtext{color:#0B1F4B;font-size:20px;font-family:var(--sans);font-weight:800}
+body.cv2-on .cv2-quiz .opts{gap:10px}
+body.cv2-on .cv2-quiz .opt{background:#fff;border:1.5px solid #DDE3EE;border-radius:16px;color:#0B1F4B;min-height:60px;padding:12px 14px;box-shadow:0 1px 4px rgba(11,31,75,.04)}
+body.cv2-on .cv2-quiz .opt .k{background:#EEF4FE;color:#0648C2;font-weight:800;border-radius:50%;width:30px;height:30px}
+body.cv2-on .cv2-quiz .opt::after{content:"";margin-left:auto;flex:none;width:20px;height:20px;border-radius:50%;border:2px solid #B8C3D6;background:#fff}
+body.cv2-on .cv2-quiz .opt.ok{background:#EDF9F3;border-color:#1F9D5C;color:#0B1F4B}
+body.cv2-on .cv2-quiz .opt.ok::after{border-color:#1F9D5C;background:radial-gradient(circle,#1F9D5C 0 5px,#fff 6px)}
+body.cv2-on .cv2-quiz .opt.bad{background:#FDF0F0;border-color:#D64545}
+body.cv2-on .cv2-quiz .opt.bad::after{border-color:#D64545;background:radial-gradient(circle,#D64545 0 5px,#fff 6px)}
+body.cv2-on .cv2-quiz .opt.dim{opacity:.55}
+body.cv2-on .cv2-quiz .mythbtns .opt{background:#fff;color:#0B1F4B;font-family:var(--sans)}
+body.cv2-on .cv2-quiz .mythbtns .opt::after{display:none}
+body.cv2-on .cv2-quiz .mythbtns .opt small{color:#5B6478}
+body.cv2-on .cv2-quiz .feedback{background:#fff;color:#0B1F4B;border:1px solid #E3E8F2;border-radius:16px}
+body.cv2-on .cv2-quiz .btn.primary{background:#0648C2;color:#fff;border-radius:16px;font-weight:800}
+body.cv2-on .cv2-quiz .ref{color:#0648C2}
+body.cv2-on .cv2-quiz .practicetag{color:#5B6478}
+/* reading plan (preview) */
+body.cv2-on .cv2-reading{padding-top:4px}
+body.cv2-on .cv2-reading .br-screen{max-width:none;padding:0}

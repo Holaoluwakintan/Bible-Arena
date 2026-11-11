@@ -238,6 +238,8 @@ function parseHash() {
 function render(html, cls) {
   cleanup.forEach((f) => { try { f(); } catch (e) {} }); cleanup = [];
   voiceStop();
+  // Chever look (preview): screens that ask for it get the light theme; every other screen is unchanged.
+  document.body.classList.toggle("cv2-on", /\bcv2\b/.test(cls || ""));
   // The tab bar lives outside the animated screen: a transformed ancestor would pin it mid-page.
   let tabs = "";
   html = html.replace(/<div class="tabbar">[\s\S]*?<\/nav><\/div>/, (m) => { tabs = m; return ""; });
@@ -274,7 +276,7 @@ async function route() {
   if (a === "reading") {
     // Shared reading (preview): only when the flag is on and the screens file loaded.
     if (!(window.BA_FLAGS && window.BA_FLAGS.sharedReading) || !window.BAReading) return home();
-    render('<div id="reading-root"></div>');
+    render('<div id="reading-root"></div>', "cv2 cv2-reading");
     window.BAReading.mount(document.getElementById("reading-root"), {});
     return;
   }
@@ -673,7 +675,7 @@ function runRound(cfg) {
     el.innerHTML = `<div class="rival">${liveNow ? `<span class="live">LIVE</span>` : "⚔️"}<b>${esc(rival.name)}</b><div class="xpbar"><i style="width:${Math.round((n / items.length) * 100)}%"></i></div><span class="gold">${fmt(rival.score)}</span></div>`;
   }
   function header() {
-    const dots = cfg.sudden ? `<div class="grow small muted">Question ${idx + 1} · one life</div>` : `<div class="dots">${items.map((_, i) => `<i class="${i < idx ? (answers[i] && answers[i].correct ? "ok" : "bad") : i === idx ? "cur" : ""}"></i>`).join("")}</div>`;
+    const dots = cfg.sudden ? `<div class="grow small muted">Question ${idx + 1} · one life</div>` : `<div class="dots">${items.map((_, i) => `<i class="${i < idx ? (answers[i] && answers[i].correct ? "ok" : "bad") : i === idx ? "cur" : ""}"></i>`).join("")}</div><span class="cv2-count">Question ${idx + 1} of ${items.length}</span>`;
     return `<div class="playtop"><button class="iconbtn" id="quit" aria-label="Quit">✕</button>${dots}${combo >= 2 ? `<span class="combo">x${(1 + Math.min(combo, 10) * 0.1).toFixed(1)}</span>` : ""}<div class="score-pill" id="sc">${fmt(score)}</div></div>${cfg.practice ? `<div class="practicetag">Practice — not scored</div>` : ""}${cfg.bonusFrom ? `<div class="practicetag">❤️ Bonus life — just for fun, your score stays at ${fmt(score)}</div>` : ""}<div id="rival"></div>`;
   }
   function next() {
@@ -686,7 +688,7 @@ function runRound(cfg) {
     const label = it.m === "gap" ? "Fill in the Gap" : it.m === "who" ? "Who Am I?" : it.m === "myth" ? "Bible or Myth?" : it.k === "who_said" ? "Who said it?" : it.k === "order" ? "Put in order" : (it.cat || "Arena");
     render(`${header()}${limit ? `<div class="timer" id="tm"><i></i></div>` : `<div style="height:20px"></div>`}<div id="adtime"></div>
       <div class="qcard"><div class="qmeta"><span class="tiny">${esc(label)}</span><span class="pill-tier">${TIER[tier].name}</span></div><div id="qbody"></div></div>
-      <div id="ans"></div><div id="adhint"></div><div id="fb"></div>`);
+      <div id="ans"></div><div id="adhint"></div><div id="fb"></div>`, "cv2 cv2-quiz");
     onLeave(() => { clearTimeout(timerH); clearInterval(tickH); });
     if (window.BAS) { BAS.setBusy(true); onLeave(() => BAS.setBusy(false)); }
     $("#quit").onclick = () => { if (confirm("Leave this round? Your progress in it will be lost.")) go("#/"); };

@@ -21,7 +21,21 @@
     ".br-bar{height:8px;border-radius:4px;background:#1b2740;overflow:hidden;margin:12px 0}" +
     ".br-bar span{display:block;height:100%;background:#c9a54a}" +
     ".br-days{padding-left:0;list-style:none}.br-days li{padding:6px 0;border-bottom:1px solid #1b2740}" +
-    ".br-done{opacity:.6}.br-tick{display:inline-block;vertical-align:middle;margin-left:4px;color:#c9a54a}";
+    ".br-done{opacity:.6}.br-tick{display:inline-block;vertical-align:middle;margin-left:4px;color:#c9a54a}" +
+    ".br-eyebrow{margin:8px 0 0;color:#0648C2;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}" +
+    ".br-range{margin:2px 0 0;font-size:30px;font-weight:800;color:#0B1F4B}" +
+    ".br-screen .br-cta{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin:14px 0 6px;padding:15px;border:0;border-radius:16px;background:#0648C2;color:#fff;font-weight:800;font-size:17px}" +
+    ".br-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}" +
+    ".br-card{background:#fff;border:1px solid #E3E8F2;border-radius:16px;padding:14px;margin:10px 0;color:#0B1F4B;box-shadow:0 1px 4px rgba(11,31,75,.04)}" +
+    ".br-cards .br-card{margin:0}" +
+    ".br-ico{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#EEF4FE;color:#0648C2}" +
+    ".br-cardlabel{display:block;font-size:13px;color:#5B6478;margin-top:8px}" +
+    ".br-cardnum{display:block;font-size:22px;color:#0B1F4B}" +
+    ".br-invite{display:flex;gap:12px;align-items:center}" +
+    ".br-code-s{display:block;font-size:24px;letter-spacing:.2em;color:#0B1F4B;margin-top:4px}" +
+    ".br-h3{font-size:16px;margin:18px 0 6px;color:#0B1F4B}" +
+    ".br-screen .br-bar{background:#E3E8F2;height:8px;margin:8px 0 4px}.br-screen .br-bar span{background:#0648C2}" +
+    ".br-screen .br-days li{border-bottom:1px solid #E3E8F2}.br-screen .br-tick{color:#0648C2}";
   if (!document.getElementById("br-style")) {
     var st = document.createElement("style");
     st.id = "br-style";
@@ -151,27 +165,49 @@
       return days.length - 1;
     }
 
+    // Chever look: today's chapters, the streak and plan progress as cards, and the invite code. Icons are inline SVG, no emoji.
+    var ICON = {
+      flame: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M12 2.5c.8 3.2 4.6 5 4.6 9.6a4.6 4.6 0 0 1-9.2 0c0-2.1 1-3.6 2.1-4.7.2 1.7.9 2.7 1.9 3.2-.3-3 .2-5.6.6-8.1z" fill="currentColor"/></svg>',
+      book: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5zM20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+      share: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></g></svg>',
+      check: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    };
+    function streakOf(days, done) {
+      var last = -1;
+      for (var i = 0; i < days.length; i++) if (done[i]) last = i;
+      var k = 0;
+      for (var j = last; j >= 0 && done[j]; j--) k++;
+      return k;
+    }
     function progressHTML(s) {
       var p = s.portion, days = dailySplit(p), done = s.done || [], n = days.filter(function (_, i) { return done[i]; }).length;
-      var today = firstOpenDay(days, done);
+      var today = firstOpenDay(days, done), td = days[today];
+      var todayRef = td.endChapter >= td.startChapter ? p.book + " " + (td.startChapter === td.endChapter ? td.startChapter : td.startChapter + "–" + td.endChapter) : "Catch-up day";
       // Long plans: show a window of about 60 days around today, not every day.
       var from = Math.max(0, Math.min(today - 3, days.length - 60)), to = Math.min(days.length, from + 60);
       var rows = days.slice(from, to).map(function (d, k) {
         var i = from + k;
         var txt = d.endChapter >= d.startChapter ? p.book + " " + (d.startChapter === d.endChapter ? d.startChapter : d.startChapter + "–" + d.endChapter) : "Catch-up day";
         return '<li class="' + (done[i] ? "br-done" : "") + '">Day ' + d.day + ": " + esc(txt) +
-          (done[i] ? ' <span class="br-tick" role="img" aria-label="done"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>' : "") + "</li>";
+          (done[i] ? ' <span class="br-tick" role="img" aria-label="done">' + ICON.check + "</span>" : "") + "</li>";
       }).join("");
       var listNote = days.length > to - from
         ? '<p class="br-small">Showing days ' + (from + 1) + " to " + to + " of " + days.length + ".</p>" : "";
+      var pct = Math.round((100 * n) / days.length), streak = streakOf(days, done);
       var action = s.state === "portion_chosen"
-        ? '<button type="button" data-act="begin">Start reading</button>'
-        : '<button type="button" data-act="day" data-i="' + today + '">Mark day ' + (today + 1) + " read</button>";
-      return '<h2>' + esc(refOf(p)) + "</h2>" +
-        '<p class="br-small">' + esc(p.version) + " · " + esc(lengthLabelOf(p)) + " · " + n + " of " + days.length + (days.length === 1 ? " day" : " days") + " done</p>" +
-        '<p class="br-small">' + esc(perDayText(p)) + "</p>" +
-        '<div class="br-bar" aria-hidden="true"><span style="width:' + Math.round((100 * n) / days.length) + '%"></span></div>' +
-        "<ol class=\"br-days\">" + rows + "</ol>" + listNote + action +
+        ? '<button type="button" class="br-cta" data-act="begin">Start reading</button>'
+        : '<button type="button" class="br-cta" data-act="day" data-i="' + today + '">' + ICON.check + " Mark as Read</button>";
+      return '<p class="br-eyebrow">Today’s reading</p>' +
+        '<h2 class="br-range">' + esc(todayRef) + "</h2>" +
+        '<p class="br-small">Day ' + (today + 1) + " of " + days.length + " · " + esc(p.version) + " · " + esc(perDayText(p)) + "</p>" +
+        action +
+        '<div class="br-cards">' +
+          '<div class="br-card"><span class="br-ico">' + ICON.flame + '</span><span class="br-cardlabel">Current streak</span><b class="br-cardnum">' + streak + (streak === 1 ? " day" : " days") + "</b></div>" +
+          '<div class="br-card"><span class="br-ico">' + ICON.book + '</span><span class="br-cardlabel">Plan progress</span><b class="br-cardnum">' + pct + '%</b><div class="br-bar" aria-hidden="true"><span style="width:' + pct + '%"></span></div><span class="br-small">' + n + " of " + days.length + (days.length === 1 ? " day" : " days") + "</span></div>" +
+        "</div>" +
+        '<div class="br-card br-invite"><span class="br-ico">' + ICON.share + '</span><div><span class="br-cardlabel">Your invite code</span><b class="br-code-s">' + esc(s.inviteCode) + '</b><span class="br-small">Share this code with the person you want to read with.</span></div></div>' +
+        '<h3 class="br-h3">' + esc(refOf(p)) + " · " + esc(lengthLabelOf(p)) + "</h3>" +
+        "<ol class=\"br-days\">" + rows + "</ol>" + listNote +
         '<p class="br-small">Your partner’s progress shows here once pairing is on the server.</p>';
     }
 
