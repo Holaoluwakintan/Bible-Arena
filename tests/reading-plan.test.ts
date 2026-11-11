@@ -7,6 +7,7 @@ import {
   advancePairing,
   createPairing,
   createReadingPortion,
+  customLengthDays,
   dailySplit,
   isQuizReady,
   nextPairingState,
@@ -37,13 +38,26 @@ describe("shared reading: portion model", () => {
     }
   });
 
-  it("accepts 3, 7, 14 and 30 day lengths only", () => {
-    for (const d of [3, 7, 14, 30]) {
+  it("accepts the preset lengths and any whole number of days up to 10 years", () => {
+    for (const d of [1, 3, 7, 14, 30, 90, 365, 3650]) {
       expect(createReadingPortion({ book: "John", startChapter: 1, endChapter: 2, lengthDays: d }).ok).toBe(true);
     }
-    for (const d of [0, 1, 5, 31, 90]) {
+    for (const d of [0, -1, 1.5, 3651]) {
       expect(createReadingPortion({ book: "John", startChapter: 1, endChapter: 2, lengthDays: d }).ok).toBe(false);
     }
+  });
+
+  it("turns a custom number and unit into days", () => {
+    expect(customLengthDays(1, "years")).toEqual({ ok: true, value: 365 });
+    expect(customLengthDays(10, "years")).toEqual({ ok: true, value: 3650 });
+    expect(customLengthDays(11, "years").ok).toBe(false);
+    expect(customLengthDays(7, "hours")).toEqual({ ok: true, value: 1 });
+    expect(customLengthDays(25, "hours")).toEqual({ ok: true, value: 2 });
+    expect(customLengthDays(2, "weeks")).toEqual({ ok: true, value: 14 });
+    expect(customLengthDays(3, "months")).toEqual({ ok: true, value: 90 });
+    expect(customLengthDays(0, "days").ok).toBe(false);
+    expect(customLengthDays(-2, "weeks").ok).toBe(false);
+    expect(customLengthDays(1.5, "days").ok).toBe(false);
   });
 
   it("checks the chapter range against the book", () => {
@@ -103,7 +117,7 @@ describe("shared reading: partner pairing", () => {
     const paired = acceptInvite(base, "b");
     if (!paired.ok) throw new Error("accept should work");
     expect(advancePairing(paired.value).ok).toBe(false);
-    const bad = { ...portion(), lengthDays: 5 as 3 };
+    const bad = { ...portion(), lengthDays: 0 };
     expect(advancePairing(paired.value, bad).ok).toBe(false);
   });
 

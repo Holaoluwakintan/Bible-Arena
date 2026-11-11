@@ -2,8 +2,12 @@
 // Every screen that uses it sits behind FEATURE_FLAGS.sharedReading in domain/feature-flags.ts, which is OFF.
 // No network, no storage, no quiz code: the quiz and its KJV-exact checks are untouched.
 
-export const READING_LENGTH_DAYS = [3, 7, 14, 30] as const;
-export type ReadingLengthDays = (typeof READING_LENGTH_DAYS)[number];
+// Preset lengths on the pick screen. A custom length (a number and a unit) can be any whole number of days up to READING_MAX_DAYS.
+export const READING_LENGTH_DAYS = [1, 3, 7, 14, 30] as const;
+export type ReadingLengthDays = number;
+export const READING_MAX_DAYS = 3650; // 10 years
+export const READING_UNITS = ["hours", "days", "weeks", "months", "years"] as const;
+export type ReadingUnit = (typeof READING_UNITS)[number];
 
 // The default translation. The version field can hold other codes later (NLT, MSG, ...).
 export const DEFAULT_BIBLE_VERSION = "KJV";
@@ -94,6 +98,7 @@ export interface ReadingPortion {
   endChapter: number;
   lengthDays: ReadingLengthDays;
   version: string;
+  lengthLabel?: string; // how the length was typed, e.g. "1 year" or "7 hours"; shown on the progress screen
 }
 
 export type ReadingResult<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -129,9 +134,19 @@ export function portionError(p: ReadingPortion): string | null {
   if (!Number.isInteger(p.startChapter) || !Number.isInteger(p.endChapter)) return "chapters must be whole numbers";
   if (p.startChapter < 1 || p.endChapter > book.chapters) return `${p.book} has chapters 1 to ${book.chapters}`;
   if (p.endChapter < p.startChapter) return "the last chapter comes before the first";
-  if (!(READING_LENGTH_DAYS as readonly number[]).includes(p.lengthDays)) return "length must be 3, 7, 14 or 30 days";
+  if (!Number.isInteger(p.lengthDays) || p.lengthDays < 1 || p.lengthDays > READING_MAX_DAYS) return "length must be a whole number of days from 1 to 3650 (10 years)";
   if (!VERSION_CODE.test(p.version)) return "version code must be 2 to 8 capital letters or digits";
   return null;
+}
+
+// Turns a custom length (a number and a unit) into days. Hours under a day count as one day,
+// a month is 30 days and a year is 365. Returns an error for zero, negative, fractional or too-long input.
+export function customLengthDays(amount: number, unit: ReadingUnit): ReadingResult<number> {
+  if (!Number.isInteger(amount) || amount < 1) return { ok: false, error: "enter a whole number of 1 or more" };
+  if (!(READING_UNITS as readonly string[]).includes(unit)) return { ok: false, error: "pick hours, days, weeks, months or years" };
+  const days = unit === "hours" ? Math.ceil(amount / 24) : amount * { days: 1, weeks: 7, months: 30, years: 365 }[unit as "days" | "weeks" | "months" | "years"];
+  if (days > READING_MAX_DAYS) return { ok: false, error: "a custom length goes up to 10 years" };
+  return { ok: true, value: days };
 }
 
 // True when the portion's wording can be checked by the quiz (KJV today).
