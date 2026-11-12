@@ -375,3 +375,27 @@ body.cv2-on .cv2-home .tabbar a i svg{width:22px;height:22px}
 body.cv2-on .cvm-body{fill:#022569}
 body.cv2-on .cvm-sw{fill:#8FB7E0}
 body.cv2-on .cvm-word{color:#0B1F4B}
+
+/* Level icons (flat line icons, no emoji) */
+.lvl-ico{width:26px;height:26px;display:block;margin:0 auto 4px;color:#FFC300;flex:none}
+.tierpick .lvl-ico{margin:0}
+.chip .lvl-ico{width:16px;height:16px;display:inline-block;margin:0;vertical-align:-3px}
+body.cv2-on .lvl-ico{color:#0648C2}
+/* Onboarding on the Chever light look */
+body.cv2-on .cv2-onboard .field input{background:#fff;border:1.5px solid #DDE3EE;color:#0B1F4B;border-radius:14px;min-height:50px;font-size:17px;font-family:var(--sans)}
+body.cv2-on .cv2-onboard .field label,body.cv2-on .cv2-onboard .tiny.muted{color:#5B6478}
+body.cv2-on .cv2-onboard .tier{background:#fff;border:1.5px solid #DDE3EE;color:#0B1F4B;box-shadow:0 1px 4px rgba(11,31,75,.05)}
+body.cv2-on .cv2-onboard .tier b{color:#0B1F4B}
+body.cv2-on .cv2-onboard .tier small{color:#5B6478}
+body.cv2-on .cv2-onboard .tier.on{border-color:#FFC300;box-shadow:0 0 0 2px rgba(255,195,0,.35)}
+body.cv2-on .cv2-onboard .small.dim{color:#5B6478}
+body.cv2-on .cv2-onboard .card{background:#fff;color:#0B1F4B;border:1px solid #E3E8F2}
+body.cv2-on .cv2-onboard .card .gold{color:#0648C2}
+/* Fill-in-the-gap on the Chever light look: light word tiles, dark navy text, a gold selected blank */
+body.cv2-on .cv2-quiz .wchip{background:#FFF8E7;border:1.5px solid #E2C77A;color:#0B1F4B;box-shadow:0 1px 4px rgba(11,31,75,.06);font-weight:800}
+body.cv2-on .cv2-quiz .wchip.used{opacity:.35}
+body.cv2-on .cv2-quiz .blank{color:#0B1F4B;background:#FFF8E7;border:1.5px solid #E2C77A;border-radius:10px;padding:2px 10px;min-width:72px}
+body.cv2-on .cv2-quiz .blank.next{background:#fff;border:2px dashed #FFC300;animation:none}
+body.cv2-on .cv2-quiz .blank.filled{background:#FFC300;border-color:#FFC300;color:#0B1F4B}
+body.cv2-on .cv2-quiz .blank.ok{background:#EDF9F3;border-color:#1F9D5C;color:#0B1F4B}
+body.cv2-on .cv2-quiz .blank.bad{background:#FDF0F0;border-color:#D64545;color:#0B1F4B}

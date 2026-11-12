@@ -80,7 +80,13 @@ const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
 const app = $("#app");
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = (n) => Number(n || 0).toLocaleString("en-US");
-const TIER = { b: { name: "Believer", sub: "Warm-up", icon: "🕊️" }, s: { name: "Scholar", sub: "Deeper", icon: "📜" }, t: { name: "Theologian", sub: "Hardest", icon: "👑" } };
+// Level icons: flat line icons (no emoji), the same stroke style as the rest of the app's icons.
+const LVL_SVG = (d) => `<svg class="lvl-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const TIER = {
+  b: { name: "Believer", sub: "Warm-up", icon: LVL_SVG(`<path d="M16 7h.01"/><path d="M3.4 18H12a8 8 0 0 0 8-8V7a4 4 0 0 0-7.28-2.3L2 20"/><path d="m20 7 2 .5-2 .5"/><path d="M10 18v3"/><path d="M14 17.75V21"/><path d="M7 18a6 6 0 0 0 3.84-10.61"/>`) },
+  s: { name: "Scholar", sub: "Deeper", icon: LVL_SVG(`<path d="M7.5 19.5h9.5v-14H7.5a2.5 2.5 0 0 0-2.5 2.5v9a2.5 2.5 0 0 0 2.5 2.5z"/><path d="M5 5.5a2.5 2.5 0 0 0 0 5"/><path d="M10.5 9h4M10.5 12.5h4"/>`) },
+  t: { name: "Theologian", sub: "Hardest", icon: LVL_SVG(`<path d="M3.5 8.5l4.5 4L12 6l4 6.5 4.5-4-2 10h-13z"/><path d="M5.5 18.5h13"/>`) },
+};
 const MODES = {
   mixed: { name: "Mixed Arena", icon: "⚔️", desc: "A bit of everything" },
   arena: { name: "Arena Quiz", icon: "🏛️", desc: "People, places, numbers" },
@@ -333,9 +339,9 @@ function onboarding(after) {
       <div class="tiers" id="tiers">${["b", "s", "t"].map((k) => `<button class="tier ${S.tier === k ? "on" : ""}" data-t="${k}"><div style="font-size:22px">${TIER[k].icon}</div><b>${TIER[k].name}</b><small>${TIER[k].sub}</small></button>`).join("")}</div>
       <p class="small dim" style="margin:0">Theologian has more blanks, decoys and a faster clock. You can change it any time.</p>
     </div>
-    ${lx && lx.xp ? `<div class="card small">🎁 Welcome back! Your <b class="gold">${fmt(lx.xp)} XP</b> from the old Bible Arena comes with you.</div>` : ""}
+    ${lx && lx.xp ? `<div class="card small"><span class="lvl-ico" style="display:inline-block;vertical-align:-4px;margin-right:4px" aria-hidden="true">${LVL_SVG('<rect x="4" y="9" width="16" height="11" rx="1.5"/><path d="M3 9h18v3H3zM12 9v11"/><path d="M12 9c-1.5-3.5-5-4-5-1.5 0 1.4 2.4 1.5 5 1.5zM12 9c1.5-3.5 5-4 5-1.5 0 1.4-2.4 1.5-5 1.5z"/>')}</span>Welcome back! Your <b class="gold">${fmt(lx.xp)} XP</b> from the old Bible Arena comes with you.</div>` : ""}
     <button class="btn primary block" id="go">Enter the Arena</button>
-  </div>`);
+  </div>`, "cv2 cv2-onboard");
   $("#tiers").onclick = (e) => { const t = e.target.closest(".tier"); if (!t) return; S.tier = t.dataset.t; $$(".tier").forEach((x) => x.classList.toggle("on", x === t)); sfx.tap(); };
   $("#go").onclick = async () => {
     { const n = $("#nm").value.trim().slice(0, 40); if (badNm(n)) { $("#nm").focus(); return toast(KIND_NAME); } S.name = n || "Player"; }
@@ -883,7 +889,7 @@ function runRound(cfg) {
           const bi = blanks.indexOf(t.i);
           if (bi < 0) return esc(t.w);
           const f = fill[bi];
-          return `<button class="blank ${bi === nextEmpty ? "next" : ""}" data-b="${bi}">${f != null ? esc(chips[f].w) : "&nbsp;"}</button>`;
+          return `<button class="blank ${bi === nextEmpty ? "next" : ""} ${f != null ? "filled" : ""}" data-b="${bi}">${f != null ? esc(chips[f].w) : "&nbsp;"}</button>`;
         }).join("")}</div>`;
         ans.innerHTML = `<div class="chips">${chips.map((c, ci) => `<button class="wchip ${fill.indexOf(ci) >= 0 ? "used" : ""}" data-ci="${ci}">${esc(c.w)}</button>`).join("")}</div>
           <button class="btn primary block" id="chk" style="margin-top:14px" ${fill.indexOf(null) >= 0 ? "disabled" : ""}>Check ✓</button>`;
