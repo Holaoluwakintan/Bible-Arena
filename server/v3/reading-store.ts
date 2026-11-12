@@ -7,7 +7,7 @@
 // database handle, so the tests run against an in-memory database.
 import crypto from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
-import { createReadingPortion, dailySplit, KNOWN_BIBLE_VERSIONS, type ReadingPortion } from "../../domain/reading-plan";
+import { buildReadingPortion, dailyReadings, KNOWN_BIBLE_VERSIONS, type PortionInput, type ReadingPortion } from "../../domain/reading-plan";
 
 export const READING_MEMBER_CAP = 50;
 const CODE_ABC = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I, as in the church codes
@@ -29,6 +29,9 @@ export function ensureReadingTables(d: DatabaseSync): void {
       plan_id TEXT NOT NULL, open_id TEXT NOT NULL, day INTEGER NOT NULL, ticked_at INTEGER NOT NULL,
       PRIMARY KEY (plan_id, open_id, day));
     CREATE INDEX IF NOT EXISTS v3_reading_ticks_day ON v3_reading_ticks(plan_id, day);`);
+  // Plans made before the scope choice have no book list: add the column once, empty for a single-book plan.
+  const cols = d.prepare("PRAGMA table_info(v3_reading_plans)").all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === "scope_books")) d.exec("ALTER TABLE v3_reading_plans ADD COLUMN scope_books TEXT NOT NULL DEFAULT ''");
 }
 
 /** A display name a member chose (or "Reader"). Control characters and markup are dropped; the length is capped. */
@@ -37,7 +40,7 @@ export function cleanReaderName(v: unknown): string {
   return s || "Reader";
 }
 
-type PlanRow = { id: string; code: string; owner_open_id: string; book: string; start_chapter: number; end_chapter: number; length_days: number; length_label: string; version: string; created_at: number };
+type PlanRow = { id: string; code: string; owner_open_id: string; book: string; start_chapter: number; end_chapter: number; length_days: number; length_label: string; version: string; created_at: number; scope_books: string };
 type MemberRow = { open_id: string; plan_id: string; name: string; role: string; joined_at: number };
 
 function newCode(d: DatabaseSync): string {
@@ -60,20 +63,20 @@ function memberCount(d: DatabaseSync, planId: string): number {
 }
 
 /** Create a plan. The creator becomes its owner and its first member. A person is in one plan at a time. */
-export function createPlan(d: DatabaseSync, openId: string, input: { name?: unknown; book: unknown; startChapter: unknown; endChapter: unknown; lengthDays: unknown; version?: unknown; lengthLabel?: unknown }, now: number): ReadingResult<{ planId: string }> {
+export function createPlan(d: DatabaseSync, openId: string, input: PortionInput & { name?: unknown; lengthLabel?: unknown }, now: number): ReadingResult<{ planId: string }> {
   if (memberOf(d, openId)) return fail(409, "already_in_plan", "You are already in a reading plan. Finish or leave it before you start another.");
   const version = String(input.version ?? "KJV");
   if (!(KNOWN_BIBLE_VERSIONS as readonly string[]).includes(version)) return fail(400, "invalid", "Pick KJV, NLT or MSG.");
-  const made = createReadingPortion({ book: String(input.book ?? ""), startChapter: Number(input.startChapter), endChapter: Number(input.endChapter), lengthDays: Number(input.lengthDays), version });
+  const made = buildReadingPortion({ ...input, version });
   if (!made.ok) return fail(400, "invalid", made.error);
-  const label = String(input.lengthLabel ?? "").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 40);
+  const label = (String(input.lengthLabel ?? "").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 40)) || made.value.lengthLabel || "";
   const id = crypto.randomUUID();
   d.exec("BEGIN IMMEDIATE");
   try {
     const code = newCode(d);
     const p = made.value;
-    d.prepare("INSERT INTO v3_reading_plans (id, code, owner_open_id, book, start_chapter, end_chapter, length_days, length_label, version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .run(id, code, openId, p.book, p.startChapter, p.endChapter, p.lengthDays, label, p.version, now);
+    d.prepare("INSERT INTO v3_reading_plans (id, code, owner_open_id, book, start_chapter, end_chapter, length_days, length_label, version, created_at, scope_books) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(id, code, openId, p.book, p.startChapter, p.endChapter, p.lengthDays, label, p.version, now, p.books ? JSON.stringify(p.books) : "");
     d.prepare("INSERT INTO v3_reading_members (open_id, plan_id, name, role, joined_at) VALUES (?, ?, ?, 'owner', ?)").run(openId, id, cleanReaderName(input.name), now);
     d.exec("COMMIT");
   } catch (error) { d.exec("ROLLBACK"); throw error; }
@@ -120,7 +123,8 @@ function myTicks(d: DatabaseSync, planId: string, openId: string): number[] {
 }
 
 function portionOf(p: PlanRow): ReadingPortion {
-  return { book: p.book, startChapter: p.start_chapter, endChapter: p.end_chapter, lengthDays: p.length_days, version: p.version, lengthLabel: p.length_label || undefined };
+  const books = p.scope_books ? (JSON.parse(p.scope_books) as string[]) : undefined;
+  return { book: p.book, startChapter: p.start_chapter, endChapter: p.end_chapter, lengthDays: p.length_days, version: p.version, lengthLabel: p.length_label || undefined, ...(books ? { books } : {}) };
 }
 
 /** The plan a member is in, with the shared progress. Counts come straight from the member and tick rows. */
@@ -130,7 +134,7 @@ export function planViewFor(d: DatabaseSync, openId: string): { plan: null } | {
   const p = planById(d, m.plan_id);
   if (!p) return { plan: null };
   const portion = portionOf(p);
-  const split = dailySplit(portion);
+  const split = dailyReadings(portion);
   const members = d.prepare("SELECT open_id, name, role, joined_at FROM v3_reading_members WHERE plan_id = ? ORDER BY joined_at ASC, open_id ASC").all(p.id) as MemberRow[];
   const ticks = d.prepare("SELECT t.open_id, t.day, m.name FROM v3_reading_ticks t JOIN v3_reading_members m ON m.open_id = t.open_id WHERE t.plan_id = ? ORDER BY t.day, m.joined_at, t.open_id").all(p.id) as Array<{ open_id: string; day: number; name: string }>;
   const readersByDay = new Map<number, string[]>();
@@ -147,8 +151,8 @@ export function planViewFor(d: DatabaseSync, openId: string): { plan: null } | {
       id: p.id,
       code: p.code,
       isOwner: p.owner_open_id === openId,
-      portion: { book: portion.book, startChapter: portion.startChapter, endChapter: portion.endChapter, lengthDays: portion.lengthDays, version: portion.version, lengthLabel: portion.lengthLabel || undefined },
-      days: split.map((x) => ({ day: x.day, startChapter: x.startChapter, endChapter: x.endChapter, readers: readersByDay.get(x.day) || [], readCount: (readersByDay.get(x.day) || []).length })),
+      portion: { ...portionOf(p), lengthLabel: portion.lengthLabel || undefined },
+      days: split.map((x) => ({ day: x.day, startChapter: x.startChapter, endChapter: x.endChapter, ref: x.ref, readers: readersByDay.get(x.day) || [], readCount: (readersByDay.get(x.day) || []).length })),
       members: members.map((x) => ({ name: x.name, role: x.role, isYou: x.open_id === openId, daysRead: countByMember.get(x.open_id) || 0 })),
       memberCount: members.length,
       memberCap: READING_MEMBER_CAP,
