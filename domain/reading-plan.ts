@@ -99,6 +99,9 @@ export interface ReadingPortion {
   lengthDays: ReadingLengthDays;
   version: string;
   lengthLabel?: string; // how the length was typed, e.g. "1 year" or "7 hours"; shown on the progress screen
+  // Several books (or the New or Old Testament, or the whole Bible): the books in canonical order. Then book is a label
+  // ("New Testament", "Ruth, Esther and Job") and the chapters run 1 to the total across these books, in order.
+  books?: string[];
 }
 
 export type ReadingResult<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -129,14 +132,163 @@ export function createReadingPortion(input: {
 }
 
 export function portionError(p: ReadingPortion): string | null {
-  const book = findBook(p.book);
-  if (!book) return "unknown book";
-  if (!Number.isInteger(p.startChapter) || !Number.isInteger(p.endChapter)) return "chapters must be whole numbers";
-  if (p.startChapter < 1 || p.endChapter > book.chapters) return `${p.book} has chapters 1 to ${book.chapters}`;
-  if (p.endChapter < p.startChapter) return "the last chapter comes before the first";
+  if (p.books !== undefined) {
+    if (!Array.isArray(p.books) || p.books.length === 0) return "pick at least one book";
+    let total = 0;
+    for (const name of p.books) {
+      const b = findBook(name);
+      if (!b) return `unknown book: ${name}`;
+      total += b.chapters;
+    }
+    if (p.startChapter !== 1 || p.endChapter !== total) return "the chapters do not match the books picked";
+  } else {
+    const book = findBook(p.book);
+    if (!book) return "unknown book";
+    if (!Number.isInteger(p.startChapter) || !Number.isInteger(p.endChapter)) return "chapters must be whole numbers";
+    if (p.startChapter < 1 || p.endChapter > book.chapters) return `${p.book} has chapters 1 to ${book.chapters}`;
+    if (p.endChapter < p.startChapter) return "the last chapter comes before the first";
+  }
   if (!Number.isInteger(p.lengthDays) || p.lengthDays < 1 || p.lengthDays > READING_MAX_DAYS) return "length must be a whole number of days from 1 to 3650 (10 years)";
   if (!VERSION_CODE.test(p.version)) return "version code must be 2 to 8 capital letters or digits";
   return null;
+}
+
+// ---- Scope: which books a plan covers ----
+// One book (with its chapter range), several chosen books, the New Testament, the Old Testament, or the whole Bible.
+// Several books, a testament or the whole Bible is one run of chapters: the days are cut from that run, in canonical order.
+
+export const READING_SCOPES = ["book", "books", "nt", "ot", "bible"] as const;
+export type ReadingScope = (typeof READING_SCOPES)[number];
+
+const OT_BOOKS: readonly BibleBook[] = BIBLE_BOOKS.slice(0, 39);
+const NT_BOOKS: readonly BibleBook[] = BIBLE_BOOKS.slice(39);
+
+export function chaptersIn(books: readonly BibleBook[]): number {
+  return books.reduce((n, b) => n + b.chapters, 0);
+}
+
+// The books a multi-book scope covers, in canonical order. "books" takes the names the person picked (any order, no repeats).
+export function scopeBooks(scope: Exclude<ReadingScope, "book">, names?: unknown): ReadingResult<BibleBook[]> {
+  if (scope === "bible") return { ok: true, value: BIBLE_BOOKS.slice() };
+  if (scope === "ot") return { ok: true, value: OT_BOOKS.slice() };
+  if (scope === "nt") return { ok: true, value: NT_BOOKS.slice() };
+  if (!Array.isArray(names) || names.length === 0) return { ok: false, error: "pick at least one book" };
+  const wanted = new Set(names.map((n) => String(n)));
+  for (const n of wanted) if (!findBook(n)) return { ok: false, error: `unknown book: ${n}` };
+  return { ok: true, value: BIBLE_BOOKS.filter((b) => wanted.has(b.name)) };
+}
+
+// The label a multi-book plan shows in place of a book name.
+export function scopeLabel(scope: Exclude<ReadingScope, "book">, books: readonly BibleBook[]): string {
+  if (scope === "nt") return "New Testament";
+  if (scope === "ot") return "Old Testament";
+  if (scope === "bible") return "The whole Bible";
+  if (books.length === 1) return books[0].name;
+  if (books.length <= 3) return books.map((b) => b.name).join(", ").replace(/, ([^,]+)$/, " and $1");
+  return `${books.length} books`;
+}
+
+// Days from chapters and a pace: ceil(chapters / chapters a day). The pace is a whole number of chapters, 1 or more.
+export function daysForPace(chapters: number, chaptersPerDay: unknown): ReadingResult<number> {
+  const pace = typeof chaptersPerDay === "string" && chaptersPerDay.trim() !== "" ? Number(chaptersPerDay) : chaptersPerDay;
+  if (typeof pace !== "number" || !Number.isInteger(pace) || pace < 1) return { ok: false, error: "enter a whole number of chapters a day, 1 or more" };
+  if (!Number.isInteger(chapters) || chapters < 1) return { ok: false, error: "the plan needs at least one chapter" };
+  const days = Math.ceil(chapters / pace);
+  if (days > READING_MAX_DAYS) return { ok: false, error: "at this pace the plan runs past 10 years, so read more chapters a day" };
+  return { ok: true, value: days };
+}
+
+export interface PortionInput {
+  scope?: unknown;          // "book" (the default), "books", "nt", "ot" or "bible"
+  book?: unknown;           // scope "book"
+  startChapter?: unknown;   // scope "book"
+  endChapter?: unknown;     // scope "book"
+  books?: unknown;          // scope "books": the names picked
+  lengthDays?: unknown;     // the days, when no pace is given
+  chaptersPerDay?: unknown; // a pace: when given, the days are the chapters ÷ this, rounded up
+  version?: unknown;
+}
+
+// Builds a plan's portion from any scope. Single-book plans come out exactly as createReadingPortion makes them.
+export function buildReadingPortion(input: PortionInput): ReadingResult<ReadingPortion> {
+  const scope = input.scope === undefined || input.scope === null || input.scope === "" ? "book" : String(input.scope);
+  if (!(READING_SCOPES as readonly string[]).includes(scope)) return { ok: false, error: "pick one book, several books, the New Testament, the Old Testament or the whole Bible" };
+  const version = input.version === undefined ? DEFAULT_BIBLE_VERSION : String(input.version);
+  const paced = input.chaptersPerDay !== undefined && input.chaptersPerDay !== null && input.chaptersPerDay !== "";
+  let portion: ReadingPortion;
+  if (scope === "book") {
+    const book = String(input.book ?? "");
+    const startChapter = Number(input.startChapter);
+    const endChapter = Number(input.endChapter);
+    let lengthDays = Number(input.lengthDays);
+    let lengthLabel: string | undefined;
+    if (paced) {
+      const chapters = endChapter - startChapter + 1;
+      const days = Number.isInteger(chapters) && chapters > 0 ? daysForPace(chapters, input.chaptersPerDay) : null;
+      if (days && !days.ok) return days;
+      if (days && days.ok) { lengthDays = days.value; lengthLabel = paceLabel(Number(input.chaptersPerDay)); }
+    }
+    portion = { book, startChapter, endChapter, lengthDays, version, ...(lengthLabel ? { lengthLabel } : {}) };
+  } else {
+    const picked = scopeBooks(scope as Exclude<ReadingScope, "book">, input.books);
+    if (!picked.ok) return picked;
+    const books = picked.value;
+    const total = chaptersIn(books);
+    let lengthDays = Number(input.lengthDays);
+    let lengthLabel: string | undefined;
+    if (paced) {
+      const days = daysForPace(total, input.chaptersPerDay);
+      if (!days.ok) return days;
+      lengthDays = days.value;
+      lengthLabel = paceLabel(Number(input.chaptersPerDay));
+    }
+    portion = {
+      book: scopeLabel(scope as Exclude<ReadingScope, "book">, books),
+      startChapter: 1,
+      endChapter: total,
+      lengthDays,
+      version,
+      books: books.map((b) => b.name),
+      ...(lengthLabel ? { lengthLabel } : {}),
+    };
+  }
+  const error = portionError(portion);
+  return error ? { ok: false, error } : { ok: true, value: portion };
+}
+
+function paceLabel(chaptersPerDay: number): string {
+  return `${chaptersPerDay} chapter${chaptersPerDay === 1 ? "" : "s"} a day`;
+}
+
+// The chapter at position n (1-based) of the plan's run of chapters: for a multi-book plan, the nth chapter across its books.
+export function chapterAt(p: ReadingPortion, n: number): { book: string; chapter: number } {
+  if (p.books === undefined) return { book: p.book, chapter: n };
+  let left = n;
+  const list = BIBLE_BOOKS.filter((b) => (p.books as string[]).includes(b.name));
+  for (const b of list) {
+    if (left <= b.chapters) return { book: b.name, chapter: left };
+    left -= b.chapters;
+  }
+  const last = list[list.length - 1];
+  return { book: last.name, chapter: last.chapters };
+}
+
+// How a run of chapters reads: "Matthew 1–7", or across books "Genesis 50 – Exodus 2". Empty for a catch-up day.
+export function refFor(p: ReadingPortion, start: number, end: number): string {
+  if (end < start) return "";
+  const a = chapterAt(p, start);
+  const b = chapterAt(p, end);
+  if (a.book === b.book) return a.chapter === b.chapter ? `${a.book} ${a.chapter}` : `${a.book} ${a.chapter}–${b.chapter}`;
+  return `${a.book} ${a.chapter} – ${b.book} ${b.chapter}`;
+}
+
+export interface DayPlan extends DayReading {
+  ref: string; // the day's reading as a person reads it
+}
+
+// The daily split with each day's reading written out.
+export function dailyReadings(p: ReadingPortion): DayPlan[] {
+  return dailySplit(p).map((d) => ({ ...d, ref: refFor(p, d.startChapter, d.endChapter) }));
 }
 
 // Turns a custom length (a number and a unit) into days. Hours under a day count as one day,

@@ -15,6 +15,9 @@
     ".br-screen input,.br-screen select{display:block;width:100%;box-sizing:border-box;margin-top:6px;padding:10px;border-radius:10px;border:1px solid #3a4a6b;background:#0d1730;color:inherit;font:inherit}" +
     ".br-screen button{margin:12px 0 4px;padding:12px 18px;border-radius:12px;border:0;background:#c9a54a;color:#070C1A;font:inherit;font-weight:700;cursor:pointer}" +
     ".br-lens{display:flex;gap:8px;flex-wrap:wrap}.br-lens button{margin:8px 0}" +
+    "[hidden]{display:none!important}.br-books{max-height:14rem;overflow:auto;border:1px solid #C9D3E6;border-radius:10px;padding:6px 10px;display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;margin:6px 0}" +
+    ".br-screen label.br-bk{display:flex!important;flex-direction:row!important;align-items:center;gap:8px;font-size:15px;color:#0B1F4B;margin:0}" +
+    ".br-bk input[type=checkbox]{width:18px!important;height:18px!important;margin:0!important;flex:none;padding:0}" +
     ".br-lens button[aria-pressed=true]{outline:2px solid #c9a54a}" +
     ".br-code{font-size:32px;letter-spacing:.2em;font-weight:800;margin:12px 0}" +
     ".br-small{opacity:.7;font-size:14px}" +
@@ -63,6 +66,8 @@
   var BOOKS = "Genesis 50;Exodus 40;Leviticus 27;Numbers 36;Deuteronomy 34;Joshua 24;Judges 21;Ruth 4;1 Samuel 31;2 Samuel 24;1 Kings 22;2 Kings 25;1 Chronicles 29;2 Chronicles 36;Ezra 10;Nehemiah 13;Esther 10;Job 42;Psalms 150;Proverbs 31;Ecclesiastes 12;Song of Solomon 8;Isaiah 66;Jeremiah 52;Lamentations 5;Ezekiel 48;Daniel 12;Hosea 14;Joel 3;Amos 9;Obadiah 1;Jonah 4;Micah 7;Nahum 3;Habakkuk 3;Zephaniah 3;Haggai 2;Zechariah 14;Malachi 4;Matthew 28;Mark 16;Luke 24;John 21;Acts 28;Romans 16;1 Corinthians 16;2 Corinthians 13;Galatians 6;Ephesians 6;Philippians 4;Colossians 4;1 Thessalonians 5;2 Thessalonians 3;1 Timothy 6;2 Timothy 4;Titus 3;Philemon 1;Hebrews 13;James 5;1 Peter 5;2 Peter 3;1 John 5;2 John 1;3 John 1;Jude 1;Revelation 22"
     .split(";").map(function (s) { var m = s.match(/^(.*) (\d+)$/); return { name: m[1], chapters: Number(m[2]) }; });
   var MEMBER_CAP = 50;
+  var NT_FROM = 39; // BOOKS[0..38] are the Old Testament, the rest the New
+  var SCOPES = [{ code: "book", label: "One book" }, { code: "books", label: "Several books" }, { code: "nt", label: "New Testament" }, { code: "ot", label: "Old Testament" }, { code: "bible", label: "Whole Bible" }];
 
   // Icons are inline SVG, no emoji. Same set as before.
   var ICON = {
@@ -77,7 +82,21 @@
     });
   }
   function bookNamed(n) { for (var i = 0; i < BOOKS.length; i++) if (BOOKS[i].name === n) return BOOKS[i]; return null; }
-  function refOf(p) { return p.book + " " + (p.startChapter === p.endChapter ? p.startChapter : p.startChapter + "–" + p.endChapter); }
+  function refOf(p) {
+    if (p.books || p.names) return p.book; // several books, a testament or the whole Bible: the label
+    return p.book + " " + (p.startChapter === p.endChapter ? p.startChapter : p.startChapter + "–" + p.endChapter);
+  }
+  // The run of chapters a scope covers, in Bible order. Several books, a testament or the whole Bible run 1 to the total.
+  function scopePortion(d) {
+    if (d.scope === "book") return { book: d.book, startChapter: d.startChapter, endChapter: d.endChapter, names: null };
+    var list = d.scope === "nt" ? BOOKS.slice(NT_FROM) : d.scope === "ot" ? BOOKS.slice(0, NT_FROM) : d.scope === "bible" ? BOOKS.slice()
+      : BOOKS.filter(function (b) { return d.booksChosen.indexOf(b.name) >= 0; });
+    var names = list.map(function (b) { return b.name; });
+    var total = list.reduce(function (n, b) { return n + b.chapters; }, 0);
+    var label = d.scope === "nt" ? "New Testament" : d.scope === "ot" ? "Old Testament" : d.scope === "bible" ? "The whole Bible"
+      : names.length === 1 ? names[0] : names.length <= 3 ? names.slice(0, -1).join(", ") + " and " + names[names.length - 1] : names.length + " books";
+    return { book: names.length ? label : "", startChapter: 1, endChapter: total, names: names };
+  }
 
   // Same rule as dailySplit in domain/reading-plan.ts (earlier days take the extra chapters). The server uses the same rule.
   function dailySplit(p) {
@@ -92,11 +111,15 @@
   }
   // Same checks as portionError in domain/reading-plan.ts.
   function portionError(p) {
-    var b = bookNamed(p.book);
-    if (!b) return "Pick a book.";
-    if (!Number.isInteger(p.startChapter) || !Number.isInteger(p.endChapter)) return "Chapters must be whole numbers.";
-    if (p.startChapter < 1 || p.endChapter > b.chapters) return p.book + " has chapters 1 to " + b.chapters + ".";
-    if (p.endChapter < p.startChapter) return "The last chapter comes before the first.";
+    if (p.names) {
+      if (p.names.length === 0) return "Pick at least one book.";
+    } else {
+      var b = bookNamed(p.book);
+      if (!b) return "Pick a book.";
+      if (!Number.isInteger(p.startChapter) || !Number.isInteger(p.endChapter)) return "Chapters must be whole numbers.";
+      if (p.startChapter < 1 || p.endChapter > b.chapters) return p.book + " has chapters 1 to " + b.chapters + ".";
+      if (p.endChapter < p.startChapter) return "The last chapter comes before the first.";
+    }
     if (!Number.isInteger(p.lengthDays) || p.lengthDays < 1 || p.lengthDays > MAX_DAYS) return "Length must be a whole number of days, 1 to 3650 (10 years).";
     return null;
   }
@@ -135,7 +158,8 @@
   function mount(el, opts) {
     if (!el) return;
     opts = opts || {};
-    var draft = { book: "Matthew", startChapter: 1, endChapter: 7, lengthDays: 7, custom: false, customAmount: "", customUnit: "weeks", version: "KJV", name: "" };
+    var draft = { book: "Matthew", startChapter: 1, endChapter: 7, lengthDays: 7, custom: false, customAmount: "", customUnit: "weeks", version: "KJV", name: "",
+      scope: "book", booksChosen: [], pace: false, paceAmount: "" };
     var notice = "";
     var view = null;        // the server's plan view for this person, or null when they are in no plan
     var loaded = false;     // false until the first read comes back
@@ -171,9 +195,10 @@
 
     function lensHTML() {
       var lens = LENGTHS.map(function (n) {
-        return '<button type="button" data-act="len" data-len="' + n + '" aria-pressed="' + (!draft.custom && n === draft.lengthDays) + '">' + n + (n === 1 ? " day" : " days") + "</button>";
+        return '<button type="button" data-act="len" data-len="' + n + '" aria-pressed="' + (!draft.custom && !draft.pace && n === draft.lengthDays) + '">' + n + (n === 1 ? " day" : " days") + "</button>";
       }).join("") +
-        '<button type="button" data-act="custom" aria-pressed="' + draft.custom + '">Custom</button>';
+        '<button type="button" data-act="custom" aria-pressed="' + draft.custom + '">Custom</button>' +
+        '<button type="button" data-act="pace" aria-pressed="' + draft.pace + '">Chapters a day</button>';
       return lens;
     }
 
@@ -197,14 +222,30 @@
             return '<option value="' + u + '"' + (u === draft.customUnit ? " selected" : "") + ">" + u + "</option>";
           }).join("") + "</select></label></div>"
         : "";
+      var paceRow = draft.pace
+        ? '<div class="br-row"><label>Chapters a day<input id="br-pace-n" type="number" min="1" step="1" inputmode="numeric" value="' + esc(draft.paceAmount) + '"></label></div>'
+        : "";
       var vers = VERSIONS.map(function (v) {
         return '<option value="' + v.code + '"' + (v.code === draft.version ? " selected" : "") + ">" + v.code + (v.quiz ? "" : " (no duel yet)") + "</option>";
       }).join("");
+      var scopeOpts = SCOPES.map(function (s2) {
+        return '<option value="' + s2.code + '"' + (s2.code === draft.scope ? " selected" : "") + ">" + esc(s2.label) + "</option>";
+      }).join("");
+      var bookChecks = BOOKS.map(function (b) {
+        return '<label class="br-bk"><input type="checkbox" value="' + esc(b.name) + '"' + (draft.booksChosen.indexOf(b.name) >= 0 ? " checked" : "") + "> " + esc(b.name) + "</label>";
+      }).join("");
       return '<h2>Pick a portion</h2>' +
-        '<label>Book<select id="br-book">' + bookOpts + "</select></label>" +
-        '<div class="br-row"><label>From chapter<input id="br-from" type="number" min="1" value="' + draft.startChapter + '"></label>' +
-        '<label>To chapter<input id="br-to" type="number" min="1" value="' + draft.endChapter + '"></label></div>' +
-        '<div class="br-lens" role="group" aria-label="Length">' + lensHTML() + "</div>" + customRow +
+        '<label>Scope<select id="br-scope">' + scopeOpts + "</select></label>" +
+        '<div id="br-sec-book"' + (draft.scope === "book" ? "" : " hidden") + ">" +
+          '<label>Book<select id="br-book">' + bookOpts + "</select></label>" +
+          '<div class="br-row"><label>From chapter<input id="br-from" type="number" min="1" value="' + draft.startChapter + '"></label>' +
+          '<label>To chapter<input id="br-to" type="number" min="1" value="' + draft.endChapter + '"></label></div>' +
+        "</div>" +
+        '<div id="br-sec-books"' + (draft.scope === "books" ? "" : " hidden") + ">" +
+          '<p class="br-small">Tick the books. They are read in Bible order.</p>' +
+          '<div id="br-books" class="br-books">' + bookChecks + "</div>" +
+        "</div>" +
+        '<div class="br-lens" role="group" aria-label="Length">' + lensHTML() + "</div>" + customRow + paceRow +
         '<label>Version<select id="br-version">' + vers + "</select></label>" +
         '<p class="br-summary" id="br-summary"></p>' +
         '<button type="button" data-act="choose">Create this plan</button>' +
@@ -212,10 +253,10 @@
     }
 
     function progressHTML() {
-      var p = view.portion, days = dailySplit(p), ticks = myDone(), n = ticks.length;
+      var p = view.portion, days = view.days, ticks = myDone(), n = ticks.length;
       var today = firstOpenDay(days, ticks), td = days[today];
       var chapters = td.endChapter >= td.startChapter ? td.endChapter - td.startChapter + 1 : 0;
-      var todayRef = chapters ? p.book + " " + (td.startChapter === td.endChapter ? td.startChapter : td.startChapter + "–" + td.endChapter) : "Catch-up day";
+      var todayRef = chapters ? td.ref : "Catch-up day";
       var todayMeta = chapters ? chapters + (chapters === 1 ? " chapter" : " chapters") : "No new chapters today";
       var members = view.memberCount;
       var todayReaders = (view.days[today] || {}).readCount || 0;
@@ -223,7 +264,7 @@
       var from = Math.max(0, Math.min(today - 3, days.length - 60)), to = Math.min(days.length, from + 60);
       var rows = days.slice(from, to).map(function (d, k) {
         var i = from + k;
-        var txt = d.endChapter >= d.startChapter ? p.book + " " + (d.startChapter === d.endChapter ? d.startChapter : d.startChapter + "–" + d.endChapter) : "Catch-up day";
+        var txt = d.endChapter >= d.startChapter ? d.ref : "Catch-up day";
         var readers = (view.days[i] || {}).readers || [];
         var mine = ticks.indexOf(d.day) >= 0;
         return '<li class="' + (mine ? "br-done" : "") + '">Day ' + d.day + ": " + esc(txt) +
@@ -273,24 +314,36 @@
       var el2 = document.getElementById("br-summary");
       if (!el2) return;
       var p = readDraft();
+      var sb = document.getElementById("br-sec-book"), sm = document.getElementById("br-sec-books");
+      if (sb) sb.hidden = draft.scope !== "book";
+      if (sm) sm.hidden = draft.scope !== "books";
       var err = lengthFromDraft().error || portionError(p);
       if (err) { el2.textContent = err; return; }
-      el2.textContent = refOf(p) + ": " + perDayText(p) + ", " + lengthLabelOf(p) + ", " + p.version + "." +
+      el2.textContent = refOf(p) + ": " + (p.chaptersPerDay ? p.lengthDays + (p.lengthDays === 1 ? " day" : " days") : perDayText(p)) + ", " + lengthLabelOf(p) + ", " + p.version + "." +
         (dailySplit(p).some(function (d) { return d.endChapter < d.startChapter; }) ? " Days after the last chapter are catch-up days." : "");
     }
 
     // The length as the person typed it, or the preset. Returns days, a label and an error if any.
     function lengthFromDraft() {
-      if (!draft.custom) return { days: draft.lengthDays, label: draft.lengthDays + (draft.lengthDays === 1 ? " day" : " days"), error: null };
+      if (draft.pace) {
+        var chapters = scopePortion(draft).endChapter - scopePortion(draft).startChapter + 1;
+        var raw0 = String(draft.paceAmount == null ? "" : draft.paceAmount).trim();
+        if (!/^\d+$/.test(raw0) || Number(raw0) < 1) return { days: 0, label: "", pace: 0, error: "Enter a whole number of chapters a day, 1 or more." };
+        var k = Number(raw0), days0 = Math.ceil(chapters / k);
+        if (!(chapters >= 1)) return { days: 0, label: "", pace: k, error: "Pick the chapters first." };
+        if (days0 > MAX_DAYS) return { days: days0, label: "", pace: k, error: "At this pace the plan runs past 10 years, so read more chapters a day." };
+        return { days: days0, label: k + (k === 1 ? " chapter" : " chapters") + " a day", pace: k, error: null };
+      }
+      if (!draft.custom) return { days: draft.lengthDays, label: draft.lengthDays + (draft.lengthDays === 1 ? " day" : " days"), pace: null, error: null };
       var raw = String(draft.customAmount == null ? "" : draft.customAmount).trim();
-      if (!/^\d+$/.test(raw) || Number(raw) < 1) return { days: 0, label: "", error: "Enter a whole number of 1 or more for the length." };
+      if (!/^\d+$/.test(raw) || Number(raw) < 1) return { days: 0, label: "", pace: null, error: "Enter a whole number of 1 or more for the length." };
       var n = Number(raw), u = draft.customUnit;
-      if (UNITS.indexOf(u) < 0) return { days: 0, label: "", error: "Pick hours, days, weeks, months or years." };
+      if (UNITS.indexOf(u) < 0) return { days: 0, label: "", pace: null, error: "Pick hours, days, weeks, months or years." };
       var days = u === "hours" ? Math.ceil(n / 24) : n * DAYS_PER_UNIT[u];
-      if (days > MAX_DAYS) return { days: days, label: "", error: "A custom length goes up to 10 years." };
+      if (days > MAX_DAYS) return { days: days, label: "", pace: null, error: "A custom length goes up to 10 years." };
       var word = n === 1 ? u.replace(/s$/, "") : u;
       var note = u === "hours" || u === "months" || u === "years" ? " (" + days + (days === 1 ? " day" : " days") + ")" : "";
-      return { days: days, label: n + " " + word + note, error: null };
+      return { days: days, label: n + " " + word + note, pace: null, error: null };
     }
 
     function readDraft() {
@@ -303,9 +356,14 @@
         if (g("br-custom-n") !== null) draft.customAmount = g("br-custom-n");
         if (g("br-custom-unit") !== null) draft.customUnit = g("br-custom-unit");
       }
+      if (g("br-scope") !== null) draft.scope = g("br-scope");
+      if (g("br-pace-n") !== null) draft.paceAmount = g("br-pace-n");
+      if (document.getElementById("br-books")) draft.booksChosen = Array.prototype.map.call(document.querySelectorAll("#br-books input:checked"), function (x) { return x.value; });
       if (g("br-name") !== null) draft.name = g("br-name");
+      var sp = scopePortion(draft);
       var len = lengthFromDraft();
-      return { book: draft.book, startChapter: draft.startChapter, endChapter: draft.endChapter, lengthDays: len.days, lengthLabel: len.label || undefined, version: draft.version };
+      return { scope: draft.scope, book: sp.book, startChapter: sp.startChapter, endChapter: sp.endChapter, names: sp.names,
+        lengthDays: len.days, lengthLabel: len.label || undefined, chaptersPerDay: len.pace || undefined, version: draft.version };
     }
 
     function render() {
@@ -341,9 +399,10 @@
       if (!t || busy) return;
       var a = t.getAttribute("data-act");
       if (a === "len") {
-        readDraft(); draft.custom = false; draft.lengthDays = Number(t.getAttribute("data-len")); render(); summary(); return;
+        readDraft(); draft.custom = false; draft.pace = false; draft.lengthDays = Number(t.getAttribute("data-len")); render(); summary(); return;
       }
-      if (a === "custom") { readDraft(); draft.custom = true; render(); summary(); return; }
+      if (a === "custom") { readDraft(); draft.custom = true; draft.pace = false; render(); summary(); return; }
+      if (a === "pace") { readDraft(); draft.custom = false; draft.pace = true; render(); summary(); return; }
       if (a === "start") { readDraft(); starting = true; notice = ""; render(); summary(); return; }
       if (a === "join") {
         var code = String((document.getElementById("br-partner-code") || {}).value || "").trim().toUpperCase();
@@ -356,7 +415,7 @@
       if (a === "choose") {
         var p = readDraft(), err = lengthFromDraft().error || portionError(p);
         if (err) { notice = err; render(); summary(); return; }
-        act(call("POST", "/api/v3/reading/plans", { name: draft.name, book: p.book, startChapter: p.startChapter, endChapter: p.endChapter, lengthDays: p.lengthDays, lengthLabel: p.lengthLabel || "", version: p.version }));
+        act(call("POST", "/api/v3/reading/plans", { name: draft.name, scope: p.scope, book: p.book, startChapter: p.startChapter, endChapter: p.endChapter, books: p.names || undefined, lengthDays: p.lengthDays, chaptersPerDay: p.chaptersPerDay, lengthLabel: p.lengthLabel || "", version: p.version }));
         return;
       }
       if (a === "day") {
