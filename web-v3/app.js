@@ -361,7 +361,7 @@ async function route() {
   if (a === "reading") {
     // Shared reading (preview): only when the flag is on and the screens file loaded.
     if (!(window.BA_FLAGS && window.BA_FLAGS.sharedReading) || !window.BAReading) return home();
-    render('<div id="reading-root"></div>' + readingTabbar("home"), "cv2 cv2-reading");
+    render('<div id="reading-root"></div>' + readingTabbar("bible"), "cv2 cv2-reading");
     window.BAReading.mount(document.getElementById("reading-root"), {});
     return;
   }
