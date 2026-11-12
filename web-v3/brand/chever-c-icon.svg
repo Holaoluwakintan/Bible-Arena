@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Chever C">
+  <defs>
+    <linearGradient id="cvi" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7FB8FF"/>
+      <stop offset="1" stop-color="#2F80ED"/>
+    </linearGradient>
+  </defs>
+  <path d="M74.4 20.9 A38 38 0 1 0 74.4 79.1" fill="none" stroke="url(#cvi)" stroke-width="17"/>
+  <path d="M46.7 87.9 A38 38 0 0 1 17.1 69" fill="none" stroke="#FFC300" stroke-width="17"/>
+</svg>

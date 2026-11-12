@@ -235,6 +235,12 @@ function parseHash() {
   const [p, q] = h.split("?");
   return { parts: (p || "").split("/").filter(Boolean), q: new URLSearchParams(q || "") };
 }
+// ---------- Chever brand mark (C) and wordmark: one bar on every screen. Colours come from CSS (dark by default, navy on the Chever light look).
+const CVM_BODY = "M750.0 624.0 745.0 614.0 731.0 601.0 709.0 593.0 695.0 582.0 654.0 563.0 612.0 554.0 602.0 560.0 557.0 607.0 495.0 639.0 479.0 643.0 435.0 640.0 409.0 649.0 366.0 672.0 335.0 678.0 313.0 689.0 266.0 693.0 201.0 690.0 197.0 696.0 213.0 715.0 231.0 728.0 249.0 734.0 264.0 746.0 335.0 779.0 377.0 783.0 397.0 793.0 421.0 797.0 503.0 796.0 535.0 783.0 565.0 781.0 598.0 772.0 627.0 752.0 650.0 743.0 690.0 713.0 703.0 694.0 734.0 664.0 748.0 645.0ZM730.0 215.0 648.0 134.0 626.0 127.0 596.0 103.0 564.0 99.0 548.0 87.0 506.0 70.0 420.0 67.0 366.0 74.0 322.0 85.0 289.0 98.0 234.0 129.0 170.0 183.0 156.0 206.0 126.0 239.0 89.0 316.0 73.0 365.0 68.0 416.0 73.0 499.0 100.0 581.0 130.0 631.0 152.0 653.0 169.0 662.0 188.0 653.0 220.0 657.0 287.0 648.0 325.0 631.0 341.0 617.0 338.0 608.0 294.0 567.0 270.0 538.0 254.0 506.0 249.0 479.0 238.0 454.0 238.0 423.0 247.0 398.0 254.0 355.0 286.0 295.0 309.0 272.0 354.0 242.0 386.0 234.0 400.0 225.0 461.0 221.0 475.0 223.0 513.0 241.0 576.0 298.0 640.0 301.0 658.0 288.0 682.0 279.0 731.0 231.0Z";
+const CVM_SWOOSH = "M436.0 805.0 437.0 812.0 446.0 816.0 481.0 816.0 491.0 810.0 490.0 803.0 481.0 799.0 446.0 799.0ZM600.0 549.0 595.0 550.0 550.0 596.0 550.0 602.0 555.0 602.0 601.0 555.0ZM544.0 559.0 535.0 545.0 504.0 545.0 475.0 572.0 453.0 579.0 419.0 608.0 357.0 608.0 343.0 597.0 342.0 602.0 350.0 607.0 346.0 622.0 332.0 636.0 310.0 642.0 292.0 656.0 235.0 656.0 219.0 667.0 212.0 667.0 201.0 658.0 190.0 655.0 184.0 657.0 177.0 669.0 171.0 672.0 161.0 669.0 123.0 629.0 118.0 629.0 117.0 635.0 200.0 714.0 202.0 711.0 194.0 702.0 190.0 688.0 178.0 684.0 179.0 674.0 194.0 687.0 308.0 687.0 328.0 672.0 359.0 670.0 373.0 658.0 390.0 654.0 405.0 642.0 422.0 638.0 437.0 627.0 443.0 627.0 460.0 639.0 487.0 638.0 495.0 628.0 495.0 607.0 487.0 605.0 484.0 597.0 519.0 566.0 524.0 573.0 514.0 578.0 507.0 591.0 498.0 595.0 497.0 605.0 504.0 604.0 529.0 575.0 542.0 567.0ZM245.0 420.0 239.0 430.0 239.0 449.0 243.0 458.0 250.0 459.0 256.0 449.0 256.0 430.0 252.0 421.0ZM580.0 309.0 581.0 316.0 590.0 320.0 625.0 320.0 635.0 314.0 634.0 308.0 624.0 303.0 590.0 303.0ZM404.0 229.0 405.0 235.0 415.0 240.0 464.0 240.0 475.0 233.0 474.0 227.0 465.0 223.0 414.0 223.0ZM662.0 133.0 661.0 139.0 728.0 203.0 730.0 196.0 667.0 133.0Z";
+function brandBar() {
+  return `<div class="cvm-bar" role="img" aria-label="Chever"><svg class="cvm-mark" viewBox="0 0 832 864" aria-hidden="true" focusable="false"><path class="cvm-body" fill-rule="evenodd" d="${CVM_BODY}"/><path class="cvm-sw" d="${CVM_SWOOSH}"/></svg><span class="cvm-word">Chever</span></div>`;
+}
 function render(html, cls) {
   cleanup.forEach((f) => { try { f(); } catch (e) {} }); cleanup = [];
   voiceStop();
@@ -243,7 +249,7 @@ function render(html, cls) {
   // The tab bar lives outside the animated screen: a transformed ancestor would pin it mid-page.
   let tabs = "";
   html = html.replace(/<div class="tabbar">[\s\S]*?<\/nav><\/div>/, (m) => { tabs = m; return ""; });
-  app.innerHTML = `<div class="screen ${cls || ""}">${html}</div>`;
+  app.innerHTML = `${brandBar()}<div class="screen ${cls || ""}">${html}</div>`;
   let t = document.getElementById("tabs");
   if (!t) { t = document.createElement("div"); t.id = "tabs"; document.body.appendChild(t); }
   t.innerHTML = tabs;
@@ -291,7 +297,7 @@ async function route() {
   if (a === "reading") {
     // Shared reading (preview): only when the flag is on and the screens file loaded.
     if (!(window.BA_FLAGS && window.BA_FLAGS.sharedReading) || !window.BAReading) return home();
-    render('<div class="cv2-brand">Chever</div><div id="reading-root"></div>' + readingTabbar("home"), "cv2 cv2-reading");
+    render('<div id="reading-root"></div>' + readingTabbar("home"), "cv2 cv2-reading");
     window.BAReading.mount(document.getElementById("reading-root"), {});
     return;
   }
@@ -469,7 +475,7 @@ function homeGuideHTML() {
   }</section>` : "";
   const tab = (h, icon, label, k) => `<a href="${h}" class="${k === "home" ? "on" : ""}"><i>${homeIco(icon)}</i>${label}</a>`;
   return `<div class="gh">
-    <header class="gh-top"><div class="cv2-brand">Chever</div>
+    <header class="gh-top">
       <div class="gh-stats"><span class="gh-stat">${homeIco("flame")}<b>${p.streak || 0}</b> day streak</span><span class="gh-stat">${homeIco("target")}<b>${rate}</b> win rate</span></div></header>
     <section class="gh-intro"><h1>Know the Word. Challenge the world.</h1>
       <p>Bible quiz, and every answer comes with its verse. Play a round on your own, go head to head with people, or read the Bible together on a plan people join.</p></section>
