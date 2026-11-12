@@ -154,7 +154,7 @@ function lobby(s) {
 }
 function lobbyUpdate(s) { const pn = $("#pn"); if (pn) pn.textContent = s.n; }
 function intro(s) {
-  myPick = null; fbShown = "";
+  myPick = null; fbShown = ""; clearAnswerError();
   app.innerHTML = `${top(s)}<div class="center"><div class="tiny" style="color:var(--gold)">Question ${s.qi + 1} of ${s.qn}</div>
     <h1>Eyes on the screen</h1><p class="qmini">${esc(s.q ? s.q.q : "")}</p>
     <div class="bar" style="max-width:280px"><i id="ib" style="transform:scaleX(0)"></i></div><p class="muted small">Answers coming up…</p></div>`;
@@ -163,6 +163,7 @@ function intro(s) {
   requestAnimationFrame(step);
 }
 function question(s) {
+  if (S && $("#toast") && $("#toast").dataset.ansErr && $("#toast").dataset.ansErr !== String(s.qi)) clearAnswerError();
   const q = s.q || { o: [] };
   const ans = s.me && s.me.ans;
   shownAt = performance.now();
@@ -173,24 +174,49 @@ function question(s) {
   $$("#btns .ab").forEach((b) => (b.onclick = () => pick(+b.dataset.i, b)));
 }
 async function pick(i, el) {
+  // A repeat tap (the answer is already locked in, or on its way) is a silent no-op.
   if (myPick !== null || !S || S.phase !== "question") return;
   myPick = i;
   const ms = Math.round(performance.now() - shownAt), qi = S.qi;
   L.buzz(25);
   el.classList.add("pick"); $("#btns").classList.add("done");
-  let r = null;
+  let r = null, fail = "";
   for (let k = 0; k < 5 && !r; k++) {
-    try { r = await L.api("/lv/r/" + code + "/answer", { t: sess.token, qi, c: i, ms }, { timeout: 8000 }); }
+    try { r = await L.api("/lv/r/" + code + "/answer", { t: sess.token, qi, c: i, ms }, { timeout: 8000 }); fail = ""; }
     catch (e) {
-      if (e.status === 409) { toast(e.message); if (e.code === "closed") break; myPick = null; return; }
-      if (e.status && e.status < 500 && e.status !== 429) { toast(e.message); break; }
+      if (e.status === 409) {
+        // The server answered, so this is never a network problem. "stale" / "closed": the question has moved on
+        // (the reveal shows the outcome). Anything else (out, kicked, a bad pick) is said in the server's words.
+        if (e.code === "stale" || e.code === "closed") { fail = "closed"; break; }
+        if (e.code === "choice") { toast(e.message); myPick = null; el.classList.remove("pick"); const bt = $("#btns"); if (bt) bt.classList.remove("done"); return; }
+        toast(e.message); fail = "closed"; break;
+      }
+      if (e.status && e.status < 500 && e.status !== 429) { toast(e.message); fail = "closed"; break; }
+      fail = "net";
       await new Promise((res) => setTimeout(res, 500 * (k + 1)));
     }
   }
   if (!S || S.qi !== qi || S.phase !== "question") return;
-  if (!r) { toast("Your answer didn't reach the game. Check your data."); return; }
+  if (!r) {
+    // The live state may already show the answer counted (a slow reply that did arrive): then all is well.
+    const counted = S.me && S.me.ans;
+    if (counted) return feedback(S, counted);
+    if (fail === "net") {
+      // A real failure: say so once, and let the player tap again (a repeat that did count comes back as "already").
+      answerError("Your answer didn't reach the game. Check your data and tap again.", qi);
+      myPick = null; el.classList.remove("pick"); const bt = $("#btns"); if (bt) bt.classList.remove("done");
+    }
+    return;
+  }
+  clearAnswerError();
   feedback(S, r.correct === undefined ? { c: r.c } : { c: r.c, ok: r.correct, pts: r.pts, speed: r.speed, streak: r.streakBonus, right: r.a });
-  if (r.score !== undefined) { const p = $("#pts"); if (p) L.countUp(p, Math.max(0, r.score - (r.pts || 0)), r.score, 700); }
+  if (r.score !== undefined && !r.already) { const p = $("#pts"); if (p) L.countUp(p, Math.max(0, r.score - (r.pts || 0)), r.score, 700); }
+}
+// The "didn't reach" line belongs to one question: it is cleared on success and when the next question starts.
+function answerError(m, qi) { const t = $("#toast"); if (!t) return; toast(m, 6000); t.dataset.ansErr = String(qi); }
+function clearAnswerError() {
+  const t = $("#toast"); if (!t || !t.dataset.ansErr) return;
+  delete t.dataset.ansErr; clearTimeout(toast.t); t.classList.remove("on"); t.textContent = "";
 }
 function feedback(s, a) {
   const q = s.q || { o: [] };
@@ -403,7 +429,7 @@ function koLobby(s) {
   }));
 }
 function koIntro(s) {
-  myPick = null; fbShown = "";
+  myPick = null; fbShown = ""; clearAnswerError();
   const q = s.q || {};
   app.innerHTML = `${top(s)}<div class="center"><div class="tiny" style="color:var(--gold)">${koRoundLabel(s)} · Question ${s.ko.rq} of ${s.ko.rlen}</div>
     ${s.ko.rq === 1 ? `<h1>${s.ko.final ? "The final!" : s.ko.round === 1 ? "Here we go!" : "You made it through!"}</h1><p class="muted small" style="margin:0">${s.ko.left} still in${s.ko.final ? `. Most points in ${s.ko.rlen} questions wins.` : `. ${s.ko.rlen} questions, then the bottom half is out.`}</p>` : `<h1>Get ready</h1>`}
