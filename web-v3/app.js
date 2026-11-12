@@ -614,10 +614,10 @@ function gameScreen() {
   const ranked = duelV2();
   render(`<div class="gh">
     <section class="gh-intro"><h1>Game</h1><p>Play on your own, go head to head with people, or join a room.</p></section>
-    <section class="gh-sec"><h3>Solo</h3>${solo.map(soloRow).join("")}</section>
     <section class="gh-sec"><h3>Public games</h3>
       ${homeGuideRow("#/public", "live", "Public lobby", "No code, no password. Watch live games or play now with anyone online.", true)}
     </section>
+    <section class="gh-sec"><h3>Solo</h3>${solo.map(soloRow).join("")}</section>
     <section class="gh-sec"><h3>Multiplayer</h3>
       ${homeGuideRow("#/qm", "users", "Match with someone", "Get paired with someone playing now.")}
       ${ranked ? homeGuideRow("#/duels", "trophy", "Ranked and find match", "Find an opponent at your level.") : ""}
