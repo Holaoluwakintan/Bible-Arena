@@ -152,12 +152,19 @@ const TIER = {
   s: { name: "Scholar", sub: "Deeper", icon: LVL_SVG(`<path d="M7.5 19.5h9.5v-14H7.5a2.5 2.5 0 0 0-2.5 2.5v9a2.5 2.5 0 0 0 2.5 2.5z"/><path d="M5 5.5a2.5 2.5 0 0 0 0 5"/><path d="M10.5 9h4M10.5 12.5h4"/>`) },
   t: { name: "Theologian", sub: "Hardest", icon: LVL_SVG(`<path d="M3.5 8.5l4.5 4L12 6l4 6.5 4.5-4-2 10h-13z"/><path d="M5.5 18.5h13"/>`) },
 };
+// Mode tiles on the duel setup screen: flat filled icons in the palette (no emoji, no line pencil or person).
+const MODE_ICON = {
+  arena: FI_W('<path d="M3 9.5 12 4l9 5.5v2H3z"/><rect x="4.5" y="12.5" width="2.8" height="6.5"/><rect x="10.6" y="12.5" width="2.8" height="6.5"/><rect x="16.7" y="12.5" width="2.8" height="6.5"/><rect x="3" y="19.5" width="18" height="2"/>', true),
+  gap: FI_W('<path d="M4 20l1.2-4.6L15.6 4.9a2.2 2.2 0 0 1 3.1 3.1L8.3 18.5z"/><path d="M4 20l1.2-4.6 3.4 3.4z"/>', true),
+  who: FI_W('<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c.9-4 3.9-6.2 7.5-6.2s6.6 2.2 7.5 6.2z"/>', true),
+  myth: FI_W('<circle cx="12" cy="12" r="9"/><path d="M9.2 9.3a2.9 2.9 0 1 1 4.1 2.6c-.8.4-1.3 1-1.3 1.9" stroke-width="2.2"/><circle cx="12" cy="17.6" r="1.3" fill="currentColor" stroke="none"/>'),
+};
 const MODES = {
   mixed: { name: "Mixed Arena", icon: "⚔️", desc: "A bit of everything" },
-  arena: { name: "Arena Quiz", icon: "🏛️", desc: "People, places, numbers" },
-  gap: { name: "Fill in the Gap", icon: "✍️", desc: "Tap the missing words" },
-  who: { name: "Who Am I?", icon: "🎭", desc: "Fewer clues, more points" },
-  myth: { name: "Bible or Myth", icon: "🧐", desc: "Fact or church folklore?" },
+  arena: { name: "Arena Quiz", icon: MODE_ICON.arena, desc: "People, places, numbers" },
+  gap: { name: "Fill in the Gap", icon: MODE_ICON.gap, desc: "Tap the missing words" },
+  who: { name: "Who Am I?", icon: MODE_ICON.who, desc: "Fewer clues, more points" },
+  myth: { name: "Bible or Myth", icon: MODE_ICON.myth, desc: "Fact or church folklore?" },
   daily: { name: "Daily Challenge", icon: "☀️", desc: "10, 15 or 20, same for everyone" },
   sudden: { name: "Sudden Death", icon: "💀", desc: "One mistake ends it" },
 };
