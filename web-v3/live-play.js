@@ -311,7 +311,7 @@ function koBoxHTML(s) {
 }
 function koPubHTML(s) {
   const k = s.ko;
-  if (!k.isHost) return "";
+  if (!k.isHost || k.auto) return ""; // v3.13: a public Play now room is always public; the players decide when it starts
   return `<div class="card kopubrow"><div class="grow" style="text-align:left"><b>Show in Live now (public)</b><div class="small muted" id="kopubtxt">${k.pub ? "Everyone online can see this game and join." : "Private: only people with your link or code can join."}</div></div><button class="kosw ${k.pub ? "on" : ""}" id="kopub" aria-label="Show in Live now"></button></div>`;
 }
 function koBindPub() {
@@ -389,7 +389,7 @@ function koLobby(s) {
     ${koShareButtons()}
     ${koPubHTML(s)}
     <div class="card" style="width:100%;text-align:left"><div class="row3"><b><span id="kon">${k.left}</span> joined</b><span class="small muted">up to ${k.max}</span></div><div id="kolist" data-mode="lobby">${koList(s, { lobby: true })}</div></div>
-    ${k.isHost ? `<div class="card" style="width:100%"><div class="tiny muted">Questions per round</div><div class="perpick">${(k.choices || [5, 7, 10]).map((c) => `<button data-per="${c}" class="${c === k.per ? "on" : ""}">${c}</button>`).join("")}</div><div class="small muted" style="margin-top:6px">The final is ${k.finalLen} questions.</div></div>
+    ${k.isHost && !k.auto ? `<div class="card" style="width:100%"><div class="tiny muted">Questions per round</div><div class="perpick">${(k.choices || [5, 7, 10]).map((c) => `<button data-per="${c}" class="${c === k.per ? "on" : ""}">${c}</button>`).join("")}</div><div class="small muted" style="margin-top:6px">The final is ${k.finalLen} questions.</div></div>
       <button class="btn primary" id="kostart"></button>` : k.auto ? "" : `<div class="card" style="width:100%"><div class="tiny muted">Waiting for ${esc(host.name || "the host")} to start</div><div class="small muted" style="margin-top:6px">Keep this screen open. ${host.on === false ? `<a href="#" id="kotake">${esc(host.name || "The host")} left? Start it yourself</a>` : ""}</div></div>`}
     <div class="card small muted" style="width:100%;text-align:left">${LP_ICON.cross} <b style="color:var(--ivory)">How it works:</b> ${esc(k.rule)}</div>
     <div class="card small muted" style="width:100%;text-align:left"><b style="color:var(--ivory)">Be kind:</b> no bad language, bullying or asking for personal details. Tap any player to mute, block or report them.</div>

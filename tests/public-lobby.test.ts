@@ -141,5 +141,16 @@ describe("public lobby screens", () => {
     expect(emoji.test(ch)).toBe(false);
     const lobby = play.slice(play.indexOf("function koLobby"), play.indexOf("function koIntro"));
     expect(emoji.test(lobby)).toBe(false);
+    expect(lobby).toContain("k.isHost && !k.auto"); // no host-only Start button in a public room
+  });
+  it("in-game knockout screens and the voice bar carry no emoji", () => {
+    const ko = play.slice(play.indexOf("function koIntro"), play.indexOf("async function koPushAsk"));
+    expect(emoji.test(ko)).toBe(false);
+    const voice = fs.readFileSync("web-v3/voice.js", "utf8");
+    expect(emoji.test(voice)).toBe(false);
+  });
+  it("a host's Start in a public room only counts as their own Start now vote", () => {
+    const src = fs.readFileSync("server/v3/live.ts", "utf8");
+    expect(src).toContain('String(b.action) === "start" && room.ko.auto && room.phase === "lobby"');
   });
 });

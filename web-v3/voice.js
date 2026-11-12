@@ -8,6 +8,18 @@ const L = window.BALive;
 const V = (window.BAVoice = {});
 const PREF = "bal:voice";
 const esc = L.esc;
+// v3.13: flat icons in the palette, no emoji on game screens (Michael's rule)
+const VSVG = (d, fill) => `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1.1em;height:1.1em;vertical-align:-0.2em" fill="${fill ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const VI = {
+  mic: VSVG('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>'),
+  micOff: VSVG('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M4 4l16 16"/>'),
+  spk: VSVG('<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>'),
+  spkOff: VSVG('<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>'),
+  warn: VSVG('<path d="M12 4 21.5 20h-19z"/><path d="M12 10v4.5M12 17.2v.3"/>'),
+  block: VSVG('<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>'),
+  flag: VSVG('<path d="M5.5 21V4M5.5 4.5h11l-2 4 2 4h-11"/>'),
+};
+const face = (a) => (window.BAFace && BAFace.isFace && BAFace.isFace(a) ? BAFace.html(a, "1.6em") : esc(a || ""));
 const prefOn = () => { try { return localStorage.getItem(PREF) !== "off"; } catch (e) { return true; } };
 const setPref = (on) => { try { localStorage.setItem(PREF, on ? "on" : "off"); } catch (e) {} };
 const toast = (m) => { const t = document.getElementById("toast"); if (!t) return; t.textContent = m; t.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("on"), 3600); };
@@ -232,7 +244,7 @@ async function micToggle() {
       }
     }
     setMic(!micOn);
-    if (micOn) { try { if (!localStorage.getItem("bal:rules")) { localStorage.setItem("bal:rules", "1"); toast("Be kind 🙏 Tap anyone's bubble to mute, block or report them."); } } catch (e) {} }
+    if (micOn) { try { if (!localStorage.getItem("bal:rules")) { localStorage.setItem("bal:rules", "1"); toast("Be kind. Tap anyone's bubble to mute, block or report them."); } } catch (e) {} }
     if (L.buzz) L.buzz(12);
   } finally { micBusy = false; render(); }
 }
@@ -306,10 +318,10 @@ function chip(x, me) {
   const p = peers.get(x.id) || {};
   const mineMuted = !me && mutedByMe.has(x.id);
   const st = me ? "" : p.state === "fail" ? "fail" : p.state === "on" ? "" : "wait";
-  // badge: 🔇 muted for me · ⚠️ couldn't connect · … connecting · 🎙️ their mic is on
-  const badge = mineMuted ? "🔇" : st === "fail" ? "⚠️" : st === "wait" ? "…" : !x.muted ? "🎙️" : "";
+  // badge: muted for me · couldn't connect · … connecting · their mic is on
+  const badge = mineMuted ? VI.spkOff : st === "fail" ? VI.warn : st === "wait" ? "…" : !x.muted ? VI.mic : "";
   return `<button class="vchip ${mineMuted ? "mute " : ""}${st}${x.muted ? " micoff" : ""}" data-id="${esc(x.id)}" aria-label="${esc(x.name)}${me ? " (you)" : mineMuted ? ", muted for you. Tap for options" : ". Tap to mute, block or report"}">
-    <span class="va">${esc(x.avatar || "🙂")}</span>${badge ? `<span class="vb">${badge}</span>` : ""}<span class="vn">${me ? "You" : esc(x.name)}</span></button>`;
+    <span class="va">${face(x.avatar)}</span>${badge ? `<span class="vb">${badge}</span>` : ""}<span class="vn">${me ? "You" : esc(x.name)}</span></button>`;
 }
 function render() {
   let d = document.getElementById("vdock");
@@ -318,19 +330,19 @@ function render() {
   document.body.classList.add("vd-on");
   let h;
   const others = roster.filter((x) => x.id !== C.myId);
-  if (!supported) h = `<div class="vmsg">🔇 Voice chat needs Chrome on this phone.</div>`;
-  else if (!prefOn()) h = `<button class="vpill" data-v="on">🔈 Voice off · <b>turn on</b></button>${roster.length ? `<span class="vmsg">${roster.length} in voice</span>` : ""}`;
+  if (!supported) h = `<div class="vmsg">${VI.spkOff} Voice chat needs Chrome on this phone.</div>`;
+  else if (!prefOn()) h = `<button class="vpill" data-v="on">${VI.spk} Voice off · <b>turn on</b></button>${roster.length ? `<span class="vmsg">${roster.length} in voice</span>` : ""}`;
   else {
     const mcls = micDenied ? "denied" : micOn ? "on" : "";
     const mtxt = micDenied ? "Mic blocked" : micOn ? "Mic on" : joining ? "Joining…" : "Tap to talk";
     const meX = roster.find((x) => x.id === C.myId);
-    h = `<button id="vmic" class="vmic ${mcls}" aria-pressed="${micOn}" aria-label="${micOn ? "Mute your mic" : "Unmute your mic"}"><span class="vi">${micDenied ? "🚫" : micOn ? "🎙️" : "🎤"}</span><span class="vt">${mtxt}</span></button>
+    h = `<button id="vmic" class="vmic ${mcls}" aria-pressed="${micOn}" aria-label="${micOn ? "Mute your mic" : "Unmute your mic"}"><span class="vi">${micDenied ? VI.block : micOn ? VI.mic : VI.micOff}</span><span class="vt">${mtxt}</span></button>
       <div class="vchips">${banned ? `<span class="vmsg">Voice is off for you in this game (reports from other players). You can still play.</span>`
         : full && !inVoice ? `<span class="vmsg">Voice is full (${max}). You can still play.</span>`
         : !inVoice ? `<span class="vmsg">${joining ? "Connecting voice…" : "Voice not connected"}</span>`
         : (meX ? chip(meX, true) : "") + (others.length ? others.map((x) => chip(x, false)).join("") : `<span class="vmsg">No one else in voice yet</span>`)}</div>
-      ${needTap ? `<button class="vtapall" data-v="tap">🔊 Tap here to hear the others</button>` : ""}
-      <button class="vx" data-v="off" aria-label="Turn voice chat off">🔊<span>Voice</span></button>`;
+      ${needTap ? `<button class="vtapall" data-v="tap">${VI.spk} Tap here to hear the others</button>` : ""}
+      <button class="vx" data-v="off" aria-label="Turn voice chat off">${VI.spk}<span>Voice</span></button>`;
   }
   if (h !== lastHTML) { d.innerHTML = h; lastHTML = h; levels(); }
 }
@@ -390,10 +402,10 @@ V.sheet = function (x) {
   const inV = roster.some((r) => r.id === x.id);
   const s = document.createElement("div");
   s.id = "vsheet"; s.className = "vsheet"; s.setAttribute("role", "dialog"); s.setAttribute("aria-label", "Options for " + x.name);
-  const main = () => `<div class="vsh-card"><div class="vsh-who"><span class="va">${esc(x.avatar || "🙂")}</span><b>${esc(x.name)}</b></div>
-    ${inV ? `<button data-s="mute">${mutedByMe.has(x.id) ? "🔈 Unmute for me" : "🔇 Mute for me"}</button>` : ""}
-    <button data-s="block">🚫 Block<span>You won't hear each other in any game</span></button>
-    <button data-s="report">🚩 Report<span>Tell us about bad behaviour</span></button>
+  const main = () => `<div class="vsh-card"><div class="vsh-who"><span class="va">${face(x.avatar)}</span><b>${esc(x.name)}</b></div>
+    ${inV ? `<button data-s="mute">${mutedByMe.has(x.id) ? VI.spk + " Unmute for me" : VI.spkOff + " Mute for me"}</button>` : ""}
+    <button data-s="block">${VI.block} Block<span>You won't hear each other in any game</span></button>
+    <button data-s="report">${VI.flag} Report<span>Tell us about bad behaviour</span></button>
     <button data-s="x" class="vsh-cancel">Cancel</button></div>`;
   const rep = () => `<div class="vsh-card"><div class="vsh-who"><b>Report ${esc(x.name)}</b></div><div class="vsh-sub">What happened?</div>
     <div class="vsh-reasons">${REASONS.map(([k, t]) => `<label><input type="radio" name="vr" value="${k}"> ${t}</label>`).join("")}</div>

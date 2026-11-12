@@ -532,8 +532,9 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
     const now = Date.now();
     p.lastSeen = now;
     // v3.13 public lobby: anyone in an open public lobby picks Start now or Wait for more players (no host needed)
-    if (String(b.action) === "vote") {
-      const v = E.koVote(room, p.id, String(b.choice), now);
+    // (an older phone's "Start" in a public room counts as that player's Start now, so nobody can start it alone)
+    if (String(b.action) === "vote" || (String(b.action) === "start" && room.ko.auto && room.phase === "lobby")) {
+      const v = E.koVote(room, p.id, String(b.action) === "start" ? "go" : String(b.choice), now);
       if (!v.ok) return json(res, 400, { error: v.error });
       koAuto(room, now);
       touch(room); pushRoom(room, true);
