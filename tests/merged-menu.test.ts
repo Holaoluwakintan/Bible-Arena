@@ -33,9 +33,11 @@ describe("merged build: flags stay off", () => {
     }
   });
 
-  it("the server flag stays off too", () => {
+  it("the server flag is the one source, and the page reads it from there", () => {
     const flags = readFileSync(join(__dirname, "..", "domain", "feature-flags.ts"), "utf8");
-    expect(flags).toMatch(/sharedReading: false/);
+    expect(flags).toMatch(/sharedReading: true/);
+    const server = readFileSync(join(__dirname, "..", "server", "v3", "index.ts"), "utf8");
+    expect(server).toMatch(/window\.BA_FLAGS=\$\{JSON\.stringify\(FEATURE_FLAGS\)/);
   });
 });
 
