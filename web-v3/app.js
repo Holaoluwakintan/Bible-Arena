@@ -61,6 +61,12 @@ const FLAT_RE = new RegExp(Object.keys(FLAT_MAP).sort((a, b) => b.length - a.len
 function flatIcons(html) { return String(html).replace(/\uFE0F/g, "").replace(FLAT_RE, (m) => FI[FLAT_MAP[m]] || ""); }
 // Plain text (toasts, labels) has no room for an icon: mapped emoji are dropped, the words stay.
 function flatText(s) { return String(s).replace(/\uFE0F/g, "").replace(FLAT_RE, "").replace(/ {2,}/g, " ").trim(); }
+// Screens also write HTML straight into elements (live lists, push cards, the story map). Every HTML write in the game goes through the same flat mapping.
+(function () {
+  const d = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML");
+  if (!d || !d.set) return;
+  Object.defineProperty(Element.prototype, "innerHTML", { configurable: true, enumerable: d.enumerable, get() { return d.get.call(this); }, set(v) { d.set.call(this, flatIcons(v)); } });
+})();
 
 // ---------- v3.8.3: opt-in rewarded ads (Android app 1.4.0+ only; the website shows nothing new) ----------
 // The app tells the page it can play ads: its launch URL carries baads=1 (Chrome / TWA path, remembered for this tab only),
