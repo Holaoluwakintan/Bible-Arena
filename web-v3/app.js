@@ -157,7 +157,7 @@ const MODE_ICON = {
   arena: FI_W('<path d="M3 9.5 12 4l9 5.5v2H3z"/><rect x="4.5" y="12.5" width="2.8" height="6.5"/><rect x="10.6" y="12.5" width="2.8" height="6.5"/><rect x="16.7" y="12.5" width="2.8" height="6.5"/><rect x="3" y="19.5" width="18" height="2"/>', true),
   gap: FI_W('<path d="M4 20l1.2-4.6L15.6 4.9a2.2 2.2 0 0 1 3.1 3.1L8.3 18.5z"/><path d="M4 20l1.2-4.6 3.4 3.4z"/>', true),
   who: FI_W('<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c.9-4 3.9-6.2 7.5-6.2s6.6 2.2 7.5 6.2z"/>', true),
-  myth: FI_W('<circle cx="12" cy="12" r="9"/><path d="M9.2 9.3a2.9 2.9 0 1 1 4.1 2.6c-.8.4-1.3 1-1.3 1.9" fill="none" stroke="#0B1F4B" stroke-width="2.2"/><circle cx="12" cy="17.6" r="1.2" fill="#0B1F4B" stroke="none"/>'),
+  myth: FI_W('<circle cx="12" cy="12" r="9"/><path d="M9.2 9.3a2.9 2.9 0 1 1 4.1 2.6c-.8.4-1.3 1-1.3 1.9" stroke-width="2.2"/><circle cx="12" cy="17.6" r="1.3" fill="currentColor" stroke="none"/>'),
 };
 const MODES = {
   mixed: { name: "Mixed Arena", icon: "⚔️", desc: "A bit of everything" },
