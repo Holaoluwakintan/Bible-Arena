@@ -1,7 +1,66 @@
 /* Chever v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.12.5";
+window.BA_V = "3.12.7";
+
+// Flat icon set (Chever look): every emoji on a game screen is drawn with these inline SVGs in the palette
+// (gold #FFC300, red #D62828, navy #0B1F4B, white). Cross = duel, church, reading, loading. Crown = ranks, wins, perfect round, mastery.
+const FI_W = (inner, filled) => `<svg class="fi" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+const FI = {
+  cross: FI_W('<path d="M10 2.5h4v6.5h6.5v4H14v9h-4v-9H3.5v-4H10z"/>', true),
+  crown: FI_W('<path d="M3.5 8.5 7.5 12 12 5.5l4.5 6.5 4-3.5-2 10h-13z"/><path d="M5.5 19.5h13"/>', true),
+  shield: FI_W('<path d="M12 3 19.5 6v5.5c0 4.4-3 7.8-7.5 9.5-4.5-1.7-7.5-5.1-7.5-9.5V6z"/>'),
+  flame: FI_W('<path d="M12 3c.5 3.2 4.5 5.2 4.5 9.5A4.5 4.5 0 0 1 12 17a4.5 4.5 0 0 1-4.5-4.5c0-1.9 1-3.2 2-4.2.2 1.4.8 2.3 1.8 2.9C11 8.2 11.4 5.6 12 3z"/>', true),
+  heart: FI_W('<path d="M12 19.5 4.6 12.3a4.4 4.4 0 0 1 6.3-6.2L12 7.1l1.1-1a4.4 4.4 0 0 1 6.3 6.2z"/>', true),
+  warn: FI_W('<path d="M12 4 21 19.5H3z"/><path d="M12 10v4.5M12 17.2v.3"/>'),
+  timer: FI_W('<circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9.5M9.5 2.5h5"/>'),
+  lock: FI_W('<rect x="5.5" y="10.5" width="13" height="10" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>'),
+  unlock: FI_W('<rect x="5.5" y="10.5" width="13" height="10" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 6.8-1.2"/>'),
+  mic: FI_W('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/>'),
+  check: FI_W('<path d="M4.5 12.5 9.5 17.5 19.5 6.5"/>'),
+  play: FI_W('<path d="M8 5.5v13l10-6.5z"/>', true),
+  globe: FI_W('<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 3 2.6 14 0 17M12 3.5c-2.6 3-2.6 14 0 17"/>'),
+  star: FI_W('<path d="M12 3.5l2.6 5.5 6 .8-4.4 4.1 1.1 5.9L12 17.1l-5.3 2.7 1.1-5.9-4.4-4.1 6-.8z"/>', true),
+  bolt: FI_W('<path d="M13 3 5 13.5h6L10 21l8-10.5h-6z"/>', true),
+  rematch: FI_W('<path d="M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5"/><path d="M20 12a8 8 0 0 1-14 5.3L4 15M4 20v-5h5"/>'),
+  share: FI_W('<path d="M12 3.5v11M8 7.5l4-4 4 4"/><path d="M5.5 12.5v6.5h13v-6.5"/>'),
+  camera: FI_W('<rect x="3.5" y="7" width="17" height="12.5" rx="2.5"/><path d="M8.5 7 10 4.5h4L15.5 7"/><circle cx="12" cy="13" r="3.2"/>'),
+  dot: FI_W('<circle cx="12" cy="12" r="5"/>', true),
+  tv: FI_W('<rect x="3" y="5.5" width="18" height="12" rx="2"/><path d="M9 21h6"/>'),
+  game: FI_W('<rect x="2.5" y="7.5" width="19" height="10" rx="5"/><path d="M7.5 10.5v3M6 12h3M15.5 12h.01M18 10.5h.01"/>'),
+  bot: FI_W('<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4.5V8M9 13h.01M15 13h.01M9.5 16.5h5"/>'),
+  users: FI_W('<circle cx="9" cy="8.2" r="3.2"/><path d="M3 19.5c.6-3.2 3-5 6-5s5.4 1.8 6 5"/><circle cx="16.5" cy="8.5" r="2.6"/><path d="M16 14.5c2.6 0 4.6 1.6 5 4.6"/>'),
+  target: FI_W('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/>'),
+  book: FI_W('<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M8 8h9M8 11.5h9"/>'),
+  sun: FI_W('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/>'),
+  pen: FI_W('<path d="M4 20l1-4L16 5l3 3L8 19z"/>'),
+  question: FI_W('<circle cx="12" cy="12" r="8.5"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 17h.01"/>'),
+  sprout: FI_W('<path d="M12 20v-8"/><path d="M12 12c0-3.5-2.5-5.5-6-5.5 0 3.5 2.5 5.5 6 5.5zM12 14c0-3 2.2-5 5.5-5 0 3-2.2 5-5.5 5z"/>'),
+  home: FI_W('<path d="M4 11 12 4.5 20 11"/><path d="M6.5 9.8V20h11V9.8"/>'),
+  me: FI_W('<circle cx="12" cy="8.5" r="3.8"/><path d="M4.8 20c.9-3.7 3.7-5.8 7.2-5.8s6.3 2.1 7.2 5.8"/>'),
+  x: FI_W('<path d="M6 6l12 12M18 6 6 18"/>'),
+  bell: FI_W('<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>'),
+  plus: FI_W('<path d="M12 5v14M5 12h14"/>'),
+  medal1: FI_W('<circle cx="12" cy="12" r="8.5" fill="#FFC300" stroke="#0B1F4B"/>'),
+  medal2: FI_W('<circle cx="12" cy="12" r="8.5" fill="#C9D3E6" stroke="#0B1F4B"/>'),
+  medal3: FI_W('<circle cx="12" cy="12" r="8.5" fill="#C88A4B" stroke="#0B1F4B"/>'),
+};
+// Emoji on the game screens, mapped to the flat set. Anything not listed here (text marks such as ✓ ✕ ★ ▶ ↓) is left as typed.
+const FLAT_MAP = {
+  "⚔": "cross", "⛪": "cross", "✦": "cross", "📖": "cross", "👑": "crown", "🏆": "crown",
+  "🛡": "shield", "🔥": "flame", "🕯": "flame", "❤": "heart", "⚠": "warn", "⏱": "timer", "⏰": "timer",
+  "🔓": "unlock", "🔒": "lock", "🎤": "mic", "✅": "check", "✔": "check", "💾": "check", "⚖": "check",
+  "▶": "play", "🏃": "play", "🌍": "globe", "🗺": "globe", "🌊": "globe", "🌟": "star", "💯": "star", "✨": "star", "💎": "star", "💪": "bolt", "⚡": "bolt", "💀": "bolt", "♾": "bolt",
+  "🔁": "rematch", "🔄": "rematch", "📤": "share", "📸": "camera", "🟢": "dot", "🔴": "dot", "🟨": "dot",
+  "📺": "tv", "📱": "tv", "🎮": "game", "🤖": "bot", "🕊": "users", "🤝": "users", "🙌": "users", "🎓": "book", "📚": "book", "📜": "book", "🔤": "pen", "✍": "pen",
+  "🎯": "target", "🧭": "target", "🥾": "target", "🔎": "target", "☀": "sun", "🧐": "question", "🎭": "me", "🧔": "me", "🦉": "me", "🙂": "me", "👤": "me",
+  "🌱": "sprout", "🌾": "sprout", "🧱": "home", "💍": "heart", "🌪": "warn", "🎵": "mic", "⏳": "timer", "😢": "heart", "👁": "target", "🦁": "star", "💔": "heart", "🦗": "sprout", "🐋": "globe", "🏗": "home", "⭐": "star", "🩺": "heart", "🍞": "sprout", "⛵": "globe", "✉": "share", "😊": "me", "⚓": "target", "🔨": "pen", "🪨": "home", "🌅": "sun", "🎉": "star", "🔔": "bell", "➕": "plus", "👥": "users", "⬆": "share", "✉️": "share", "⛺": "home", "🏰": "home", "🏛": "home", "🏠": "home", "🥇": "medal1", "🥈": "medal2", "🥉": "medal3", "❌": "x",
+};
+const FLAT_RE = new RegExp(Object.keys(FLAT_MAP).sort((a, b) => b.length - a.length).map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "gu");
+// Screens are HTML strings: each mapped emoji becomes its flat icon; the variation selector (FE0F) is dropped first.
+function flatIcons(html) { return String(html).replace(/\uFE0F/g, "").replace(FLAT_RE, (m) => FI[FLAT_MAP[m]] || ""); }
+// Plain text (toasts, labels) has no room for an icon: mapped emoji are dropped, the words stay.
+function flatText(s) { return String(s).replace(/\uFE0F/g, "").replace(FLAT_RE, "").replace(/ {2,}/g, " ").trim(); }
 
 // ---------- v3.8.3: opt-in rewarded ads (Android app 1.4.0+ only; the website shows nothing new) ----------
 // The app tells the page it can play ads: its launch URL carries baads=1 (Chrome / TWA path, remembered for this tab only),
@@ -149,7 +208,7 @@ const sfx = {
   chip: () => tone([740], 0.05, "triangle", 0.07),
 };
 function buzz(p) { if (S.haptics && navigator.vibrate) try { navigator.vibrate(p); } catch (e) {} }
-function toast(msg, ms) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), ms || 2200); }
+function toast(msg, ms) { const t = $("#toast"); t.textContent = flatText(msg); t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), ms || 2200); }
 function confetti(n) {
   const box = document.createElement("div"); box.className = "confetti";
   const colors = ["#F5B942", "#FFD98A", "#3DDC97", "#9B8CFF", "#5AB8FF", "#FF8A65"];
@@ -248,6 +307,7 @@ function brandBar() {
   return `<div class="cvm-bar" role="img" aria-label="Chever"><svg class="cvm-mark" viewBox="0 0 832 864" aria-hidden="true" focusable="false"><path class="cvm-body" fill-rule="evenodd" d="${CVM_BODY}"/><path class="cvm-sw" d="${CVM_SWOOSH}"/></svg><span class="cvm-word">Chever</span></div>`;
 }
 function render(html, cls) {
+  html = flatIcons(html);
   cleanup.forEach((f) => { try { f(); } catch (e) {} }); cleanup = [];
   voiceStop();
   // Chever look (preview): screens that ask for it get the light theme; every other screen is unchanged.
@@ -262,8 +322,8 @@ function render(html, cls) {
   window.scrollTo(0, 0);
 }
 function tabbar(active) {
-  const t = (h, i, l, k) => `<a href="${h}" class="${active === k ? "on" : ""}"><i>${i}</i>${l}</a>`;
-  return `<div class="tabbar"><nav>${t("#/", "🏠", "Home", "home")}${t("#/duels", "⚔️", "Duels", "duels")}${t("#/ranks", "🏆", "Ranks", "ranks")}${t("#/me", "👤", "Me", "me")}</nav></div>`;
+  const t = (h, i, l, k) => `<a href="${h}" class="${active === k ? "on" : ""}"><i>${homeIco(i)}</i>${l}</a>`;
+  return `<div class="tabbar"><nav>${t("#/", "home", "Home", "home")}${t("#/duels", "swords", "Duels", "duels")}${t("#/ranks", "ranks", "Ranks", "ranks")}${t("#/me", "me", "Me", "me")}</nav></div>`;
 }
 // Tab bar for the reading plan (Chever look): icons, not emoji. Only the reading screen uses it. Routes are the app's own:
 // Home = #/, Community = #/duels, Profile = #/me. Library has no route yet, so it stays visibly inactive.
@@ -448,15 +508,15 @@ function homeIco(name) {
   const P = {
     play: '<path d="M8 5.5v13l10-6.5z"/>',
     users: '<circle cx="9" cy="8.2" r="3.2"/><path d="M3 19.5c.6-3.2 3-5 6-5s5.4 1.8 6 5"/><circle cx="16.5" cy="8.5" r="2.6"/><path d="M16 14.5c2.6 0 4.6 1.6 5 4.6"/>',
-    trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5.2A2.7 2.7 0 0 0 8 10.5M16 6h2.8A2.7 2.7 0 0 1 16 10.5"/><path d="M12 13v4M8.5 20h7M9.5 17h5"/>',
+    trophy: '<path d="M3.5 8.5 7.5 12 12 5.5l4.5 6.5 4-3.5-2 10h-13z" fill="currentColor"/><path d="M5.5 19.5h13"/>',
     plus: '<rect x="4.5" y="4.5" width="15" height="15" rx="4"/><path d="M12 8.5v7M8.5 12h7"/>',
-    book: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M8 8h9M8 11.5h9"/>',
+    book: '<path d="M10 2.5h4v6.5h6.5v4H14v9h-4v-9H3.5v-4H10z" fill="currentColor"/>',
     flame: '<path d="M12 3c.5 3.2 4.5 5.2 4.5 9.5A4.5 4.5 0 0 1 12 17a4.5 4.5 0 0 1-4.5-4.5c0-1.9 1-3.2 2-4.2.2 1.4.8 2.3 1.8 2.9C11 8.2 11.4 5.6 12 3z"/>',
     target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/>',
     chev: '<path d="M9.5 6 15.5 12l-6 6"/>',
     home: '<path d="M4 11 12 4.5 20 11"/><path d="M6.5 9.8V20h11V9.8"/>',
-    swords: '<path d="M4.5 4.5 14 14"/><path d="M19.5 4.5 10 14"/><path d="M9.5 14.5 5 19"/><path d="M14.5 14.5 19 19"/>',
-    ranks: '<path d="M7 20V11M12 20V5M17 20v-6"/>',
+    swords: '<path d="M10 2.5h4v6.5h6.5v4H14v9h-4v-9H3.5v-4H10z" fill="currentColor"/>',
+    ranks: '<path d="M3.5 8.5 7.5 12 12 5.5l4.5 6.5 4-3.5-2 10h-13z" fill="currentColor"/><path d="M5.5 19.5h13"/>',
     me: '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.8 20c.9-3.7 3.7-5.8 7.2-5.8s6.3 2.1 7.2 5.8"/>',
   };
   return `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${P[name] || ""}</svg>`;
@@ -2405,10 +2465,10 @@ const ACH_ICO = {
   correct_500: '<path d="M2.5 9.5L12 5l9.5 4.5L12 14z"/><path d="M6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5"/>',
   streak_3: '<path d="M12 3c1.2 2 2.5 3.4 2.5 5.4"/><rect x="9.5" y="9" width="5" height="11" rx="1.5"/>',
   streak_7: PF_P.flame,
-  streak_30: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5.2A2.7 2.7 0 0 0 8 10.5M16 6h2.8A2.7 2.7 0 0 1 16 10.5"/><path d="M12 13v4M8.5 20h7M9.5 17h5"/>',
+  streak_30: '<path d="M3.5 8.5 7.5 12 12 5.5l4.5 6.5 4-3.5-2 10h-13z" fill="currentColor"/><path d="M5.5 19.5h13"/>',
   daily_5: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/>',
   duel_sent: '<path d="M4.5 4.5L14 14M19.5 4.5L10 14M9.5 14.5L5 19M14.5 14.5L19 19"/>',
-  duel_won: '<circle cx="12" cy="14" r="5.5"/><path d="M9 3h6l-1.5 5.5h-3z"/>',
+  duel_won: '<path d="M3.5 8.5 7.5 12 12 5.5l4.5 6.5 4-3.5-2 10h-13z" fill="currentColor"/><path d="M5.5 19.5h13"/>',
   duel_5: '<path d="M12 3l7 3v5.5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/>',
   rematch: '<path d="M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.5 4.5L20 16M20 20v-4h-4"/>',
   church: PF_P.church,

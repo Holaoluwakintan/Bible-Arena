@@ -471,3 +471,6 @@ body.cv2-on .cv2-quiz .blank.next{background:#fff;border:2px dashed #FFC300;anim
 body.cv2-on .cv2-quiz .blank.filled{background:#FFC300;border-color:#FFC300;color:#0B1F4B}
 body.cv2-on .cv2-quiz .blank.ok{background:#EDF9F3;border-color:#1F9D5C;color:#0B1F4B}
 body.cv2-on .cv2-quiz .blank.bad{background:#FDF0F0;border-color:#D64545;color:#0B1F4B}
+
+/* Flat icons on game screens (inline SVG that replaces the emoji): sized to the text around it. */
+.fi{width:1em;height:1em;display:inline-block;vertical-align:-0.15em;flex:0 0 auto}
