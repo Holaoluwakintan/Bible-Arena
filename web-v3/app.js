@@ -2377,8 +2377,52 @@ function blockedSheet() {
   };
   draw();
 }
+// ---------- Me page on the Chever look: flat line icons, no emoji. Only this screen uses them. ACH keeps its emoji for the badge
+// pop-ups on other screens; the Me page draws the same achievements with ACH_ICO.
+const PF_P = {
+  report: '<path d="M7 20V11M12 20V5M17 20v-6"/>',
+  flame: '<path d="M12 3c.5 3.2 4.5 5.2 4.5 9.5A4.5 4.5 0 0 1 12 17a4.5 4.5 0 0 1-4.5-4.5c0-1.9 1-3.2 2-4.2.2 1.4.8 2.3 1.8 2.9C11 8.2 11.4 5.6 12 3z"/>',
+  shield: '<path d="M12 3l7 3v5.5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/>',
+  mic: '<rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/>',
+  classic: '<path d="M3.5 9.5L12 4.5l8.5 5"/><path d="M5.5 10.5V18M9.5 10.5V18M14.5 10.5V18M18.5 10.5V18M3.5 20.5h17"/>',
+  android: '<rect x="6.5" y="2.8" width="11" height="18.4" rx="2.6"/><path d="M10.5 18h3"/>',
+  church: '<path d="M12 3v4M10 5h4"/><path d="M7 11l5-3.5 5 3.5V21H7z"/><path d="M10.5 21v-4h3v4"/>',
+};
+function pfIco(name) { return `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${PF_P[name] || ""}</svg>`; }
+const ACH_ICO = {
+  first_round: '<path d="M12 20v-8"/><path d="M12 12c0-3.5-2.5-5.5-6-5.5 0 3.5 2.5 5.5 6 5.5zM12 14c0-3 2.2-5 5.5-5 0 3-2.2 5-5.5 5z"/>',
+  ten_rounds: '<path d="M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5"/><path d="M20 12a8 8 0 0 1-14 5.3L4 15M4 20v-5h5"/>',
+  fifty_rounds: '<path d="M4 20h16"/><path d="M6 16l4-4 3 2 5-6"/>',
+  perfect: '<circle cx="12" cy="12" r="8.5"/><path d="M8 12.5l2.7 2.7L16 9.5"/>',
+  theologian_perfect: '<path d="M4 8l3.5 4L12 6l4.5 6L20 8l-1.5 10h-13z"/>',
+  combo_5: PF_P.flame,
+  combo_10: '<path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/>',
+  gap_10: '<path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/>',
+  gap_50: '<path d="M7 4h10v14a2 2 0 0 1-2 2H7z"/><path d="M7 4a2 2 0 0 0-2 2v1h2M10 9h4M10 12h4"/>',
+  first_clue: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/>',
+  myth_buster: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
+  correct_100: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M8 8h9M8 11.5h9"/>',
+  correct_500: '<path d="M2.5 9.5L12 5l9.5 4.5L12 14z"/><path d="M6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5"/>',
+  streak_3: '<path d="M12 3c1.2 2 2.5 3.4 2.5 5.4"/><rect x="9.5" y="9" width="5" height="11" rx="1.5"/>',
+  streak_7: PF_P.flame,
+  streak_30: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5.2A2.7 2.7 0 0 0 8 10.5M16 6h2.8A2.7 2.7 0 0 1 16 10.5"/><path d="M12 13v4M8.5 20h7M9.5 17h5"/>',
+  daily_5: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/>',
+  duel_sent: '<path d="M4.5 4.5L14 14M19.5 4.5L10 14M9.5 14.5L5 19M14.5 14.5L19 19"/>',
+  duel_won: '<circle cx="12" cy="14" r="5.5"/><path d="M9 3h6l-1.5 5.5h-3z"/>',
+  duel_5: '<path d="M12 3l7 3v5.5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/>',
+  rematch: '<path d="M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.5 4.5L20 16M20 20v-4h-4"/>',
+  church: PF_P.church,
+  rank_elder: '<path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/>',
+  rank_apostle: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><path d="M12 7.5l1.4 3.1 3.1 1.4-3.1 1.4L12 16.5l-1.4-3.1-3.1-1.4 3.1-1.4z"/>',
+};
+function achIco(k) { return `<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ACH_ICO[k] || ""}</svg>`; }
+// The Me tab bar: the same four tabs as the Home bar, with its flat icons.
+function meTabbar() {
+  const tab = (h, icon, label, k) => `<a href="${h}" class="${k === "me" ? "on" : ""}"><i>${homeIco(icon)}</i>${label}</a>`;
+  return `<div class="tabbar"><nav>${tab("#/", "home", "Home", "home")}${tab("#/duels", "swords", "Duels", "duels")}${tab("#/ranks", "ranks", "Ranks", "ranks")}${tab("#/me", "me", "Me", "me")}</nav></div>`;
+}
 async function profile() {
-  render(`<div id="pf"></div>${tabbar("me")}`);
+  render(`<div id="pf"></div>${meTabbar()}`, "cv2 cv2-me");
   await ensureSession();
   try { const m = await api("/api/v3/churches/mine"); syncChurch(m.church); } catch (e) {}
   const p = ME.player || { xp: 0, achievements: [], stats: {} };
@@ -2387,16 +2431,16 @@ async function profile() {
   if (!$("#pf")) return; // left the Me tab while it was loading
   $("#pf").innerHTML = `<div class="col" style="gap:14px">
     <div class="hero center"><div class="rays"></div><div class="emblem" style="width:84px;height:84px;font-size:36px;border-radius:24px;margin:0 auto 10px">${rk.name[0]}</div>
-      <h2 style="font-family:var(--serif)">${esc(S.name || "Player")}</h2><div class="gold" style="font-weight:800">${rk.name} ${rk.division}</div>${S.church ? `<div class="small muted">⛪ ${esc(S.church)}</div>` : ""}
+      <h2 style="font-family:var(--serif)">${esc(S.name || "Player")}</h2><div class="gold" style="font-weight:800">${rk.name} ${rk.division}</div>${S.church ? `<div class="small muted pfline">${pfIco("church")} ${esc(S.church)}</div>` : ""}
       <div class="xpbar" style="margin:12px 0 6px"><i style="width:${Math.round(rk.progress * 100)}%"></i></div><div class="small muted">${fmt(p.xp)} XP${rk.next ? ` · ${fmt(rk.nextXp - p.xp)} to ${rk.next}` : ""}</div></div>
     <div class="card" id="facepick"><div class="row between"><b>Your face</b><span class="small muted">shows next to your name in duels and rooms</span></div>
     <div class="facegrid" style="margin-top:10px">${BAFace.ids.map((id) => `<button class="faceopt ${myFace() === id ? "on" : ""}" data-face="${id}" aria-label="Face ${Number(id.slice(5))}">${BAFace.html(id, "100%")}</button>`).join("")}</div></div>
-    <a class="card row reportlink" href="#/report"><div style="font-size:28px">📊</div><div class="grow"><b>Your weekly report card</b><div class="small muted">Strongest and weakest books, accuracy vs last week</div></div><div class="gold">›</div></a>
-    <div class="stats3"><div class="stat"><b>🔥 ${p.streak || 0}</b><span>Day streak</span></div><div class="stat"><b>${p.bestStreak || 0}</b><span>Best streak</span></div><div class="stat"><b>${p.rounds || 0}</b><span>Rounds</span></div></div>
-    <div class="small muted center" style="margin-top:-6px">🛡️ Streak saves: <b>${saves(p)}</b> · earn one every 7 days in a row (max 2). Miss a day and a save keeps your streak going.</div>
+    <a class="card row reportlink" href="#/report"><div class="pico">${pfIco("report")}</div><div class="grow"><b>Your weekly report card</b><div class="small muted">Strongest and weakest books, accuracy vs last week</div></div><div class="gold">›</div></a>
+    <div class="stats3"><div class="stat"><b>${pfIco("flame")} ${p.streak || 0}</b><span>Day streak</span></div><div class="stat"><b>${p.bestStreak || 0}</b><span>Best streak</span></div><div class="stat"><b>${p.rounds || 0}</b><span>Rounds</span></div></div>
+    <div class="small muted center pfline" style="margin-top:-6px">${pfIco("shield")} Streak saves: <b>${saves(p)}</b> · earn one every 7 days in a row (max 2). Miss a day and a save keeps your streak going.</div>
     <div class="stats3"><div class="stat"><b>${st.correct || 0}</b><span>Correct</span></div><div class="stat"><b>${st.gapPerfect || 0}</b><span>Perfect gaps</span></div><div class="stat"><b>${st.duelsWon || 0}</b><span>Duels won</span></div></div>
     <div class="card"><div class="row between"><b>Ranks</b><span class="small muted">Seeker → Apostle</span></div><div class="row" style="flex-wrap:wrap;gap:6px;margin-top:10px">${RANKS.map(([n, x], i) => `<span class="chip ${i <= rk.index ? "on" : ""}">${n}<span class="dim small">${x ? fmt(x) : ""}</span></span>`).join("")}</div></div>
-    <div class="card"><div class="row between"><b>Achievements</b><span class="small muted">${got.length}/${Object.keys(ACH).length}</span></div><div class="achs" style="margin-top:10px">${Object.keys(ACH).map((k) => `<div class="ach ${got.indexOf(k) >= 0 ? "got" : ""}"><div class="ai">${ACH[k][0]}</div><b>${ACH[k][1]}</b><span>${ACH[k][2]}</span></div>`).join("")}</div></div>
+    <div class="card"><div class="row between"><b>Achievements</b><span class="small muted">${got.length}/${Object.keys(ACH).length}</span></div><div class="achs" style="margin-top:10px">${Object.keys(ACH).map((k) => `<div class="ach ${got.indexOf(k) >= 0 ? "got" : ""}"><div class="ai">${achIco(k)}</div><b>${ACH[k][1]}</b><span>${ACH[k][2]}</span></div>`).join("")}</div></div>
     <div class="card">
       <b>Settings</b>
       <div class="setrow"><div class="grow"><div>Name</div><div class="small muted">${esc(S.name)}</div></div><button class="chip" id="ename">Edit</button></div>
@@ -2404,7 +2448,7 @@ async function profile() {
       <div class="setrow"><div class="grow"><div>Level</div><div class="small muted">${TIER[S.tier].name}</div></div><button class="chip" id="etier">Change</button></div>
       <div class="setrow"><div>Sound</div><button class="switch ${S.sound ? "on" : ""}" id="snd" aria-label="Sound"></button></div>
       <div class="setrow"><div>Vibration</div><button class="switch ${S.haptics ? "on" : ""}" id="hap" aria-label="Vibration"></button></div>
-      <div class="setrow"><div class="grow"><div>Voice answers 🎤</div><div class="small muted">${SpeechRec ? "A mic button on quiz questions. It only listens after you tap it. It can mishear Bible names and accents, so tapping always works too." : "Not available in this browser (Chrome on Android works best). Tapping works as usual."}</div></div><button class="switch ${S.voice !== false && SpeechRec ? "on" : ""}" id="vce" aria-label="Voice answers" ${SpeechRec ? "" : "disabled"}></button></div>
+      <div class="setrow"><div class="grow"><div>Voice answers ${pfIco("mic")}</div><div class="small muted">${SpeechRec ? "A mic button on quiz questions. It only listens after you tap it. It can mishear Bible names and accents, so tapping always works too." : "Not available in this browser (Chrome on Android works best). Tapping works as usual."}</div></div><button class="switch ${S.voice !== false && SpeechRec ? "on" : ""}" id="vce" aria-label="Voice answers" ${SpeechRec ? "" : "disabled"}></button></div>
       <div class="setrow"><div class="grow"><div>Game pop-ups</div><div class="small muted">“A live game is starting” or “someone is waiting for a challenger” while you're in the app (max 1 every 2 min)</div></div><button class="switch ${window.BAS && !BAS.muted() ? "on" : ""}" id="pops" aria-label="Challenge pop-ups"></button></div>
       <div class="setrow" id="pushrow"><div class="grow"><div>Phone notifications</div><div class="small muted" id="pushtxt">Checking…</div></div><span id="pushbtn"></span></div>
       <div class="setrow" id="remrow"><div class="grow"><div>Daily 7 PM reminder</div><div class="small muted" id="remtxt">If you haven't played the Daily Challenge by 7 PM (Lagos time)</div></div><button class="switch" id="rem" aria-label="Daily 7 PM reminder"></button></div>
@@ -2413,7 +2457,7 @@ async function profile() {
       <div class="setrow"><div class="grow"><div>Privacy policy</div><div class="small muted">What we keep and why</div></div><a class="chip" href="/privacy">Read</a></div>
       <div class="setrow"><div class="grow"><div>Delete account</div><div class="small muted">Permanently erase your profile, scores and duels</div></div><button class="chip" id="delacct" style="color:#ff8a80">Delete</button></div>
     </div>
-    <div class="card"><b>More</b><div class="row" style="flex-wrap:wrap;gap:8px;margin-top:10px"><a class="chip" href="/play">🏛️ Classic app</a>${inAppShell() ? "" : `<a class="chip" href="/download">📱 Android app</a>`}<a class="chip" href="#/ranks?tab=church">⛪ Church League</a></div>
+    <div class="card"><b>More</b><div class="row" style="flex-wrap:wrap;gap:8px;margin-top:10px"><a class="chip" href="/play">${pfIco("classic")} Classic app</a>${inAppShell() ? "" : `<a class="chip" href="/download">${pfIco("android")} Android app</a>`}<a class="chip" href="#/ranks?tab=church">${pfIco("church")} Church League</a></div>
       <p class="small dim" style="margin:12px 0 0">Scripture quotations are from the King James Version (public domain). Every answer carries its reference so you can read it yourself.</p></div>
   </div>`;
   $("#facepick").querySelectorAll(".faceopt").forEach((b) => (b.onclick = () => {
@@ -2428,7 +2472,7 @@ async function profile() {
   $("#etier").onclick = () => tierSheet(() => profile());
   $("#snd").onclick = (e) => { S.sound = !S.sound; save(); e.target.classList.toggle("on", S.sound); sfx.ok(); };
   $("#hap").onclick = (e) => { S.haptics = !S.haptics; save(); e.target.classList.toggle("on", S.haptics); buzz(30); };
-  $("#vce").onclick = (e) => { if (!SpeechRec) return; S.voice = S.voice === false; save(); e.target.classList.toggle("on", S.voice !== false); toast(S.voice !== false ? "Voice answers on 🎤" : "Voice answers off"); };
+  $("#vce").onclick = (e) => { if (!SpeechRec) return; S.voice = S.voice === false; save(); e.target.classList.toggle("on", S.voice !== false); toast(S.voice !== false ? "Voice answers on" : "Voice answers off"); };
   $("#pops").onclick = (e) => { if (!window.BAS) return; const on = BAS.muted(); BAS.mute(!on); e.target.classList.toggle("on", on); toast(on ? "Challenge pop-ups on" : "Challenge pop-ups muted"); };
   const drawPushRow = async () => {
     const tx = $("#pushtxt"), bt = $("#pushbtn"); if (!tx || !window.BAS) return;
@@ -2438,7 +2482,7 @@ async function profile() {
     bt.innerHTML = s === "on" ? `<button class="chip" id="ptest">Test</button> <button class="chip" id="poff">Off</button>` : s === "off" ? `<button class="chip on" id="pon">Turn on</button>` : "";
     const on = $("#pon"); if (on) on.onclick = async () => { on.disabled = true; const r = await BAS.push.enable().catch(() => "off"); toast(r === "on" ? "Notifications on ✓" : r === "denied" ? "Blocked in your browser settings." : "Couldn't turn on notifications here."); drawPushRow(); };
     const off = $("#poff"); if (off) off.onclick = async () => { await BAS.push.disable().catch(() => {}); toast("Notifications off"); drawPushRow(); };
-    const te = $("#ptest"); if (te) te.onclick = async () => { try { const r = await BAS.push.test(); toast(r.sent ? "Test sent. Check your notifications 🔔" : "Couldn't send a test right now."); } catch (e) { toast(e.status === 429 ? "Wait a few minutes before another test." : "Couldn't send a test right now."); } };
+    const te = $("#ptest"); if (te) te.onclick = async () => { try { const r = await BAS.push.test(); toast(r.sent ? "Test sent. Check your notifications" : "Couldn't send a test right now."); } catch (e) { toast(e.status === 429 ? "Wait a few minutes before another test." : "Couldn't send a test right now."); } };
   };
   drawPushRow();
   // v3.10 daily reminder switch: on by default once notifications are on
@@ -2453,7 +2497,7 @@ async function profile() {
       sw.disabled = true;
       if (s !== "on") { const r = await BAS.push.enable().catch(() => "off"); if (r !== "on") { sw.disabled = false; return toast(r === "denied" ? "Notifications are blocked in your browser settings." : "Couldn't turn on notifications here."); } drawPushRow(); }
       const want = s === "on" ? !p.daily : true;
-      try { await api("/api/v3/push/prefs", { body: { daily: want } }); toast(want ? "Daily 7 PM reminder on ⏰" : "Daily reminder off"); } catch (e) { toast("Couldn't save that. Try again."); }
+      try { await api("/api/v3/push/prefs", { body: { daily: want } }); toast(want ? "Daily 7 PM reminder on" : "Daily reminder off"); } catch (e) { toast("Couldn't save that. Try again."); }
       sw.disabled = false; drawRem();
     };
   };
