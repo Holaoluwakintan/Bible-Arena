@@ -1,7 +1,7 @@
 /* Chever v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.12.7";
+window.BA_V = "3.12.8";
 
 // Flat icon set (Chever look): every emoji on a game screen is drawn with these inline SVGs in the palette
 // (gold #FFC300, red #D62828, navy #0B1F4B, white). Cross = duel, church, reading, loading. Crown = ranks, wins, perfect round, mastery.
@@ -327,25 +327,17 @@ function render(html, cls) {
   t.innerHTML = tabs;
   window.scrollTo(0, 0);
 }
-function tabbar(active) {
-  const t = (h, i, l, k) => `<a href="${h}" class="${active === k ? "on" : ""}"><i>${homeIco(i)}</i>${l}</a>`;
-  return `<div class="tabbar"><nav>${t("#/", "home", "Home", "home")}${t("#/duels", "swords", "Duels", "duels")}${t("#/ranks", "ranks", "Ranks", "ranks")}${t("#/me", "me", "Me", "me")}</nav></div>`;
+// The one tab bar (Michael's mockup, 2026-11-12): Home, Game, Bible (the open book raised in a navy circle), Groups, Profile.
+// Ranks is not a bar tab: it is reached from Profile. Each screen names its section; older names map onto these five.
+const NAV_OF = { home: "home", game: "game", duels: "game", live: "game", community: "game", bible: "bible", reading: "bible", groups: "groups", church: "groups", me: "profile", profile: "profile", ranks: "profile" };
+function navBar(active) {
+  const key = NAV_OF[active] || "home";
+  const item = (k, href, icon, label) => `<a href="${href}" class="${key === k ? "on" : ""}${k === "bible" ? " nb-centre" : ""}"><i>${homeIco(icon)}</i><span>${label}</span></a>`;
+  return `<div class="tabbar"><nav>${item("home", "#/", "home", "Home")}${item("game", "#/game", "controller", "Game")}${item("bible", "#/reading", "openbook", "Bible")}${item("groups", "#/church", "users", "Groups")}${item("profile", "#/me", "me", "Profile")}</nav></div>`;
 }
-// Tab bar for the reading plan (Chever look): icons, not emoji. Only the reading screen uses it. Routes are the app's own:
-// Home = #/, Community = #/duels, Profile = #/me. Library has no route yet, so it stays visibly inactive.
-function readingTabbar(active) {
-  const svg = (d) => `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
-  const ic = {
-    home: svg(`<path d="M3.5 10.5L12 3.5l8.5 7"/><path d="M5.5 9.5V20h4.5v-5.5h4V20h4.5V9.5"/>`),
-    library: svg(`<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5z"/>`),
-    community: svg(`<circle cx="9" cy="8" r="3.2"/><path d="M3 19.5c.6-3.2 3-5 6-5s5.4 1.8 6 5"/><circle cx="16.5" cy="8.5" r="2.6"/><path d="M16 14.5c2.6 0 4.6 1.6 5 4.6"/>`),
-    profile: svg(`<circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5c.9-3.9 3.8-6 7.5-6s6.6 2.1 7.5 6"/>`),
-  };
-  const item = (key, label, href, icon) => href
-    ? `<a href="${href}" class="${active === key ? "on" : ""}"><i>${icon}</i>${label}</a>`
-    : `<a class="off" aria-disabled="true" tabindex="-1"><i>${icon}</i>${label}</a>`;
-  return `<div class="tabbar"><nav>${item("home", "Home", "#/", ic.home)}${item("library", "Library", null, ic.library)}${item("community", "Community", "#/duels", ic.community)}${item("profile", "Profile", "#/me", ic.profile)}</nav></div>`;
-}
+function tabbar(active) { return navBar(active); }
+// The reading plan and the duel pages share the same bar.
+function readingTabbar(active) { return navBar(active); }
 // Every navigation retires the round on screen, so a left-behind timer can never answer for a new round.
 let ROUND_SEQ = 0;
 async function route() {
@@ -381,6 +373,7 @@ async function route() {
   if (a === "report") return reportCard();
   if (a === "story") return storyMap();
   if (a === "endless") return endlessScreen();
+  if (a === "game") return gameScreen();
   if (a === "me") { if (q.get("signedin")) { toast("Signed in with Google ✓"); history.replaceState(null, "", "#/me"); } return profile(); }
   return home();
 }
@@ -523,6 +516,9 @@ function homeIco(name) {
     home: '<path d="M4 11 12 4.5 20 11"/><path d="M6.5 9.8V20h11V9.8"/>',
     swords: '<path d="M10 2.5h4v6.5h6.5v4H14v9h-4v-9H3.5v-4H10z" fill="currentColor"/>',
     ranks: '<path d="M3.5 8.5 7.5 12 12 5.5l4.5 6.5 4-3.5-2 10h-13z" fill="currentColor"/><path d="M5.5 19.5h13"/>',
+    controller: '<path d="M7.5 8.5h9a4.5 4.5 0 0 1 4.3 5.8l-.6 2.2a2 2 0 0 1-3.5.6L14.2 15H9.8l-2.5 2.1a2 2 0 0 1-3.5-.6l-.6-2.2A4.5 4.5 0 0 1 7.5 8.5z"/><path d="M8 11v2.6M6.7 12.3h2.6"/><circle cx="15.6" cy="11.6" r=".7" fill="currentColor"/><circle cx="17.6" cy="13.6" r=".7" fill="currentColor"/>',
+    openbook: '<path d="M12 6.8C10.1 5.4 7.4 4.9 4 5.2v13.3c3.4-.3 6.1.2 8 1.6 1.9-1.4 4.6-1.9 8-1.6V5.2c-3.4-.3-6.1.2-8 1.6z"/><path d="M12 6.8v13.3"/>',
+    live: '<circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M8.2 8.2a5.5 5.5 0 0 0 0 7.6M15.8 8.2a5.5 5.5 0 0 1 0 7.6M5.6 5.6a9.6 9.6 0 0 0 0 12.8M18.4 5.6a9.6 9.6 0 0 1 0 12.8"/>',
     me: '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.8 20c.9-3.7 3.7-5.8 7.2-5.8s6.3 2.1 7.2 5.8"/>',
   };
   return `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${P[name] || ""}</svg>`;
@@ -545,8 +541,7 @@ function homeGuideHTML() {
         + homeGuideRow("#/reading", "users", "Join someone", "Enter the code they sent you.")
         + homeGuideRow("#/reading", "plus", "Create a plan", "Start one and invite people.")
   }</section>` : "";
-  const tab = (h, icon, label, k) => `<a href="${h}" class="${k === "home" ? "on" : ""}"><i>${homeIco(icon)}</i>${label}</a>`;
-  return `<div class="gh">
+    return `<div class="gh">
     <header class="gh-top">
       <div class="gh-stats"><span class="gh-stat">${homeIco("flame")}<b>${p.streak || 0}</b> day streak</span><span class="gh-stat">${homeIco("target")}<b>${rate}</b> win rate</span></div></header>
     <section class="gh-intro"><h1>Know the Word. Challenge the world.</h1>
@@ -562,12 +557,38 @@ function homeGuideHTML() {
         <div class="gh-joinrow"><input id="homecodein" name="c" inputmode="numeric" maxlength="8" placeholder="6-digit code" autocomplete="one-time-code" enterkeyhint="go"><button type="submit">Join</button></div></form>
     </section>
     ${readingBlock}
-    <div class="tabbar"><nav>${tab("#/", "home", "Home", "home")}${tab("#/duels", "swords", "Duels", "duels")}${tab("#/ranks", "ranks", "Ranks", "ranks")}${tab("#/me", "me", "Me", "me")}</nav></div>
+    ${navBar("home")}
   </div>`;
 }
 function homeGuide() {
   render(`${homeGuideHTML()}`, "cv2 cv2-home");
   bindCodeBox("homejoin");
+}
+// The Game tab (2026-11-12): every way to play sits under this one bar item: solo modes (Bible or Myth included), multiplayer,
+// private rooms, join with code, group knockouts and live now. Same routes as before; nothing here is new behaviour.
+function gameScreen() {
+  const solo = ["mixed", "myth", "arena", "gap", "who", "daily", "sudden"];
+  const soloRow = (k) => (k === "mixed"
+    ? homeGuideRow(`#/play/${k}`, "play", "Solo match", "Just you and the Word. Start now.", true)
+    : homeGuideRow(`#/play/${k}`, "play", MODES[k].name, MODES[k].desc));
+  const ranked = duelV2();
+  render(`<div class="gh">
+    <section class="gh-intro"><h1>Game</h1><p>Play on your own, go head to head with people, or join a room.</p></section>
+    <section class="gh-sec"><h3>Solo</h3>${solo.map(soloRow).join("")}</section>
+    <section class="gh-sec"><h3>Multiplayer</h3>
+      ${homeGuideRow("#/qm", "users", "Match with someone", "Get paired with someone playing now.")}
+      ${ranked ? homeGuideRow("#/duels", "trophy", "Ranked and find match", "Find an opponent at your level.") : ""}
+      ${homeGuideRow("#/online", "users", "Online now", "See who is playing right now.")}
+      ${homeGuideRow("#/live", "live", "Live now", "Join a live game with people online.")}
+    </section>
+    <section class="gh-sec"><h3>Private rooms and groups</h3>
+      ${homeGuideRow("#/ko/new", "plus", "Create private room", "Get a code, send it, last one standing wins.")}
+      <form class="gh-join" id="gamejoin" autocomplete="off"><label for="gamecodein">Join with code</label>
+        <div class="gh-joinrow"><input id="gamecodein" name="c" inputmode="numeric" maxlength="8" placeholder="6-digit code" autocomplete="one-time-code" enterkeyhint="go"><button type="submit">Join</button></div></form>
+      ${homeGuideRow("#/ko/quick", "flame", "Quick knockout", "Jump into an open group knockout.")}
+    </section>
+  </div>${navBar("game")}`, "cv2 cv2-home cv2-game");
+  bindCodeBox("gamejoin");
 }
 async function home() {
   if (homeGuideOn()) return homeGuide();
@@ -1601,7 +1622,7 @@ function placeLine(c) { return `${esc(c.city)}, ${esc(c.state)} · ${KIND[c.kind
 function medal(i) { return i === 1 ? "🥇" : i === 2 ? "🥈" : i === 3 ? "🥉" : i; }
 
 async function churchHub() {
-  render(`<div id="chh"><div class="boot"><div class="boot-mark">⛪</div><div class="boot-sub">Opening the Church League…</div></div></div>${tabbar("ranks")}`);
+  render(`<div id="chh"><div class="boot"><div class="boot-mark">⛪</div><div class="boot-sub">Opening the Church League…</div></div></div>${tabbar("groups")}`);
   await ensureSession();
   let mine = null; try { mine = await api("/api/v3/churches/mine"); } catch (e) {}
   if (mine && mine.church) { syncChurch(mine.church); return go("#/church/" + mine.church.id); }
@@ -1626,7 +1647,7 @@ async function churchHub() {
 }
 
 async function createChurch() {
-  render(`<div id="chn"></div>${tabbar("ranks")}`);
+  render(`<div id="chn"></div>${tabbar("groups")}`);
   await ensureSession();
   const meta = await chMeta();
   const el = $("#chn"); if (!el) return;
@@ -1665,7 +1686,7 @@ async function createChurch() {
 }
 
 async function churchPage(id, q) {
-  render(`<div id="chp"><div class="boot"><div class="boot-mark">⛪</div><div class="boot-sub">Loading…</div></div></div>${tabbar("ranks")}`);
+  render(`<div id="chp"><div class="boot"><div class="boot-mark">⛪</div><div class="boot-sub">Loading…</div></div></div>${tabbar("groups")}`);
   await ensureSession();
   let d; try { d = await api("/api/v3/churches/" + encodeURIComponent(id)); } catch (e) {
     const el = $("#chp"); if (el) el.innerHTML = `<div class="col center" style="padding-top:18vh;gap:12px"><div style="font-size:48px">🕊️</div><h2>Church not found</h2><p class="muted">This team may have closed.</p><a class="btn primary" href="#/church">Church League</a></div>`;
@@ -2485,10 +2506,7 @@ function achIco(k) { return `<svg viewBox="0 0 24 24" width="26" height="26" ari
 // The Me tab bar: the same four tabs as the Home bar, with its flat icons.
 function meTabbar() { return chTabbar("me"); }
 // The Chever tab bar for the light look (Home, Duels, Ranks, Me): flat icons, no emoji, one bar on each of these screens.
-function chTabbar(active) {
-  const tab = (h, icon, label, k) => `<a href="${h}" class="${active === k ? "on" : ""}"><i>${homeIco(icon)}</i>${label}</a>`;
-  return `<div class="tabbar"><nav>${tab("#/", "home", "Home", "home")}${tab("#/duels", "swords", "Duels", "duels")}${tab("#/ranks", "ranks", "Ranks", "ranks")}${tab("#/me", "me", "Me", "me")}</nav></div>`;
-}
+function chTabbar(active) { return navBar(active); }
 async function profile() {
   render(`<div id="pf"></div>${meTabbar()}`, "cv2 cv2-me");
   await ensureSession();
@@ -2503,6 +2521,7 @@ async function profile() {
       <div class="xpbar" style="margin:12px 0 6px"><i style="width:${Math.round(rk.progress * 100)}%"></i></div><div class="small muted">${fmt(p.xp)} XP${rk.next ? ` · ${fmt(rk.nextXp - p.xp)} to ${rk.next}` : ""}</div></div>
     <div class="card" id="facepick"><div class="row between"><b>Your face</b><span class="small muted">shows next to your name in duels and rooms</span></div>
     <div class="facegrid" style="margin-top:10px">${BAFace.ids.map((id) => `<button class="faceopt ${myFace() === id ? "on" : ""}" data-face="${id}" aria-label="Face ${Number(id.slice(5))}">${BAFace.html(id, "100%")}</button>`).join("")}</div></div>
+    <a class="card row reportlink" href="#/ranks"><div class="pico">${homeIco("trophy")}</div><div class="grow"><b>Ranks</b><div class="small muted">This week's board, and every rank</div></div><div class="gold">›</div></a>
     <a class="card row reportlink" href="#/report"><div class="pico">${pfIco("report")}</div><div class="grow"><b>Your weekly report card</b><div class="small muted">Strongest and weakest books, accuracy vs last week</div></div><div class="gold">›</div></a>
     <div class="stats3"><div class="stat"><b>${pfIco("flame")} ${p.streak || 0}</b><span>Day streak</span></div><div class="stat"><b>${p.bestStreak || 0}</b><span>Best streak</span></div><div class="stat"><b>${p.rounds || 0}</b><span>Rounds</span></div></div>
     <div class="small muted center pfinl" style="margin-top:-6px">${pfIco("shield")} Streak saves: <b>${saves(p)}</b> · earn one every 7 days in a row (max 2). Miss a day and a save keeps your streak going.</div>

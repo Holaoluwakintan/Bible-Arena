@@ -54,7 +54,7 @@ h2{font-size:20px}h3{font-size:16px}
 .tier.on{border-color:var(--gold);background:rgba(245,185,66,.12);box-shadow:0 0 0 1px rgba(245,185,66,.3) inset}
 .tier b{display:block;font-size:14px}.tier small{display:block;font-size:11px;color:var(--muted);margin-top:2px}
 .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:20;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:linear-gradient(180deg,rgba(7,12,26,0),rgba(7,12,26,.92) 30%);}
-.tabbar nav{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;background:rgba(18,28,58,.94);border:1px solid var(--line2);border-radius:20px;padding:6px}
+.tabbar nav{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr);align-items:end;gap:6px;background:rgba(18,28,58,.94);border:1px solid var(--line2);border-radius:20px;padding:6px}
 .tabbar a{display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 0;border-radius:14px;text-decoration:none;color:var(--muted);font-size:11.5px;font-weight:700}
 .tabbar a i{font-style:normal;font-size:20px;line-height:1}
 .tabbar a.on{color:var(--gold2);background:rgba(245,185,66,.1)}
@@ -323,10 +323,10 @@ body.cv2-on .cv2-brand{font-family:var(--serif, Georgia, serif);font-size:20px;f
 body.cv2-on .cv2-reading .br-screen{max-width:none;padding:0}
 
 /* Reading plan tab bar (Chever look, preview): light bar with icons; the inactive tab is greyed and has no link. */
-body.cv2-on .tabbar nav{background:#fff;border:1px solid #E3E8F2;border-radius:22px;box-shadow:0 -2px 12px rgba(11,31,75,.06);max-width:560px;grid-template-columns:repeat(4,1fr);padding:6px 4px}
+body.cv2-on .tabbar nav{background:#fff;border:1px solid #E3E8F2;border-radius:22px;box-shadow:0 -2px 12px rgba(11,31,75,.06);max-width:560px;grid-template-columns:repeat(5,1fr);padding:6px 4px}
 body.cv2-on .tabbar a{color:#5B6478;font-size:12px;font-weight:700;gap:3px}
 body.cv2-on .tabbar a i{font-size:0;line-height:0;height:24px;display:flex;align-items:center}
-body.cv2-on .tabbar a.on{color:#0648C2;background:transparent}
+body.cv2-on .tabbar a.on{color:#0B1F4B;background:transparent}
 body.cv2-on .tabbar a.off{opacity:.45;pointer-events:none;cursor:default}
 body.cv2-on .tabbar a:not(.off):focus-visible{outline:2px solid #0648C2}
 
@@ -474,3 +474,13 @@ body.cv2-on .cv2-quiz .blank.bad{background:#FDF0F0;border-color:#D64545;color:#
 
 /* Flat icons on game screens (inline SVG that replaces the emoji): sized to the text around it. */
 .fi{width:1em;height:1em;display:inline-block;vertical-align:-0.15em;flex:0 0 auto}
+
+/* The one bar (2026-11-12, Michael's mockup): Home, Game, Bible (open book raised in a navy circle), Groups, Profile. Ranks sits under Profile. */
+.tabbar a i{display:flex;align-items:center;justify-content:center;height:30px;width:44px;border-radius:12px}
+.tabbar a i svg{width:22px;height:22px}
+.tabbar a span{line-height:1.1}
+.tabbar a.nb-centre i{width:56px;height:56px;border-radius:50%;background:#0B1F4B;color:#fff;margin-top:-34px;box-shadow:0 4px 14px rgba(11,31,75,.3)}
+.tabbar a.nb-centre i svg{width:26px;height:26px}
+body.cv2-on .tabbar a.on i{background:#FFF3C4}
+body.cv2-on .tabbar a.nb-centre.on i{background:#0B1F4B;box-shadow:0 0 0 3px #FFC300}
+body.cv2-on .tabbar a.nb-centre{color:#0B1F4B}

@@ -103,8 +103,8 @@ describe("home guide: no emoji, icons only", () => {
 
   it("the guide tab bar uses icons, not emoji", () => {
     const html = fnBody("homeGuideHTML");
-    expect(html).toMatch(/<div class="tabbar"><nav>/);
-    expect(html).toMatch(/tab\("#\/", "home", "Home", "home"\)/);
+    expect(html).toMatch(/\$\{navBar\("home"\)\}/);
+    expect(fnBody("navBar")).toMatch(/item\("home", "#\/", "home", "Home"\)/);
   });
 });
 

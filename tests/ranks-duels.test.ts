@@ -20,16 +20,19 @@ describe("Ranks and Duels: light look and flat icons", () => {
   const duels = fnBody("async function duelsScreen() {");
   const league = fnBody("async function leagueBoard(el, per) {");
 
-  it("the shared Chever tab bar is flat-icon and has Home, Duels, Ranks and Me", () => {
-    const bar = fnBody("function chTabbar(active) {");
+  it("the shared Chever tab bar is flat-icon and has Home, Game, Bible, Groups and Profile (Ranks sits under Profile)", () => {
+    const bar = fnBody("navBar");
     expect(bar).toMatch(/homeIco\(icon\)/);
-    expect(bar).toMatch(/tab\("#\/duels", "swords", "Duels", "duels"\)/);
-    expect(bar).toMatch(/tab\("#\/ranks", "ranks", "Ranks", "ranks"\)/);
+    expect(bar).toMatch(/item\("game", "#\/game", "controller", "Game"\)/);
+    expect(bar).toMatch(/item\("bible", "#\/reading", "openbook", "Bible"\)/);
+    expect(bar).toMatch(/item\("groups", "#\/church", "users", "Groups"\)/);
+    expect(bar).toMatch(/item\("profile", "#\/me", "me", "Profile"\)/);
+    expect(bar).not.toMatch(/"Ranks"/);
     expect(EMOJI.test(bar)).toBe(false);
   });
 
   it("the Me tab bar is unchanged: it is the same shared bar with Me active", () => {
-    expect(fnBody("function meTabbar() {")).toMatch(/chTabbar\("me"\)/);
+    expect(fnBody("meTabbar")).toMatch(/chTabbar\("me"\)/);
   });
 
   it("Ranks renders on the light theme with its own class and the shared tab bar", () => {

@@ -35,10 +35,10 @@ describe("Me page: light look and flat icons", () => {
     expect(EMOJI.test(icons)).toBe(false);
   });
 
-  it("the Me tab bar is the Home bar's flat icons, with Me active", () => {
-    const bar = fnBody("function meTabbar() {");
-    expect(bar).toMatch(/homeIco\(icon\)/);
-    expect(bar).toMatch(/tab\("#\/me", "me", "Me", "me"\)/);
+  it("the Me tab bar is the shared bar's flat icons, with Profile active", () => {
+    const bar = fnBody("meTabbar");
+    expect(bar).toMatch(/chTabbar\("me"\)/);
+    expect(fnBody("navBar")).toMatch(/item\("profile", "#\/me", "me", "Profile"\)/);
     expect(EMOJI.test(bar)).toBe(false);
     expect(profile).not.toMatch(/tabbar\("me"\)/);
   });
