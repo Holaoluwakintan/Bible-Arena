@@ -1464,7 +1464,7 @@ function voiceBar(it, box, isDone, pick) {
   const opts = it.k === "tf" ? [{ c: "fact", t: "fact", l: "a" }, { c: "myth", t: "myth", l: "b" }]
     : $$(".opt", box).map((b, n) => ({ c: Number(b.dataset.c), t: it.o[Number(b.dataset.c)], l: "abcdef"[n] }));
   const tips = (S.voiceN || 0) < 3;
-  box.insertAdjacentHTML("beforeend", `<div class="voicebar"><button class="vmic" type="button" aria-label="Say your answer">🎤 <span>Say it</span></button><div class="vheard small muted">${tips ? "Tap the mic and say your answer. It can mishear names and accents, so you can always tap instead." : ""}</div></div>`);
+  box.insertAdjacentHTML("beforeend", `<div class="voicebar"><button class="vmic" type="button" aria-label="Say your answer">${FI.mic} <span>Say it</span></button><div class="vheard small muted">${tips ? "Tap the mic and say your answer. It can mishear names and accents, so you can always tap instead." : ""}</div></div>`);
   const btn = $(".vmic", box), out = $(".vheard", box), label = $("span", btn);
   const optEl = (c) => $$(".opt", box).find((b) => String(b.dataset.c) === String(c));
   btn.onclick = () => {
