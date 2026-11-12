@@ -405,6 +405,34 @@ body.cv2-on .cv2-me .btn.ghost{background:#fff;border:1px solid #DDE3EE;color:#0
 body.cv2-on .cv2-me .faceopt.on{border-color:#FFC300;box-shadow:0 0 0 2px rgba(255,195,0,.35)}
 body.cv2-on .cv2-me #delacct{color:#C23B3B !important}
 body.cv2-on .cv2-me .reportlink{color:#0B1F4B}
+/* ---- Ranks and Duels on the Chever light look (cv2-ranks, cv2-duels): white cards, navy and blue, flat icons, no emoji. ---- */
+.chin{display:inline-flex;align-items:center;vertical-align:-3px;margin-right:4px}
+.chin svg{width:16px;height:16px;display:block}
+.chbig{display:flex;justify-content:center;align-items:center;color:#0648C2;margin:0 auto}
+.chbig svg{width:42px;height:42px}
+body.cv2-on .cv2-ranks .btn svg,body.cv2-on .cv2-duels .btn svg{width:20px;height:20px;flex:0 0 auto}
+body.cv2-on .cv2-ranks h2,body.cv2-on .cv2-duels h2{color:#0B1F4B;font-family:var(--serif, Georgia, serif)}
+body.cv2-on .cv2-ranks .card,body.cv2-on .cv2-duels .card,body.cv2-on .cv2-ranks .badge,body.cv2-on .cv2-duels .hero{background:#fff;border:1px solid #E3E8F2;border-radius:18px;color:#0B1F4B;box-shadow:0 2px 10px rgba(11,31,75,.06)}
+body.cv2-on .cv2-ranks .card b,body.cv2-on .cv2-duels .card b,body.cv2-on .cv2-ranks .badge b,body.cv2-on .cv2-duels .hero h2{color:#0B1F4B}
+body.cv2-on .cv2-ranks .muted,body.cv2-on .cv2-duels .muted{color:#5B6478}
+body.cv2-on .cv2-ranks .dim,body.cv2-on .cv2-duels .dim{color:#8A93A6}
+body.cv2-on .cv2-ranks .gold,body.cv2-on .cv2-duels .gold{color:#0648C2}
+body.cv2-on .cv2-ranks .chip,body.cv2-on .cv2-duels .chip{background:#fff;border:1px solid #DDE3EE;color:#0B1F4B}
+body.cv2-on .cv2-ranks .chip.on,body.cv2-on .cv2-duels .chip.on{background:#EEF4FE;border-color:#C9D9F7;color:#0648C2}
+body.cv2-on .cv2-ranks .btn.primary,body.cv2-on .cv2-duels .btn.primary{background:#0648C2;color:#fff;box-shadow:0 4px 14px rgba(6,72,194,.22)}
+body.cv2-on .cv2-ranks .btn.ghost,body.cv2-on .cv2-duels .btn.ghost{background:#fff;border:1px solid #DDE3EE;color:#0B1F4B}
+body.cv2-on .cv2-duels .hero .rays{display:none}
+body.cv2-on .cv2-ranks .lb{border-bottom:1px solid #EEF1F6;color:#0B1F4B}
+body.cv2-on .cv2-ranks .lb b{color:#0B1F4B}
+body.cv2-on .cv2-ranks .lb .pos{color:#8A93A6}
+body.cv2-on .cv2-ranks .lb .pos.p1{color:#B7791F}
+body.cv2-on .cv2-ranks .lb .pos.p2{color:#6B7689}
+body.cv2-on .cv2-ranks .lb .pos.p3{color:#A8642E}
+body.cv2-on .cv2-ranks .lb.me{background:#EEF4FE;border-radius:12px}
+body.cv2-on .cv2-ranks .vtick{color:#0648C2;display:inline-flex;vertical-align:-2px}
+body.cv2-on .cv2-duels .codebox input{background:#F8FAFD;border:1.5px solid #DDE3EE;color:#0B1F4B}
+body.cv2-on .cv2-duels .codebox input:focus{border-color:#0648C2}
+body.cv2-on .cv2-duels .sechead b{color:#0B1F4B}
 /* Your face (profile): forty avatar faces, the chosen one ringed in gold */
 .facegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));gap:8px;max-height:300px;overflow-y:auto;padding:4px 2px}
 .faceopt{width:100%;aspect-ratio:1;border-radius:50%;padding:0;border:2px solid transparent;background:none;display:block;line-height:0}

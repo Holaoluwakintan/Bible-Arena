@@ -1698,10 +1698,10 @@ async function leagueBoard(el, per) {
   const mine = r.mine;
   el.innerHTML = `
     <div class="row" style="gap:6px;margin-bottom:10px"><button class="chip ${per === "week" ? "on" : ""}" data-lp="week">This week</button><button class="chip ${per === "all" ? "on" : ""}" data-lp="all">All-time</button><span class="grow"></span>${per === "week" ? `<span class="small dim">Resets in ${untilReset(r.resetsAt)}</span>` : ""}</div>
-    ${champ && per === "week" ? `<a class="badge" href="#/church/${esc(champ.id)}" style="text-decoration:none;color:inherit;margin-bottom:10px"><div class="bi">🏆</div><div><b>Last week's champion</b><div class="small muted">${esc(champ.name)} · ${fmt(champ.points)} pts</div></div></a>` : ""}
-    ${mine && mine.pos > 5 ? `<a class="lb me" href="#/church/${esc(mine.id)}" style="text-decoration:none;color:inherit;margin-bottom:6px"><div class="pos">${mine.pos}</div><div class="grow"><b>⛪ ${esc(mine.name)}</b> <span class="small gold">your church</span><div class="small muted">${mine.members} member${mine.members === 1 ? "" : "s"}</div></div><div class="gold serif" style="font-weight:800">${fmt(mine.points)}</div></a>`
-      : mine ? "" : `<a class="card gold row" href="#/church" style="text-decoration:none;color:inherit;gap:12px;margin-bottom:10px"><div style="font-size:26px">⛪</div><div class="grow"><b>Play for your church</b><div class="small muted">Join with an invite code or create your church's team</div></div><div class="gold">›</div></a>`}
-    ${r.churches.length ? r.churches.map((c) => `<a class="lb ${c.isMine ? "me" : ""}" href="#/church/${esc(c.id)}" style="text-decoration:none;color:inherit"><div class="pos p${c.pos}">${medal(c.pos)}</div><div class="grow"><b>${esc(c.name)}</b>${c.verified ? ` <span class="vtick" title="Verified church">✅</span>` : ""}${c.titles ? ` <span class="small gold">🏆${c.titles > 1 ? "×" + c.titles : ""}</span>` : ""}<div class="small muted">${esc(c.city)}, ${esc(c.state)} · ${c.members} member${c.members === 1 ? "" : "s"}</div></div><div class="gold serif" style="font-weight:800">${fmt(c.points)}</div></a>`).join("")
+    ${champ && per === "week" ? `<a class="badge" href="#/church/${esc(champ.id)}" style="text-decoration:none;color:inherit;margin-bottom:10px"><div class="bi">${homeIco("trophy")}</div><div><b>Last week's champion</b><div class="small muted">${esc(champ.name)} · ${fmt(champ.points)} pts</div></div></a>` : ""}
+    ${mine && mine.pos > 5 ? `<a class="lb me" href="#/church/${esc(mine.id)}" style="text-decoration:none;color:inherit;margin-bottom:6px"><div class="pos">${mine.pos}</div><div class="grow"><b><span class="chin">${pfIco("church")}</span>${esc(mine.name)}</b> <span class="small gold">your church</span><div class="small muted">${mine.members} member${mine.members === 1 ? "" : "s"}</div></div><div class="gold serif" style="font-weight:800">${fmt(mine.points)}</div></a>`
+      : mine ? "" : `<a class="card gold row" href="#/church" style="text-decoration:none;color:inherit;gap:12px;margin-bottom:10px"><div class="chbig" style="width:34px">${pfIco("church")}</div><div class="grow"><b>Play for your church</b><div class="small muted">Join with an invite code or create your church's team</div></div><div class="gold">›</div></a>`}
+    ${r.churches.length ? r.churches.map((c) => `<a class="lb ${c.isMine ? "me" : ""}" href="#/church/${esc(c.id)}" style="text-decoration:none;color:inherit"><div class="pos p${c.pos}">${c.pos}</div><div class="grow"><b>${esc(c.name)}</b>${c.verified ? ` <span class="vtick" title="Verified church"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>` : ""}${c.titles ? ` <span class="small gold chin">${homeIco("trophy")}${c.titles > 1 ? "×" + c.titles : ""}</span>` : ""}<div class="small muted">${esc(c.city)}, ${esc(c.state)} · ${c.members} member${c.members === 1 ? "" : "s"}</div></div><div class="gold serif" style="font-weight:800">${fmt(c.points)}</div></a>`).join("")
       : `<div class="muted">No church teams yet. Create the first one!</div>`}`;
   $$("[data-lp]", el).forEach((b) => (b.onclick = () => { sfx.chip(); history.replaceState(null, "", "#/ranks?tab=church&p=" + b.dataset.lp); leagueBoard(el, b.dataset.lp); }));
 }
@@ -2239,38 +2239,38 @@ function duelResult(v, r, cfg) {
 }
 async function duelsScreen() {
   if (duelV2()) return duelsScreenV2();
-  render(`<div class="row between" style="margin-bottom:14px"><h2>Challenges</h2><a class="btn primary" href="#/ko/new" style="min-height:42px">⚔️ New</a></div>
-    <div class="card col" style="gap:10px;margin-bottom:14px"><div class="small muted">Got a code from someone? Enter it to join.</div>${codeBoxHTML("dcode")}<div class="row" style="gap:8px"><a class="btn ghost grow sm" href="#/live">🌍 Play online</a><a class="btn ghost grow sm" href="#/duel/new">📨 Send a set to beat</a></div></div>
-    <div class="sechead"><b>Your sets to beat</b></div><div id="dl" class="col"><div class="muted small">Loading your challenges…</div></div>${tabbar("duels")}`);
+  render(`<div class="row between" style="margin-bottom:14px"><h2>Challenges</h2><a class="btn primary" href="#/ko/new" style="min-height:42px">${homeIco("swords")}New</a></div>
+    <div class="card col" style="gap:10px;margin-bottom:14px"><div class="small muted">Got a code from someone? Enter it to join.</div>${codeBoxHTML("dcode")}<div class="row" style="gap:8px"><a class="btn ghost grow sm" href="#/live">${homeIco("users")}Play online</a><a class="btn ghost grow sm" href="#/duel/new">${homeIco("plus")}Send a set to beat</a></div></div>
+    <div class="sechead"><b>Your sets to beat</b></div><div id="dl" class="col"><div class="muted small">Loading your challenges…</div></div>${chTabbar("duels")}`, "cv2 cv2-duels");
   bindCodeBox("dcode");
   await ensureSession();
   let r; try { r = await api("/api/v3/duels/mine"); } catch (e) { if (!$("#dl")) return; $("#dl").innerHTML = `<div class="card">Couldn't load duels. Check your connection.</div>`; return; }
   const el = $("#dl"); if (!el) return;
-  if (!r.duels.length) { el.innerHTML = `<div class="hero center"><div class="rays"></div><div style="font-size:42px">⚔️</div><h2 style="font-family:var(--serif)">No challenges yet</h2><p class="muted small">Challenge a friend: create a challenge, send the link, play live. Last one standing wins.</p><a class="btn primary block" href="#/ko/new">⚔️ Challenge someone</a></div>`; return; }
+  if (!r.duels.length) { el.innerHTML = `<div class="hero center"><div class="rays"></div><div class="chbig">${homeIco("swords")}</div><h2 style="font-family:var(--serif)">No challenges yet</h2><p class="muted small">Challenge a friend: create a challenge, send the link, play live. Last one standing wins.</p><a class="btn primary block" href="#/ko/new">${homeIco("swords")}Challenge someone</a></div>`; return; }
   el.innerHTML = r.duels.map((d) => {
     const es = d.entries || []; const me = es.find((e) => e.me); const others = es.filter((e) => !e.me && e.finished);
     const best = others.sort((a, b) => duelCmp(b, a))[0];
     const c = me && me.finished && best ? duelCmp(me, best) : null;
-    const status = !me || !me.finished ? "Your turn" : !best ? "Waiting for opponent" : c === 1 ? "You lead 🏆" : c === 0 ? "Draw 🤝" : `${best.name} leads`;
-    return `<a class="card row" href="#/d/${d.code}" style="text-decoration:none;color:inherit;gap:12px"><div style="font-size:26px">${MODES[d.mode] ? MODES[d.mode].icon : "⚔️"}</div><div class="grow"><b>${d.mine ? "Your challenge" : "From " + esc(d.creator_name)}</b><div class="small muted">${MODES[d.mode] ? MODES[d.mode].name : ""} · ${TIER[d.tier] ? TIER[d.tier].name : ""} · ${d.players} played</div></div><div class="small ${status.startsWith("You") ? "gold" : "muted"}" style="text-align:right;font-weight:700">${esc(status)}</div></a>`;
+    const status = !me || !me.finished ? "Your turn" : !best ? "Waiting for opponent" : c === 1 ? "You lead" : c === 0 ? "Draw" : `${best.name} leads`;
+    return `<a class="card row" href="#/d/${d.code}" style="text-decoration:none;color:inherit;gap:12px"><div class="chin" style="margin:0">${homeIco("swords")}</div><div class="grow"><b>${d.mine ? "Your challenge" : "From " + esc(d.creator_name)}</b><div class="small muted">${MODES[d.mode] ? MODES[d.mode].name : ""} · ${TIER[d.tier] ? TIER[d.tier].name : ""} · ${d.players} played</div></div><div class="small ${status.startsWith("You") ? "gold" : "muted"}" style="text-align:right;font-weight:700">${esc(status)}</div></a>`;
   }).join("");
 }
 
 // ---------- leaderboards ----------
 async function ranks(tab) {
-  const tabs = [["week", "This week"], ["church", "⛪ Churches"], ["rivals", "Rivals"], ["daily", "Today"], ["all", "All-time"]];
-  render(`<h2 style="margin-bottom:12px">Leaderboards</h2><div class="segs">${tabs.map(([k, l]) => `<a class="chip ${tab === k ? "on" : ""}" href="#/ranks?tab=${k}">${l}</a>`).join("")}</div>${tab === "daily" ? `<p class="small muted" style="margin:0 0 10px">🌍 Global Scoreboard for today's Daily Challenge: one official try each. Longer sets can score more.</p>` : ""}<div id="lb" class="card"><div class="muted small">Loading…</div></div>${tabbar("ranks")}`);
+  const tabs = [["week", "This week"], ["church", "Churches"], ["rivals", "Rivals"], ["daily", "Today"], ["all", "All-time"]];
+  render(`<h2 style="margin-bottom:12px">Leaderboards</h2><div class="segs">${tabs.map(([k, l]) => `<a class="chip ${tab === k ? "on" : ""}" href="#/ranks?tab=${k}">${l}</a>`).join("")}</div>${tab === "daily" ? `<p class="small muted" style="margin:0 0 10px">Global Scoreboard for today's Daily Challenge: one official try each. Longer sets can score more.</p>` : ""}<div id="lb" class="card"><div class="muted small">Loading…</div></div>${chTabbar("ranks")}`, "cv2 cv2-ranks");
   await ensureSession();
   if (tab === "church") { const l = $("#lb"); if (l) leagueBoard(l, parseHash().q.get("p") === "all" ? "all" : "week"); return; }
   let r; try { r = await api("/api/v3/leaderboard?scope=" + tab); } catch (e) { const l = $("#lb"); if (l) l.innerHTML = "Couldn't load the board."; return; }
   const el = $("#lb"); if (!el) return;
   if (tab === "church") {
-    el.innerHTML = `<div class="small muted" style="margin-bottom:8px">Churches and groups ranked by their players' total XP. ${S.church ? `You play for <b class="gold">${esc(S.church)}</b>.` : `<a href="#/me">Add your church</a> to join.`}</div>` + (r.churches.length ? r.churches.map((c, i) => `<div class="lb"><div class="pos p${i + 1}">${i + 1}</div><div class="grow"><b>⛪ ${esc(c.church)}</b><div class="small muted">${c.players} player${c.players > 1 ? "s" : ""}</div></div><div class="gold serif" style="font-weight:800">${fmt(c.score)}</div></div>`).join("") : `<div class="muted">No churches yet. Be the first!</div>`);
+    el.innerHTML = `<div class="small muted" style="margin-bottom:8px">Churches and groups ranked by their players' total XP. ${S.church ? `You play for <b class="gold">${esc(S.church)}</b>.` : `<a href="#/me">Add your church</a> to join.`}</div>` + (r.churches.length ? r.churches.map((c, i) => `<div class="lb"><div class="pos p${i + 1}">${i + 1}</div><div class="grow"><b><span class="chin">${pfIco("church")}</span>${esc(c.church)}</b><div class="small muted">${c.players} player${c.players > 1 ? "s" : ""}</div></div><div class="gold serif" style="font-weight:800">${fmt(c.score)}</div></div>`).join("") : `<div class="muted">No churches yet. Be the first!</div>`);
     return;
   }
   const rows = r.rows || [];
   const empty = { week: "No rounds this week yet. Play one and top the board!", daily: "Nobody has played today's challenge yet.", rivals: "Your rivals appear here after your first duel.", all: "No players yet." }[tab];
-  el.innerHTML = rows.length ? rows.map((x, i) => `<div class="lb ${x.isMe ? "me" : ""}"><div class="pos p${i + 1}">${i + 1}</div><div class="grow"><b>${esc(x.name)}</b>${x.isMe ? ` <span class="small gold">you</span>` : ""}<div class="small muted">${esc(x.rank)}${x.church ? " · " + esc(x.church) : ""}${tab === "rivals" ? ` · You ${x.wins}–${x.losses}${x.draws ? ` · ${x.draws} draw${x.draws > 1 ? "s" : ""}` : ""}` : ""}${tab === "daily" && x.total ? ` · ${x.correct}/${x.total}` : ""}</div></div><div class="gold serif" style="font-weight:800">${fmt(x.score)}</div></div>`).join("") : `<div class="muted">${empty}</div>${tab === "rivals" ? `<a class="btn primary block" style="margin-top:12px" href="#/ko/new">⚔️ Challenge someone</a>` : ""}`;
+  el.innerHTML = rows.length ? rows.map((x, i) => `<div class="lb ${x.isMe ? "me" : ""}"><div class="pos p${i + 1}">${i + 1}</div><div class="grow"><b>${esc(x.name)}</b>${x.isMe ? ` <span class="small gold">you</span>` : ""}<div class="small muted">${esc(x.rank)}${x.church ? " · " + esc(x.church) : ""}${tab === "rivals" ? ` · You ${x.wins}–${x.losses}${x.draws ? ` · ${x.draws} draw${x.draws > 1 ? "s" : ""}` : ""}` : ""}${tab === "daily" && x.total ? ` · ${x.correct}/${x.total}` : ""}</div></div><div class="gold serif" style="font-weight:800">${fmt(x.score)}</div></div>`).join("") : `<div class="muted">${empty}</div>${tab === "rivals" ? `<a class="btn primary block" style="margin-top:12px" href="#/ko/new">${homeIco("swords")}Challenge someone</a>` : ""}`;
 }
 
 
@@ -2417,8 +2417,10 @@ const ACH_ICO = {
 };
 function achIco(k) { return `<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ACH_ICO[k] || ""}</svg>`; }
 // The Me tab bar: the same four tabs as the Home bar, with its flat icons.
-function meTabbar() {
-  const tab = (h, icon, label, k) => `<a href="${h}" class="${k === "me" ? "on" : ""}"><i>${homeIco(icon)}</i>${label}</a>`;
+function meTabbar() { return chTabbar("me"); }
+// The Chever tab bar for the light look (Home, Duels, Ranks, Me): flat icons, no emoji, one bar on each of these screens.
+function chTabbar(active) {
+  const tab = (h, icon, label, k) => `<a href="${h}" class="${active === k ? "on" : ""}"><i>${homeIco(icon)}</i>${label}</a>`;
   return `<div class="tabbar"><nav>${tab("#/", "home", "Home", "home")}${tab("#/duels", "swords", "Duels", "duels")}${tab("#/ranks", "ranks", "Ranks", "ranks")}${tab("#/me", "me", "Me", "me")}</nav></div>`;
 }
 async function profile() {
