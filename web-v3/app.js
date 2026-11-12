@@ -1,7 +1,7 @@
 /* Chever v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.13.0";
+window.BA_V = "3.13.1";
 
 // Flat icon set (Chever look): every emoji on a game screen is drawn with these inline SVGs in the palette
 // (gold #FFC300, red #D62828, navy #0B1F4B, white). Cross = duel, church, reading, loading. Crown = ranks, wins, perfect round, mastery.
@@ -2647,8 +2647,8 @@ async function profile() {
 function featureScripts() {
   const f = window.BA_FLAGS || {};
   const want = [];
-  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.0");
-  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.12.6");
+  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.1");
+  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.13.1");
   if (!want.length) return null;
   return Promise.all(want.map((src) => new Promise((done) => {
     const s = document.createElement("script"); s.src = src; s.onload = done; s.onerror = done; document.head.appendChild(s);

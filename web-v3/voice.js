@@ -19,7 +19,8 @@ const VI = {
   block: VSVG('<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>'),
   flag: VSVG('<path d="M5.5 21V4M5.5 4.5h11l-2 4 2 4h-11"/>'),
 };
-const face = (a) => (window.BAFace && BAFace.isFace && BAFace.isFace(a) ? BAFace.html(a, "1.6em") : esc(a || ""));
+// The player's face picture, or their initial in a circle; never the raw avatar id ("face-01") as text.
+const face = (a, n) => (window.BAFace && BAFace.html ? BAFace.html(a, "1.6em", n) : `<span class="ba-init">${esc(String(n || "?").trim().charAt(0).toUpperCase() || "?")}</span>`);
 const prefOn = () => { try { return localStorage.getItem(PREF) !== "off"; } catch (e) { return true; } };
 const setPref = (on) => { try { localStorage.setItem(PREF, on ? "on" : "off"); } catch (e) {} };
 const toast = (m) => { const t = document.getElementById("toast"); if (!t) return; t.textContent = m; t.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("on"), 3600); };
@@ -321,7 +322,7 @@ function chip(x, me) {
   // badge: muted for me · couldn't connect · … connecting · their mic is on
   const badge = mineMuted ? VI.spkOff : st === "fail" ? VI.warn : st === "wait" ? "…" : !x.muted ? VI.mic : "";
   return `<button class="vchip ${mineMuted ? "mute " : ""}${st}${x.muted ? " micoff" : ""}" data-id="${esc(x.id)}" aria-label="${esc(x.name)}${me ? " (you)" : mineMuted ? ", muted for you. Tap for options" : ". Tap to mute, block or report"}">
-    <span class="va">${face(x.avatar)}</span>${badge ? `<span class="vb">${badge}</span>` : ""}<span class="vn">${me ? "You" : esc(x.name)}</span></button>`;
+    <span class="va">${face(x.avatar, x.name)}</span>${badge ? `<span class="vb">${badge}</span>` : ""}<span class="vn">${me ? "You" : esc(x.name)}</span></button>`;
 }
 function render() {
   let d = document.getElementById("vdock");
@@ -402,7 +403,7 @@ V.sheet = function (x) {
   const inV = roster.some((r) => r.id === x.id);
   const s = document.createElement("div");
   s.id = "vsheet"; s.className = "vsheet"; s.setAttribute("role", "dialog"); s.setAttribute("aria-label", "Options for " + x.name);
-  const main = () => `<div class="vsh-card"><div class="vsh-who"><span class="va">${face(x.avatar)}</span><b>${esc(x.name)}</b></div>
+  const main = () => `<div class="vsh-card"><div class="vsh-who"><span class="va">${face(x.avatar, x.name)}</span><b>${esc(x.name)}</b></div>
     ${inV ? `<button data-s="mute">${mutedByMe.has(x.id) ? VI.spk + " Unmute for me" : VI.spkOff + " Mute for me"}</button>` : ""}
     <button data-s="block">${VI.block} Block<span>You won't hear each other in any game</span></button>
     <button data-s="report">${VI.flag} Report<span>Tell us about bad behaviour</span></button>

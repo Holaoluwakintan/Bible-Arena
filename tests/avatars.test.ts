@@ -73,7 +73,13 @@ describe("avatar faces: browser helpers", () => {
     expect(B.isFace("face-41")).toBe(false);
     expect(B.isFace("face-40")).toBe(true);
     expect(B.isFace("🦁")).toBe(false);
-    expect(B.html("🦁")).toBe("🦁");
+    // v3.13.1: anything that is not a face id is the player's initial in a circle, never raw text
+    expect(B.html("🦁", "1.5em", "Ada")).toContain('class="ba-init"');
+    expect(B.html("🦁", "1.5em", "Ada")).toContain(">A</span>");
+    expect(B.html("🦁", "1.5em", "Ada")).not.toContain("🦁");
+    expect(B.html(undefined, "2em", "  bola")).toContain(">B</span>");
+    expect(B.html("", "2em", "")).toContain(">?</span>");
+    expect(B.html("face-03", "44px", "Ada")).not.toContain("face-03<");
     expect(B.html("face-03", "44px")).toContain('src="/v3/avatars/face-03.svg"');
   });
 
