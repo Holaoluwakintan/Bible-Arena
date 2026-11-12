@@ -16,7 +16,8 @@
     ".br-screen button{margin:12px 0 4px;padding:12px 18px;border-radius:12px;border:0;background:#c9a54a;color:#070C1A;font:inherit;font-weight:700;cursor:pointer}" +
     ".br-lens{display:flex;gap:8px;flex-wrap:wrap}.br-lens button{margin:8px 0}" +
     "[hidden]{display:none!important}.br-books{max-height:14rem;overflow:auto;border:1px solid #C9D3E6;border-radius:10px;padding:6px 10px;display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;margin:6px 0}" +
-    ".br-bk{display:flex;gap:6px;align-items:center;font-size:15px;color:#0B1F4B}" +
+    ".br-screen label.br-bk{display:flex!important;flex-direction:row!important;align-items:center;gap:8px;font-size:15px;color:#0B1F4B;margin:0}" +
+    ".br-bk input[type=checkbox]{width:18px!important;height:18px!important;margin:0!important;flex:none;padding:0}" +
     ".br-lens button[aria-pressed=true]{outline:2px solid #c9a54a}" +
     ".br-code{font-size:32px;letter-spacing:.2em;font-weight:800;margin:12px 0}" +
     ".br-small{opacity:.7;font-size:14px}" +
@@ -318,7 +319,7 @@
       if (sm) sm.hidden = draft.scope !== "books";
       var err = lengthFromDraft().error || portionError(p);
       if (err) { el2.textContent = err; return; }
-      el2.textContent = refOf(p) + ": " + perDayText(p) + ", " + lengthLabelOf(p) + ", " + p.version + "." +
+      el2.textContent = refOf(p) + ": " + (p.chaptersPerDay ? p.lengthDays + (p.lengthDays === 1 ? " day" : " days") : perDayText(p)) + ", " + lengthLabelOf(p) + ", " + p.version + "." +
         (dailySplit(p).some(function (d) { return d.endChapter < d.startChapter; }) ? " Days after the last chapter are catch-up days." : "");
     }
 
