@@ -479,8 +479,10 @@ body.cv2-on .cv2-quiz .blank.bad{background:#FDF0F0;border-color:#D64545;color:#
 .tabbar a i{display:flex;align-items:center;justify-content:center;height:30px;width:44px;border-radius:12px}
 .tabbar a i svg{width:22px;height:22px}
 .tabbar a span{line-height:1.1}
-.tabbar a.nb-centre i{width:56px;height:56px;border-radius:50%;background:#0B1F4B;color:#fff;margin-top:-34px;box-shadow:0 4px 14px rgba(11,31,75,.3)}
+.tabbar a.nb-centre{position:relative;padding-top:26px}
+.tabbar a.nb-centre i{position:absolute;top:-30px;left:50%;transform:translateX(-50%);width:56px;height:56px;margin:0;border-radius:50%;background:#0B1F4B;color:#fff;box-shadow:0 4px 14px rgba(11,31,75,.3)}
 .tabbar a.nb-centre i svg{width:26px;height:26px}
+body.cv2-on .tabbar a.nb-centre i{width:56px;height:56px;margin:0}
 body.cv2-on .tabbar a.on i{background:#FFF3C4}
 body.cv2-on .tabbar a.nb-centre.on i{background:#0B1F4B;box-shadow:0 0 0 3px #FFC300}
 body.cv2-on .tabbar a.nb-centre{color:#0B1F4B}
