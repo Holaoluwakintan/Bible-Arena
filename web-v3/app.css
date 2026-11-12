@@ -367,6 +367,7 @@ body.cv2-on .cv2-home .tabbar a i svg{width:22px;height:22px}
 .pico svg,.pfline svg{display:block;flex:0 0 auto}
 .pfline{display:flex;align-items:center;justify-content:center;gap:6px}
 .pfline svg{width:16px;height:16px}
+.pfinl svg{display:inline-block;vertical-align:-3px;width:16px;height:16px;margin-right:2px}
 .stat b svg{display:inline-block;vertical-align:-3px;width:16px;height:16px}
 .chip svg{width:16px;height:16px;flex:0 0 auto}
 .ach .ai{display:flex;align-items:center;justify-content:center;height:30px;margin:0 auto}
@@ -383,7 +384,7 @@ body.cv2-on .cv2-me .xpbar{background:#E3E8F2}
 body.cv2-on .cv2-me .xpbar>i{background:linear-gradient(90deg,#0648C2,#1E6BE6)}
 body.cv2-on .cv2-me .pico{background:#EEF2FA;color:#0B1F4B}
 body.cv2-on .cv2-me .pfline{color:#5B6478}
-body.cv2-on .cv2-me .pfline svg,body.cv2-on .cv2-me .stat b svg,body.cv2-on .cv2-me .chip svg{color:#0648C2}
+body.cv2-on .cv2-me .pfline svg,body.cv2-on .cv2-me .pfinl svg,body.cv2-on .cv2-me .stat b svg,body.cv2-on .cv2-me .chip svg{color:#0648C2}
 body.cv2-on .cv2-me .stat{background:#fff;border:1px solid #E3E8F2;color:#0B1F4B;border-radius:16px}
 body.cv2-on .cv2-me .stat b{color:#0B1F4B;font-family:var(--serif, Georgia, serif)}
 body.cv2-on .cv2-me .stat span{color:#5B6478}
