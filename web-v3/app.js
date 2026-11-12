@@ -1,7 +1,7 @@
 /* Chever v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.12.8";
+window.BA_V = "3.13.0";
 
 // Flat icon set (Chever look): every emoji on a game screen is drawn with these inline SVGs in the palette
 // (gold #FFC300, red #D62828, navy #0B1F4B, white). Cross = duel, church, reading, loading. Crown = ranks, wins, perfect round, mastery.
@@ -354,11 +354,12 @@ async function route() {
   if (pathDuel && !parts.length) { history.replaceState(null, "", "/#/d/" + pathDuel[1].toUpperCase()); return route(); }
   const pathChurch = location.pathname.match(/^\/c\/([A-Za-z0-9]{4,8})/);
   if (pathChurch && !parts.length) { history.replaceState(null, "", "/#/c/" + pathChurch[1].toUpperCase()); return route(); }
-  if (!S.onboarded && parts[0] !== "d" && parts[0] !== "c") return ["qm", "live", "ko", "online", "bot"].includes(parts[0]) ? onboarding(() => route()) : onboarding();
+  if (!S.onboarded && parts[0] !== "d" && parts[0] !== "c") return ["qm", "live", "ko", "online", "bot", "public"].includes(parts[0]) ? onboarding(() => route()) : onboarding();
   const [a, b] = parts;
-  if (window.BAS) { BAS.setBusy(false); BAS.watchLive(!a || a === "live" || a === "online"); }
+  if (window.BAS) { BAS.setBusy(false); BAS.watchLive(!a || a === "live" || a === "online" || a === "public"); }
   if (!a) return home();
   if (a === "live") return liveNow();
+  if (a === "public") return publicScreen();
   if (a === "qm") return quickMatch(q);
   if (a === "ko") return b === "quick" ? quickKo() : newKo();
   if (a === "online") return onlineNow();
@@ -567,6 +568,38 @@ function homeGuideHTML() {
     ${navBar("home")}
   </div>`;
 }
+// ---------- Public lobby (v3.13, Michael 2026-11-12): no code, no password. See the public games being played and the people
+// waiting, and tap Play now to be put in the same room as everyone else who tapped it (2 to 8 players). In the room the
+// players choose: Start now, Wait for more players, or Share code. Built on the knockout rooms (/lv/ko/quick); no new engine.
+function pubRow(x, live) {
+  const who = (x.names || []).slice(0, 4).map(esc).join(", ") + ((x.names || []).length > 4 ? ` +${x.names.length - 4}` : "");
+  const sub = live
+    ? `${x.final ? "Final" : "Round " + x.round} · ${x.left} still in${x.lead ? ` · leading: ${esc(x.lead.name)} ${fmt(x.lead.score)}` : ""}`
+    : x.startsIn != null ? `Starting in ${Math.ceil(x.startsIn / 1000)}s · ${x.n} of ${x.max}` : `${x.n} of ${x.max} waiting · join them`;
+  return `<div class="gh-row pubrow"><span class="gh-ico">${homeIco(live ? "live" : "users")}</span><span class="gh-txt"><b>${who || esc(x.host)}</b><span>${sub}</span></span>
+    <button class="pubbtn${live ? " ghost" : ""}" data-ko="${esc(x.code)}">${live ? "Watch" : "Join"}</button></div>`;
+}
+async function publicScreen() {
+  render(`<div class="gh">
+    <section class="gh-intro"><h1>Public lobby</h1><p>No code, no password. Anyone online can play. Tap Play now and you are put in a room with everyone else who tapped it, up to 8 players.</p></section>
+    <section class="gh-sec"><button class="pubplay" id="pubgo">${homeIco("play")}<span>Play now</span></button>
+      <p class="gh-hint" id="pubhint">Once 2 or more are in, you all choose: start now, wait for more players, or share the code with friends.</p></section>
+    <section class="gh-sec"><h3>Waiting for players</h3><div id="pubwait" class="col" style="gap:10px"><div class="gh-hint">Loading…</div></div></section>
+    <section class="gh-sec"><h3>Live games</h3><div id="publive" class="col" style="gap:10px"><div class="gh-hint">Loading…</div></div></section>
+    <section class="gh-sec"><h3>Private rooms</h3>${homeGuideRow("#/ko/new", "plus", "Create private room", "Only people with your code can join.")}</section>
+  </div>${navBar("game")}`, "cv2 cv2-home cv2-game cv2-public");
+  $("#pubgo").onclick = () => { sfx.tap(); buzz(12); go("#/ko/quick"); };
+  await ensureSession();
+  const draw = (r) => {
+    const w = $("#pubwait"), l = $("#publive"); if (!w || !l) return;
+    w.innerHTML = r.waiting.length ? r.waiting.map((x) => pubRow(x, false)).join("") : `<div class="gh-hint">Nobody is waiting right now. Tap Play now to open a room: people online get a pop-up.</div>`;
+    l.innerHTML = r.live.length ? r.live.map((x) => pubRow(x, true)).join("") : `<div class="gh-hint">No public game is being played right now.</div>`;
+    const h = $("#pubhint"); if (h) h.textContent = r.waitingPlayers ? `${r.waitingPlayers} ${r.waitingPlayers === 1 ? "person is" : "people are"} waiting. Tap Play now to join them.` : "Once 2 or more are in, you all choose: start now, wait for more players, or share the code with friends.";
+    bindJoins(w); bindJoins(l);
+  };
+  const tick = async () => { try { draw(await api("/lv/public")); } catch (e) { if ($("#pubwait") && $("#pubwait").textContent === "Loading…") draw({ waiting: [], live: [], waitingPlayers: 0 }); } };
+  tick(); const t = setInterval(() => { if (!document.hidden) tick(); }, 4000); onLeave(() => clearInterval(t));
+}
 function homeGuide() {
   render(`${homeGuideHTML()}`, "cv2 cv2-home");
   bindCodeBox("homejoin");
@@ -582,6 +615,9 @@ function gameScreen() {
   render(`<div class="gh">
     <section class="gh-intro"><h1>Game</h1><p>Play on your own, go head to head with people, or join a room.</p></section>
     <section class="gh-sec"><h3>Solo</h3>${solo.map(soloRow).join("")}</section>
+    <section class="gh-sec"><h3>Public games</h3>
+      ${homeGuideRow("#/public", "live", "Public lobby", "No code, no password. Watch live games or play now with anyone online.", true)}
+    </section>
     <section class="gh-sec"><h3>Multiplayer</h3>
       ${homeGuideRow("#/qm", "users", "Match with someone", "Get paired with someone playing now.")}
       ${ranked ? homeGuideRow("#/duels", "trophy", "Ranked and find match", "Find an opponent at your level.") : ""}
@@ -2611,7 +2647,7 @@ async function profile() {
 function featureScripts() {
   const f = window.BA_FLAGS || {};
   const want = [];
-  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.12.8");
+  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.0");
   if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.12.6");
   if (!want.length) return null;
   return Promise.all(want.map((src) => new Promise((done) => {

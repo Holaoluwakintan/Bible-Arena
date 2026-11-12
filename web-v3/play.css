@@ -157,3 +157,8 @@ body.vd-on #toast{bottom:calc(96px + env(safe-area-inset-bottom))}
 .vsh-reasons label,.vsh-also{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;background:rgba(255,255,255,.04);font-size:15px}
 .vsh-reasons input,.vsh-also input{width:20px;height:20px;accent-color:#F5B942}
 .vsheet textarea{font:inherit;font-size:15px;color:var(--ivory);background:#0b1430;border:1px solid var(--line);border-radius:12px;padding:10px;resize:none}
+
+/* v3.13 public waiting room choice */
+.kochoice .kochoices .btn{width:100%;min-height:48px;display:flex;align-items:center;justify-content:center;gap:8px}
+.kocode.flash{outline:3px solid #FFC300;transition:outline .2s}
+.lpbig svg{width:30px;height:30px}

@@ -46,8 +46,18 @@ export interface LKo {
   auto?: boolean;
   /** v3.7.0: when the auto-start countdown ends (ms epoch); when this game's lobby opened */
   startAt?: number; openedAt?: number;
+  /** v3.13 public lobby: each player's choice in an open public lobby ("go" = Start now, "wait" = Wait for more players) */
+  votes?: Record<string, "go" | "wait">;
+  /** v3.13: a "wait" vote holds the automatic countdown until this moment (one hold per lobby, cleared when someone new joins) */
+  waitUntil?: number;
 }
 export const KO_MAX = 50;
+/** v3.13 public lobby ("Play now"): rooms fill to this many players; people who tap Play now after that get a new room */
+export const KO_QUICK_MAX = 8;
+/** v3.13: once more than half of the players here tap Start now, the game starts after this short countdown */
+export const KO_VOTE_GO_MS = 5_000;
+/** v3.13: one "Wait for more players" holds the automatic countdown for at most this long */
+export const KO_WAIT_HOLD_MS = 120_000;
 export const KO_ROUND_LEN = 5;
 export const KO_PER_CHOICES = [5, 7, 10];
 export const koPer = (ko: LKo) => (KO_PER_CHOICES.includes(Number(ko.per)) ? Number(ko.per) : KO_ROUND_LEN);
@@ -139,7 +149,8 @@ export function joinRoom(room: LRoom, input: { name?: unknown; avatar?: unknown;
   if (room.phase === "final" && !room.ko) return { ok: false, error: "This game has finished.", code: "ended" };
   if (room.locked) return { ok: false, error: "The host has locked this game.", code: "locked" };
   const live = activePlayers(room);
-  if (live.length >= room.maxPlayers) return { ok: false, error: `This room is full (${room.maxPlayers} players). Bigger rooms are coming with Church Premium.`, code: "full" };
+  const watcherRoom = !!room.ko && room.phase !== "lobby" && live.length < KO_MAX; // v3.13: anyone can come in and watch a public game
+  if (live.length >= room.maxPlayers && !watcherRoom) return { ok: false, error: `This room is full (${room.maxPlayers} players). Bigger rooms are coming with Church Premium.`, code: "full" };
   let name = cleanName(input.name);
   if (!name) return { ok: false, error: "Please enter a name (kind words only 🙂).", code: "name" };
   const taken = new Set(live.map((p) => p.name.toLowerCase()));
@@ -166,6 +177,7 @@ export function joinRoom(room: LRoom, input: { name?: unknown; avatar?: unknown;
   if (dk) player.dk = dk;
   room.players[player.id] = player;
   if (room.ko && room.phase !== "lobby") room.ko.out[player.id] = -1; // joined mid-game or after the end: watches until Play again
+  if (room.ko && room.phase === "lobby") koNewcomer(room.ko);
   bump(room);
   return { ok: true, player, rejoined: false };
 }
@@ -431,6 +443,7 @@ export function koStart(room: LRoom, now: number, isOnline: (p: LPlayer) => bool
   const here = activePlayers(room).filter((p) => isOnline(p));
   if (here.length < 2) return { ok: false, error: "You need at least 2 players. Share the link!" };
   for (const p of activePlayers(room)) if (!isOnline(p)) ko.out[p.id] = -1;
+  delete ko.votes; delete ko.waitUntil;
   ko.round = 0;
   koNewRound(room, now, 0);
   return { ok: true };
@@ -448,17 +461,48 @@ export function koAdvance(room: LRoom, now: number): void {
     default: break;
   }
 }
-/** v3.7.0 auto lobby clock. Returns "start" when the countdown is over, "changed" when the countdown moved, else "". */
-export function koAutoLobby(room: LRoom, now: number, here: number): "" | "start" | "changed" {
+/** v3.7.0 auto lobby clock. Returns "start" when the countdown is over, "changed" when the countdown moved, else "".
+ * v3.13 public lobby choice (hereIds = the players online now): when more than half of them tapped Start now, it starts in
+ * KO_VOTE_GO_MS; while anyone here tapped Wait for more players (and the one hold has not run out), the automatic countdown
+ * is held; otherwise the v3.7.0 clock runs (30 s once 3 are here, or 2 after a minute). */
+export function koAutoLobby(room: LRoom, now: number, here: number, hereIds?: string[]): "" | "start" | "changed" {
   const ko = room.ko;
   if (!ko || !ko.auto || room.phase !== "lobby") return "";
   const was = ko.startAt;
+  const t = hereIds ? koTally(ko, hereIds) : { go: 0, wait: 0 };
   if (here < 2) delete ko.startAt;
+  else if (t.go * 2 > here) ko.startAt = Math.min(ko.startAt || Infinity, now + KO_VOTE_GO_MS);
+  else if (t.wait > 0 && ko.waitUntil && now < ko.waitUntil) delete ko.startAt;
   else if (here >= 3) ko.startAt = Math.min(ko.startAt || Infinity, now + KO_AUTO_COUNTDOWN_MS);
   else if (!ko.startAt) ko.startAt = Math.max((ko.openedAt || room.createdAt) + KO_AUTO_TWO_MS, now + KO_AUTO_TWO_MIN_MS);
   if (ko.startAt && now >= ko.startAt) return "start";
   if (ko.startAt !== was) { room.version++; room.pversion++; return "changed"; }
   return "";
+}
+/** v3.13: how many of the players here chose Start now / Wait for more players. */
+export function koTally(ko: LKo, hereIds: string[]): { go: number; wait: number } {
+  let go = 0, wait = 0;
+  for (const id of hereIds) { const v = ko.votes?.[id]; if (v === "go") go++; else if (v === "wait") wait++; }
+  return { go, wait };
+}
+/** v3.13: a player in an open public lobby picks Start now ("go") or Wait for more players ("wait"). */
+export function koVote(room: LRoom, pid: string, choice: string, now: number): { ok: true } | { ok: false; error: string } {
+  const ko = room.ko;
+  if (!ko || !ko.auto) return { ok: false, error: "Only public games have this choice." };
+  if (room.phase !== "lobby") return { ok: false, error: "The game has already started." };
+  if (!room.players[pid] || room.players[pid].kicked) return { ok: false, error: "Join first." };
+  if (choice !== "go" && choice !== "wait") return { ok: false, error: "Pick Start now or Wait." };
+  ko.votes = ko.votes || {};
+  ko.votes[pid] = choice;
+  if (choice === "wait" && !ko.waitUntil) ko.waitUntil = now + KO_WAIT_HOLD_MS;
+  bump(room);
+  return { ok: true };
+}
+/** v3.13: someone new came into the lobby: the people who were waiting for more got their wish, so they choose again. */
+function koNewcomer(ko: LKo) {
+  if (!ko.auto) return;
+  if (ko.votes) for (const [id, v] of Object.entries(ko.votes)) if (v === "wait") delete ko.votes[id];
+  delete ko.waitUntil;
 }
 /** "Play again": everyone (knocked out or not, plus anyone who joined meanwhile) back in the lobby with a new set. */
 export function koAgain(room: LRoom, questions: LQ[], now: number): void {
@@ -467,7 +511,7 @@ export function koAgain(room: LRoom, questions: LQ[], now: number): void {
   room.phase = "lobby"; room.qi = -1; room.phaseAt = now; room.endsAt = 0; delete room.endedAt;
   room.createdAt = now; // a room that keeps being played stays alive
   ko.game++; ko.round = 0; ko.roundStart = 0; ko.roundLen = koPer(ko); ko.out = {}; ko.lastOut = []; ko.history = []; delete ko.winner;
-  delete ko.startAt; ko.openedAt = now;
+  delete ko.startAt; delete ko.votes; delete ko.waitUntil; ko.openedAt = now;
   for (const p of Object.values(room.players)) {
     p.score = 0; p.streak = 0; p.best = 0; p.correct = 0; p.timeMs = 0; p.answers = {}; delete p.rank; delete p.prevRank;
   }

@@ -486,3 +486,10 @@ body.cv2-on .tabbar a.nb-centre i{width:56px;height:56px;margin:0}
 body.cv2-on .tabbar a.on i{background:#FFF3C4}
 body.cv2-on .tabbar a.nb-centre.on i{background:#0B1F4B;box-shadow:0 0 0 3px #FFC300}
 body.cv2-on .tabbar a.nb-centre{color:#0B1F4B}
+
+/* v3.13 Public lobby */
+body.cv2-on .cv2-home.cv2-public .pubplay{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:58px;border:0;border-radius:18px;background:#0B1F4B;color:#fff;font-size:19px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(11,31,75,.25)}
+body.cv2-on .cv2-home.cv2-public .pubplay svg{width:24px;height:24px;color:#FFC300;fill:#FFC300}
+body.cv2-on .cv2-home.cv2-public .pubrow .gh-txt b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.cv2-on .cv2-home.cv2-public .pubbtn{flex:none;border:0;border-radius:12px;padding:9px 16px;background:#FFC300;color:#0B1F4B;font-weight:800;font-size:14px;cursor:pointer}
+body.cv2-on .cv2-home.cv2-public .pubbtn.ghost{background:#fff;border:1.5px solid #0B1F4B}

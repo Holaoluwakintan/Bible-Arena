@@ -98,7 +98,7 @@ export function liveWinner(code: string, token: string): { title: string; name: 
 }
 
 /** v3.7.0: public knockout rooms with someone in them right now, for "Live now", pop-ups and "Join a live game". */
-export interface KoRow { code: string; host: string; auto: boolean; n: number; here: number; left: number; phase: string; round: number; final: boolean; game: number; startsIn: number | null; openedAt: number; max: number }
+export interface KoRow { code: string; host: string; auto: boolean; n: number; here: number; left: number; phase: string; round: number; final: boolean; game: number; startsIn: number | null; openedAt: number; max: number; lead?: { name: string; score: number } | null; names?: string[] }
 export function publicKo(now = Date.now()): KoRow[] {
   const out: KoRow[] = [];
   for (const room of rooms.values()) {
@@ -106,14 +106,27 @@ export function publicKo(now = Date.now()): KoRow[] {
     if (!ko || !E.koPublic(ko) || room.locked) continue;
     const act = E.activePlayers(room);
     const here = act.filter((p) => online(room.code, p, now)).length;
-    if (!here || act.length >= room.maxPlayers) continue;
+    if (!here || (room.phase === "lobby" && act.length >= room.maxPlayers)) continue; // v3.13: a full game being played is still listed to watch
     const alive = room.phase === "lobby" ? act.length : E.alivePlayers(room).length;
     out.push({ code: room.code, host: room.players[ko.hostId]?.name || "Someone", auto: !!ko.auto, n: act.length, here, left: alive,
       phase: room.phase, round: ko.round, final: room.phase !== "lobby" && room.phase !== "final" && alive <= 2 && ko.roundLen === E.koFinalLen(ko),
-      game: ko.game, startsIn: room.phase === "lobby" && ko.startAt ? Math.max(0, ko.startAt - now) : null, openedAt: ko.openedAt || room.createdAt, max: room.maxPlayers });
+      game: ko.game, startsIn: room.phase === "lobby" && ko.startAt ? Math.max(0, ko.startAt - now) : null, openedAt: ko.openedAt || room.createdAt, max: room.maxPlayers,
+      lead: koLead(room), names: act.sort((x, y) => x.joinedAt - y.joinedAt).slice(0, 8).map((x) => x.name) });
   }
   // open lobbies first (busiest first), then games being played
   return out.sort((a, b) => Number(b.phase === "lobby") - Number(a.phase === "lobby") || b.here - a.here || b.openedAt - a.openedAt).slice(0, 20);
+}
+function koLead(room: E.LRoom): { name: string; score: number } | null {
+  if (room.phase === "lobby") return null;
+  const top = E.koStandings(room)[0];
+  return top ? { name: top.name, score: top.score } : null;
+}
+/** v3.13 Public lobby (no code, no password): open public lobbies with people waiting, and public games being played now. */
+export function publicLobby(now = Date.now()) {
+  const rows = publicKo(now);
+  const waiting = rows.filter((r) => r.phase === "lobby" && r.n < Math.min(r.max, E.KO_QUICK_MAX));
+  const live = rows.filter((r) => r.phase !== "lobby");
+  return { waiting, live, waitingPlayers: waiting.reduce((a, r) => a + r.here, 0), playing: live.reduce((a, r) => a + r.here, 0), max: E.KO_QUICK_MAX };
 }
 /** v3.7.0: called (once) when a public knockout lobby opens, so people who are not in the app can get a phone notification. */
 let koOpenHook: ((code: string) => void) | null = null;
@@ -227,6 +240,14 @@ export function playerView(room: E.LRoom, p: E.LPlayer | undefined, now = Date.n
   return v;
 }
 
+/** v3.13 public lobby: the Start now / Wait for more players tally among the players here, my own pick, and the hold left. */
+function koChoice(room: E.LRoom, p: E.LPlayer | undefined, now: number) {
+  const ko = room.ko!;
+  const hereIds = E.activePlayers(room).filter((x) => online(room.code, x, now)).map((x) => x.id);
+  const t = E.koTally(ko, hereIds);
+  return { go: t.go, wait: t.wait, need: Math.floor(hereIds.length / 2) + 1, mine: (p && ko.votes?.[p.id]) || null,
+    holdLeft: t.wait && ko.waitUntil && ko.waitUntil > now ? ko.waitUntil - now : 0 };
+}
 /** What every phone in a knockout room sees: round, who is still in, who just went out, the winner. */
 function koView(room: E.LRoom, p: E.LPlayer | undefined, now: number) {
   const ko = room.ko!;
@@ -243,6 +264,7 @@ function koView(room: E.LRoom, p: E.LPlayer | undefined, now: number) {
     game: ko.game, round: ko.round, rq: room.qi >= 0 ? room.qi - ko.roundStart + 1 : 0, rlen: ko.roundLen,
     final: room.phase !== "lobby" && alive.length <= 2 && ko.roundLen === E.koFinalLen(ko),
     per: E.koPer(ko), finalLen: E.koFinalLen(ko), choices: E.KO_PER_CHOICES,
+    choice: ko.auto && room.phase === "lobby" ? koChoice(room, p, now) : null,
     pub: E.koPublic(ko), auto: !!ko.auto, startsIn: room.phase === "lobby" && ko.startAt ? Math.max(0, ko.startAt - now) : null,
     here: all.filter((x) => online(room.code, x, now)).length,
     again: ko.auto && room.phase === "final" ? Math.max(0, room.phaseAt + E.KO_AUTO_AGAIN_MS - now) : null,
@@ -381,7 +403,7 @@ function koAuto(room: E.LRoom, now: number): boolean {
     E.koAgain(room, pickSet(bankRef(), { tiers: [ko.tier], count: 45 }), now);
     return true;
   }
-  const r = E.koAutoLobby(room, now, here.length);
+  const r = E.koAutoLobby(room, now, here.length, here.map((p) => p.id));
   if (r === "start") {
     const host = room.players[ko.hostId];
     if (!host || host.kicked || !isOn(host)) ko.hostId = here[0].id; // the host left: the longest-waiting player takes over
@@ -414,6 +436,7 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
   bankRef = bank;
   ensureLoops();
 
+  app.get("/lv/public", (_req, res) => { res.setHeader("Cache-Control", "no-store"); json(res, 200, publicLobby()); });
   app.get("/lv/meta", (_req, res) => { res.setHeader("Cache-Control", "public, max-age=300"); res.json(bankMeta(bank())); });
   app.post("/lv/count", (req, res) => json(res, 200, { count: countMatches(bank(), (req.body || {}) as Pick) }));
 
@@ -470,7 +493,7 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
       if (room && p) { p.lastSeen = now; room.version++; room.pversion++; return json(res, 200, { code: room.code, token: p.token, id: p.id, joined: true, back: true, state: playerView(room, p) }); }
     }
     // busiest open public lobby with someone in it right now (one with a countdown running wins ties)
-    const pick = publicKo(now).filter((r) => r.phase === "lobby" && r.n < r.max)
+    const pick = publicKo(now).filter((r) => r.phase === "lobby" && r.auto && r.n < Math.min(r.max, E.KO_QUICK_MAX))
       .sort((x, y) => y.here - x.here || Number(y.startsIn != null) - Number(x.startsIn != null) || x.openedAt - y.openedAt)[0];
     if (pick) {
       const room = rooms.get(pick.code)!;
@@ -485,7 +508,7 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
     const questions = pickSet(bank(), { tiers: [tier], count: 45 });
     if (questions.length < 10) return json(res, 503, { error: "Questions are loading. Try again in a moment." });
     const room = E.createRoom({ code: genCode(), title: "Live knockout", questions, timer: E.KO_TIMER, auto: true, instant: true, now });
-    room.maxPlayers = E.KO_MAX;
+    room.maxPlayers = E.KO_QUICK_MAX; // v3.13: public Play now rooms hold up to 8; watchers can still come in once it is playing
     const j = E.joinRoom(room, { name, avatar: b.avatar, dk: S.deviceTag(req.headers["x-ba-d"]) }, now);
     if (!j.ok) return json(res, 400, { error: j.error });
     room.ko = E.makeKo(j.player.id, tier, E.KO_ROUND_LEN);
@@ -508,6 +531,14 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
     if (!p) return json(res, 404, { error: "Join first." });
     const now = Date.now();
     p.lastSeen = now;
+    // v3.13 public lobby: anyone in an open public lobby picks Start now or Wait for more players (no host needed)
+    if (String(b.action) === "vote") {
+      const v = E.koVote(room, p.id, String(b.choice), now);
+      if (!v.ok) return json(res, 400, { error: v.error });
+      koAuto(room, now);
+      touch(room); pushRoom(room, true);
+      return json(res, 200, { ok: true, state: playerView(room, p) });
+    }
     const host = room.players[room.ko.hostId];
     // the host runs it; if the host has left (offline), anyone in the room can take over
     if (p.id !== room.ko.hostId) {
@@ -539,7 +570,7 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
     if (!room) return json(res, 404, { error: "No game with that code. Check the screen and try again." });
     json(res, 200, { code: room.code, title: room.title, church: room.church, phase: room.phase, n: E.activePlayers(room).length, max: room.maxPlayers,
       locked: room.locked, teams: room.teams, full: E.activePlayers(room).length >= room.maxPlayers, avatars: E.FACE_AVATARS,
-      ko: room.ko ? { host: room.players[room.ko.hostId]?.name || "", rule: E.koRule(room.ko) } : undefined });
+      ko: room.ko ? { host: room.players[room.ko.hostId]?.name || "", rule: E.koRule(room.ko), auto: !!room.ko.auto } : undefined });
   });
 
   app.post("/lv/r/:code/join", async (req, res) => {
