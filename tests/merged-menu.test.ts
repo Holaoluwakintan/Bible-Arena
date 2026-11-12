@@ -22,20 +22,21 @@ function allFiles(dir: string): string[] {
   });
 }
 
-describe("merged build: flags stay off", () => {
-  it("nothing in the web pages sets either flag to true", () => {
-    for (const file of allFiles(ROOT).filter((f) => /\.(js|html)$/.test(f))) {
+describe("merged build: flags are on for the live build", () => {
+  it("only the page bootstrap sets both flags to true", () => {
+    const boot = readFileSync(join(ROOT, "index.html"), "utf8");
+    expect(boot).toMatch(/window\.BA_FLAGS=\{chever2Duels:true,sharedReading:true\}/);
+    for (const file of allFiles(ROOT).filter((f) => /\.(js|html)$/.test(f) && !f.endsWith("index.html"))) {
       const text = readFileSync(file, "utf8");
       expect(text, file).not.toMatch(/sharedReading\s*:\s*true/);
       expect(text, file).not.toMatch(/chever2Duels\s*:\s*true/);
-      expect(text, file).not.toMatch(/sharedReading\s*=\s*true/);
-      expect(text, file).not.toMatch(/chever2Duels\s*=\s*true/);
     }
   });
 
-  it("the server flag stays off too", () => {
+  it("the server-side flag table is on for both flags", () => {
     const flags = readFileSync(join(__dirname, "..", "domain", "feature-flags.ts"), "utf8");
-    expect(flags).toMatch(/sharedReading: false/);
+    expect(flags).toMatch(/sharedReading: true/);
+    expect(flags).toMatch(/chever2Duels: true/);
   });
 });
 

@@ -16,9 +16,9 @@ import {
 import { FEATURE_FLAGS, featureOn } from "../domain/feature-flags";
 
 describe("shared reading: flag", () => {
-  it("is OFF by default", () => {
-    expect(FEATURE_FLAGS.sharedReading).toBe(false);
-    expect(featureOn("sharedReading")).toBe(false);
+  it("is ON in the live build", () => {
+    expect(FEATURE_FLAGS.sharedReading).toBe(true);
+    expect(featureOn("sharedReading")).toBe(true);
   });
 });
 

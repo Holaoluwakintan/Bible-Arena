@@ -1,7 +1,7 @@
 /* Chever v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.12.5";
+window.BA_V = "3.13.0";
 
 // ---------- v3.8.3: opt-in rewarded ads (Android app 1.4.0+ only; the website shows nothing new) ----------
 // The app tells the page it can play ads: its launch URL carries baads=1 (Chrome / TWA path, remembered for this tab only),
@@ -2452,8 +2452,8 @@ async function profile() {
 function featureScripts() {
   const f = window.BA_FLAGS || {};
   const want = [];
-  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.12.5");
-  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.12.5");
+  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.0");
+  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.13.0");
   if (!want.length) return null;
   return Promise.all(want.map((src) => new Promise((done) => {
     const s = document.createElement("script"); s.src = src; s.onload = done; s.onerror = done; document.head.appendChild(s);
