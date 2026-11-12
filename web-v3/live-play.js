@@ -3,6 +3,12 @@
 "use strict";
 const L = window.BALive, { $, $$, esc, fmt, ord } = L;
 const app = $("#app");
+const LP_SVG = (inner) => `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:1.1em;height:1.1em;vertical-align:-0.2em;flex:none" fill="currentColor">${inner}</svg>`;
+const LP_ICON = {
+  wa: LP_SVG('<path d="M12 2.8a9.2 9.2 0 0 0-7.9 13.9L2.8 21.2l4.6-1.2A9.2 9.2 0 1 0 12 2.8z"/>'),
+  link: LP_SVG('<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>'),
+  crown: LP_SVG('<path d="M3.5 8.5 7.5 12 12 5.5l4.5 6.5 4-3.5-2 10h-13z"/><path d="M5.5 19.5h13" stroke="currentColor" stroke-width="2"/>'),
+};
 const toast = (m, ms) => { const t = $("#toast"); t.textContent = m; t.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("on"), ms || 2800); };
 const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }, del(k) { try { localStorage.removeItem(k); } catch (e) {} } };
 let code = "", sess = null, S = null, conn = null, scene = "", deadline = 0, shownAt = 0, myPick = null, fbShown = "", peek = null, net = "live", confettiDone = false;
@@ -300,7 +306,7 @@ function koList(s, opts) {
   const o = opts || {};
   const rows = s.ko.list.filter((x) => (o.alive ? !x.out : true)).slice(0, o.limit || 60);
   return `<div class="kol">${rows.map((x, i) => `<div class="${x.me ? "me " : ""}${x.out ? "out " : ""}${x.justOut ? "just " : ""}${x.on ? "" : "off"}"${x.me ? "" : ` data-pid="${esc(x.id)}" data-k="${esc(x.k || "")}" data-n="${esc(x.name)}" data-a="${esc(x.avatar)}" role="button" tabindex="0" aria-label="${esc(x.name)}: mute, block or report"`}>
-    <span class="kp">${o.lobby ? "" : x.out ? "❌" : i + 1}</span><span class="ka">${BAFace.html(x.avatar, "1.5em")}</span><span class="kn">${esc(x.name)}${x.host ? " 👑" : ""}${x.me ? " (you)" : ""}</span>
+    <span class="kp">${o.lobby ? "" : x.out ? "❌" : i + 1}</span><span class="ka">${BAFace.html(x.avatar, "1.5em")}</span><span class="kn">${esc(x.name)}${x.host ? " " + LP_ICON.crown : ""}${x.me ? " (you)" : ""}</span>
     <b>${o.lobby ? (x.on ? "" : "away") : x.out ? (x.out === -1 ? "watching" : s.phase === "final" && x.out === s.ko.round ? "2nd 🥈" : "out R" + x.out) : o.round ? "+" + fmt(x.rp) : fmt(x.score)}</b></div>`).join("")}</div>`;
 }
 function koRefreshList(s) {
@@ -316,7 +322,7 @@ function koStartBtn(s) {
   b.disabled = on < 2; b.textContent = on < 2 ? "Waiting for 1 more player…" : s.ko.startsIn != null ? `▶ Start now (${on} players)` : `▶ Start (${on} players)`;
 }
 function koShareButtons() {
-  return `<div class="row2"><a class="btn wa" id="kowa" href="https://wa.me/?text=${encodeURIComponent(koShareText(S))}" target="_blank" rel="noopener">📲 WhatsApp</a><button class="btn ghost" id="kocopy">🔗 Copy invite</button></div>`;
+  return `<div class="row2"><a class="btn wa" id="kowa" href="https://wa.me/?text=${encodeURIComponent(koShareText(S))}" target="_blank" rel="noopener">${LP_ICON.wa} WhatsApp</a><button class="btn ghost" id="kocopy">${LP_ICON.link} Copy invite</button></div>`;
 }
 function koBindShare(s) {
   const c = $("#kocopy"); if (c) c.onclick = async () => { try { await navigator.clipboard.writeText(koShareText(s)); toast("Link copied. Paste it anywhere 👍"); } catch (e) { toast(koUrl()); } };
@@ -331,6 +337,7 @@ function koLobby(s) {
   const k = s.ko, host = k.host || {};
   app.innerHTML = `${top(s)}<div class="center" style="justify-content:flex-start;gap:12px">
     <div class="tiny" style="color:var(--gold);margin-top:6px">⚔️ Bible knockout${k.game > 1 ? " · game " + k.game : ""}</div>
+    <a class="btn primary" id="kohome" href="/" style="width:100%;min-height:48px;text-decoration:none">&larr; Back to home</a>
     <h1>${k.auto ? "Live game lobby" : k.isHost ? "Your challenge is ready" : esc(host.name || "") + "'s challenge"}</h1>
     <div id="kobox" style="width:100%">${koBoxHTML(s)}</div>
     <div class="card kocode"><div class="tiny muted">Challenge code</div><div class="kc">${esc(code)}</div><div class="small muted">Friends tap your link, or enter this code in Chever.</div></div>
@@ -341,7 +348,7 @@ function koLobby(s) {
       <button class="btn primary" id="kostart"></button>` : k.auto ? "" : `<div class="card" style="width:100%"><div class="tiny muted">Waiting for ${esc(host.name || "the host")} to start</div><div class="small muted" style="margin-top:6px">Keep this screen open. ${host.on === false ? `<a href="#" id="kotake">${esc(host.name || "The host")} left? Start it yourself</a>` : ""}</div></div>`}
     <div class="card small muted" style="width:100%;text-align:left">📜 <b style="color:var(--ivory)">How it works:</b> ${esc(k.rule)}</div>
     <div class="card small muted" style="width:100%;text-align:left">🤝 <b style="color:var(--ivory)">Be kind:</b> no bad language, bullying or asking for personal details. Tap any player to mute, block or report them.</div>
-    <p class="foot"><a href="/">Chever home</a></p></div>`;
+    <a class="btn ghost" href="/" style="width:100%;min-height:48px;text-decoration:none;margin-top:4px">Chever home</a></div>`;
   koBindShare(s); koBindPub(); koBoxKey = koBoxState(s);
   const st = $("#kostart"); if (st) { koStartBtn(s); st.onclick = () => { L.buzz(15); koAction("start", st); }; }
   const tk = $("#kotake"); if (tk) tk.onclick = (e) => { e.preventDefault(); koAction("start"); };
