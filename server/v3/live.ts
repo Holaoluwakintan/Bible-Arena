@@ -538,7 +538,7 @@ export function registerLive(app: Express, bank: () => BankItem[], webDir: strin
     const room = await loadRoom(cleanCode(req.params.code));
     if (!room) return json(res, 404, { error: "No game with that code. Check the screen and try again." });
     json(res, 200, { code: room.code, title: room.title, church: room.church, phase: room.phase, n: E.activePlayers(room).length, max: room.maxPlayers,
-      locked: room.locked, teams: room.teams, full: E.activePlayers(room).length >= room.maxPlayers, avatars: E.AVATARS,
+      locked: room.locked, teams: room.teams, full: E.activePlayers(room).length >= room.maxPlayers, avatars: E.FACE_AVATARS,
       ko: room.ko ? { host: room.players[room.ko.hostId]?.name || "", rule: E.koRule(room.ko) } : undefined });
   });
 

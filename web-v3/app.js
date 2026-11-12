@@ -375,6 +375,7 @@ async function newKo() {
 // v3.7.0 "Join a live game": the busiest open public knockout lobby, or a new one that starts itself.
 function koMine() { const out = []; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (/^bal:p:\d{6}$/.test(k)) { const v = JSON.parse(localStorage.getItem(k) || "{}"); if (v && v.token) out.push({ code: k.slice(6), t: v.token }); } } } catch (e) {} return out.slice(-10); }
 function koKeep(r) { try { localStorage.setItem("bal:p:" + r.code, JSON.stringify({ token: r.token, id: r.id })); const me = JSON.parse(localStorage.getItem("bal:me") || "{}") || {}; if (!me.name) localStorage.setItem("bal:me", JSON.stringify({ name: (S.name || "Player").slice(0, 18), avatar: me.avatar })); } catch (e) {} }
+function myFace() { try { var a = (JSON.parse(localStorage.getItem("bal:me") || "{}") || {}).avatar; return BAFace.isFace(a) ? a : null; } catch (e) { return null; } }
 function koAvatar() { try { return (JSON.parse(localStorage.getItem("bal:me") || "{}") || {}).avatar; } catch (e) { return undefined; } }
 async function quickKo() {
   render(`<div class="boot"><div class="boot-mark">🎮</div><div class="boot-sub">Finding a live game…</div></div>`);
@@ -2376,6 +2377,8 @@ async function profile() {
     <div class="hero center"><div class="rays"></div><div class="emblem" style="width:84px;height:84px;font-size:36px;border-radius:24px;margin:0 auto 10px">${rk.name[0]}</div>
       <h2 style="font-family:var(--serif)">${esc(S.name || "Player")}</h2><div class="gold" style="font-weight:800">${rk.name} ${rk.division}</div>${S.church ? `<div class="small muted">⛪ ${esc(S.church)}</div>` : ""}
       <div class="xpbar" style="margin:12px 0 6px"><i style="width:${Math.round(rk.progress * 100)}%"></i></div><div class="small muted">${fmt(p.xp)} XP${rk.next ? ` · ${fmt(rk.nextXp - p.xp)} to ${rk.next}` : ""}</div></div>
+    <div class="card" id="facepick"><div class="row between"><b>Your face</b><span class="small muted">shows next to your name in duels and rooms</span></div>
+    <div class="facegrid" style="margin-top:10px">${BAFace.ids.map((id) => `<button class="faceopt ${myFace() === id ? "on" : ""}" data-face="${id}" aria-label="Face ${Number(id.slice(5))}">${BAFace.html(id, "100%")}</button>`).join("")}</div></div>
     <a class="card row reportlink" href="#/report"><div style="font-size:28px">📊</div><div class="grow"><b>Your weekly report card</b><div class="small muted">Strongest and weakest books, accuracy vs last week</div></div><div class="gold">›</div></a>
     <div class="stats3"><div class="stat"><b>🔥 ${p.streak || 0}</b><span>Day streak</span></div><div class="stat"><b>${p.bestStreak || 0}</b><span>Best streak</span></div><div class="stat"><b>${p.rounds || 0}</b><span>Rounds</span></div></div>
     <div class="small muted center" style="margin-top:-6px">🛡️ Streak saves: <b>${saves(p)}</b> · earn one every 7 days in a row (max 2). Miss a day and a save keeps your streak going.</div>
@@ -2401,6 +2404,12 @@ async function profile() {
     <div class="card"><b>More</b><div class="row" style="flex-wrap:wrap;gap:8px;margin-top:10px"><a class="chip" href="/play">🏛️ Classic app</a>${inAppShell() ? "" : `<a class="chip" href="/download">📱 Android app</a>`}<a class="chip" href="#/ranks?tab=church">⛪ Church League</a></div>
       <p class="small dim" style="margin:12px 0 0">Scripture quotations are from the King James Version (public domain). Every answer carries its reference so you can read it yourself.</p></div>
   </div>`;
+  $("#facepick").querySelectorAll(".faceopt").forEach((b) => (b.onclick = () => {
+    let m = {}; try { m = JSON.parse(localStorage.getItem("bal:me") || "{}") || {}; } catch (e) {}
+    m.avatar = b.dataset.face; try { localStorage.setItem("bal:me", JSON.stringify(m)); } catch (e) {}
+    $("#facepick").querySelectorAll(".faceopt").forEach((x) => x.classList.toggle("on", x === b));
+    toast("Face saved");
+  }));
   const ed = async (key, label, max) => { const v = prompt(label, S[key] || ""); if (v == null) return; if (key === "name" && badNm(v)) return toast(KIND_NAME); S[key] = v.trim().slice(0, max); save(); await savePlayer(); profile(); };
   $("#ename").onclick = () => ed("name", "Your name", 40);
   const blk = $("#blk"); if (blk) blk.onclick = () => blockedSheet();
@@ -2452,8 +2461,8 @@ async function profile() {
 function featureScripts() {
   const f = window.BA_FLAGS || {};
   const want = [];
-  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.12.5");
-  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.12.5");
+  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.12.6");
+  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.12.6");
   if (!want.length) return null;
   return Promise.all(want.map((src) => new Promise((done) => {
     const s = document.createElement("script"); s.src = src; s.onload = done; s.onerror = done; document.head.appendChild(s);

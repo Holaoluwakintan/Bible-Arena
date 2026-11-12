@@ -207,7 +207,7 @@ L.drawCard = async function (s, w, h, me) {
     const g = c.createLinearGradient(0, top, 0, baseY); g.addColorStop(0, cols[idx]); g.addColorStop(1, "rgba(255,255,255,.04)");
     c.fillStyle = g; c.globalAlpha = 0.9; rr(c, x - colW / 2, top, colW, heights[idx], U * 1.6); c.fill(); c.globalAlpha = 1;
     c.fillStyle = "#0A1124"; c.font = `800 ${U * 5}px ${serif}`; c.fillText(String(idx + 1), x, top + U * 6.5);
-    c.font = `${U * 6}px ${sans}`; c.fillText(p.avatar || medals[idx], x, top - U * 9.5);
+    c.font = `${U * 6}px ${sans}`; c.fillText(window.BAFace && BAFace.isFace(p.avatar) ? medals[idx] : (p.avatar || medals[idx]), x, top - U * 9.5);
     c.fillStyle = "#F6F1E7"; const ns = fit(c, p.name, colW - U, U * 3.6, 800, sans); c.font = `800 ${ns}px ${sans}`; c.fillText(p.name, x, top - U * 4.8);
     c.fillStyle = cols[idx]; c.font = `700 ${U * 2.6}px ${sans}`; c.fillText(L.fmt(p.score) + " pts", x, top - U * 1.6);
   });

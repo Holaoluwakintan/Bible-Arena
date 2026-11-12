@@ -70,6 +70,8 @@ export const MAX_PLAYERS = 200;
 export const INTRO_MS = 4000;
 export const GRACE_MS = 1000;          // answers landing just after zero still count (weak mobile data)
 export const LATENCY_CREDIT_MS = 2500; // the most a phone's own clock can shave off the server's
+export const FACE_AVATARS = ["face-01", "face-02", "face-03", "face-04", "face-05", "face-06", "face-07", "face-08", "face-09", "face-10", "face-11", "face-12", "face-13", "face-14", "face-15", "face-16", "face-17", "face-18", "face-19", "face-20", "face-21", "face-22", "face-23", "face-24", "face-25", "face-26", "face-27", "face-28", "face-29", "face-30", "face-31", "face-32", "face-33", "face-34", "face-35", "face-36", "face-37", "face-38", "face-39", "face-40"];
+// The first lobby set (emoji). Still accepted so a player who joined with one keeps it.
 export const AVATARS = ["🦁", "🐑", "🕊️", "🐟", "🌿", "⭐", "🔥", "👑", "📜", "🍇", "🌾", "⛵", "🐪", "🌈", "🏺", "🗝️", "🎺", "🪔", "🛡️", "🌻", "🐝", "🦅", "🍞", "💎"];
 export const TEAM_PRESETS: Record<string, Array<[string, string, string]>> = {
   "youth-choir": [["Youth", "#FF5D73", "🔥"], ["Choir", "#5AB8FF", "🎶"]],
@@ -146,7 +148,8 @@ export function joinRoom(room: LRoom, input: { name?: unknown; avatar?: unknown;
     while (taken.has(`${name} ${i}`.toLowerCase())) i++;
     name = `${name.slice(0, 15)} ${i}`;
   }
-  const avatar = AVATARS.includes(String(input.avatar)) ? String(input.avatar) : AVATARS[live.length % AVATARS.length];
+  const picked = String(input.avatar);
+  const avatar = FACE_AVATARS.includes(picked) || AVATARS.includes(picked) ? picked : FACE_AVATARS[live.length % FACE_AVATARS.length];
   let team: string | null = null;
   if (room.teams) {
     team = typeof input.team === "string" && room.teams.some((t) => t.id === input.team) ? input.team : null;

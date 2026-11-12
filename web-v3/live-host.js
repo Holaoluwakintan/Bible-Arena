@@ -201,7 +201,7 @@ function menu() {
     <div class="switchrow"><div><b>Lock the room</b><span>No new players can join</span></div><button class="sw ${S && S.locked ? "on" : ""}" data-a="lock"></button></div>
     <div class="switchrow"><div><b>List in "Live now" 🌍</b><span>Anyone in the app can find this game and join</span></div><button class="sw ${S && S.public ? "on" : ""}" data-a="public"></button></div>
     ${S && S.phase === "question" ? `<div class="switchrow"><div><b>+10 seconds</b><span>Give everyone a little more time</span></div><button class="btn ghost" data-x="extend">+10 s</button></div>` : ""}
-    <div class="sub">Remove a player</div><div class="plist" id="plist">${(S && S.players ? S.players : []).map((p) => `<button data-pid="${p.id}">${p.avatar} ${esc(p.name)} ✕</button>`).join("") || `<span class="hint">Open on the lobby or leaderboard to see players.</span>`}</div>
+    <div class="sub">Remove a player</div><div class="plist" id="plist">${(S && S.players ? S.players : []).map((p) => `<button data-pid="${p.id}">${BAFace.html(p.avatar, "1.2em")} ${esc(p.name)} ✕</button>`).join("") || `<span class="hint">Open on the lobby or leaderboard to see players.</span>`}</div>
     <div class="acts"><button class="btn ghost" data-x="close">Close</button>${S && S.phase !== "final" ? `<button class="btn ghost" data-x="end" style="border-color:rgba(255,93,115,.5)">End game now</button>` : ""}<button class="btn ghost" data-x="new">New game</button></div></div>`;
   document.body.appendChild(ov);
   ov.onclick = (e) => {
@@ -311,7 +311,7 @@ function updateLobby(s, first) {
   const players = s.players || [];
   pn.textContent = s.n;
   $("#waitmsg").style.display = players.length ? "none" : "";
-  const chip = (p) => `<span class="pl ${p.on ? "" : "off"}" data-id="${p.id}" title="Click to remove"><span class="av">${p.avatar}</span>${esc(p.name)}</span>`;
+  const chip = (p) => `<span class="pl ${p.on ? "" : "off"}" data-id="${p.id}" title="Click to remove"><span class="av">${BAFace.html(p.avatar, "1.6em")}</span>${esc(p.name)}</span>`;
   const ids = new Set(players.map((p) => p.id));
   $$(".pl").forEach((el) => { if (!ids.has(el.dataset.id)) el.remove(); });
   let popped = 0;
@@ -357,7 +357,7 @@ function toReveal(s, instant) {
   const ring = $("#ring"); if (ring) ring.style.visibility = "hidden";
   const pct = s.n ? Math.round((100 * (s.correctN || 0)) / s.n) : 0;
   $("#side").innerHTML = "";
-  $("#mid").innerHTML = `<div class="revealrow"><div class="pctbox"><div class="pct">${pct}%</div><div class="pctl">got it right · ${total} answered</div></div>${s.fastest ? `<div class="fast">⚡ Fastest<b>${s.fastest.avatar} ${esc(s.fastest.name)}</b>${(s.fastest.ms / 1000).toFixed(1)} s</div>` : ""}</div>`;
+  $("#mid").innerHTML = `<div class="revealrow"><div class="pctbox"><div class="pct">${pct}%</div><div class="pctl">got it right · ${total} answered</div></div>${s.fastest ? `<div class="fast">⚡ Fastest<b>${BAFace.html(s.fastest.avatar, "1.2em")} ${esc(s.fastest.name)}</b>${(s.fastest.ms / 1000).toFixed(1)} s</div>` : ""}</div>`;
   if (s.q.r || s.q.x) {
     const ref = document.createElement("div"); ref.className = "refline";
     ref.innerHTML = `${s.q.r ? `<b>📖 ${esc(s.q.r)}</b>` : ""}${s.q.x ? ` · ${esc(s.q.x)}` : ""}`;
@@ -391,7 +391,7 @@ function animateBoard(s) {
     const from = p.prev ? Math.min(p.prev - 1, top.length) : top.length;
     const move = p.prev ? p.prev - p.rank : 0;
     return `<div class="row ${p.rank === 1 ? "r1" : ""}" style="height:${H}px;top:${from * (H + gap)}px" data-to="${i * (H + gap)}">
-      <span class="pos">${p.rank}</span><span class="av">${p.avatar}</span>${p.team && tcol[p.team] ? `<span class="tm" style="background:${tcol[p.team]}"></span>` : ""}<span class="nm">${esc(p.name)}</span>
+      <span class="pos">${p.rank}</span><span class="av">${BAFace.html(p.avatar, "1.6em")}</span>${p.team && tcol[p.team] ? `<span class="tm" style="background:${tcol[p.team]}"></span>` : ""}<span class="nm">${esc(p.name)}</span>
       ${p.streak >= 3 ? `<span class="fl">🔥${p.streak}</span>` : ""}${move > 0 ? `<span class="up">▲${move}</span>` : move < 0 ? `<span class="dn">▼${-move}</span>` : ""}
       ${p.last ? `<span class="gain">+${fmt(p.last)}</span>` : ""}<span class="sc" data-from="${p.score - (p.last || 0)}" data-to="${p.score}">${fmt(p.score - (p.last || 0))}</span></div>`;
   }).join("");
@@ -410,7 +410,7 @@ function finale(s) {
   const body = $("#body");
   body.innerHTML = `<div class="scene final"><div class="fh">${esc(s.title)}</div><div class="fs">${s.church ? esc(s.church) + " · " : ""}${f.players || 0} players · ${f.questions || 0} questions</div>
     ${f.teams && f.teams.length ? `<div class="teamwin" id="tw" style="--tc:${f.teams[0].color};opacity:0">${f.teams[0].emoji} ${esc(f.teams[0].name)} win the team battle! <span style="opacity:.75;font-weight:700">(${fmt(f.teams[0].avg)} avg${f.teams[1] ? " vs " + fmt(f.teams[1].avg) : ""})</span></div>` : ""}
-    <div class="podium">${[1, 0, 2].map((i) => pod[i] ? `<div class="pod p${i + 1}" id="pod${i + 1}"><div class="who">${i === 0 ? `<div class="crown">👑</div>` : ""}<div class="av">${pod[i].avatar}</div><div class="nm">${i === 0 ? "👑 " : ""}${esc(pod[i].name)}</div><div class="sc">${fmt(pod[i].score)} pts</div></div><div class="blk">${i + 1}</div></div>` : "").join("")}</div>
+    <div class="podium">${[1, 0, 2].map((i) => pod[i] ? `<div class="pod p${i + 1}" id="pod${i + 1}"><div class="who">${i === 0 ? `<div class="crown">👑</div>` : ""}<div class="av">${BAFace.html(pod[i].avatar, "1.3em")}</div><div class="nm">${i === 0 ? "👑 " : ""}${esc(pod[i].name)}</div><div class="sc">${fmt(pod[i].score)} pts</div></div><div class="blk">${i + 1}</div></div>` : "").join("")}</div>
     <div class="finalbar" id="fbar"><span class="stat">🎯 <b>${f.accuracy || 0}%</b> answered right</span>${f.fastest ? `<span class="stat">⚡ Fastest answer <b>${esc(f.fastest.name)}</b> ${(f.fastest.ms / 1000).toFixed(1)} s</span>` : ""}${f.hardest ? `<span class="stat">🧠 Hardest question: only <b>${f.hardest.pct}%</b> got it</span>` : ""}</div>
     <div class="finalact" id="fact" style="opacity:0"><button class="btn primary" id="share">📲 Share results</button><button class="btn ghost" id="again">🔁 New game</button></div></div>`;
   const seq = finalShown ? [0, 0, 0, 0] : [3200, 4600, 6200, 7400];

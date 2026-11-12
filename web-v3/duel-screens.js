@@ -88,9 +88,19 @@
   }
 
   // ---------- renderers ----------
+  // A player's face (their own, from this phone's saved choice) or the initial when there is none.
+  // Only the "You" side carries a face: the other player's face is not stored with the duel yet.
+  var FACE = /^face-(0[1-9]|[1-2]\d|3\d|40)$/;
+  function myFace() {
+    try { var a = JSON.parse(localStorage.getItem("bal:me") || "{}").avatar; return FACE.test(a || "") ? a : null; } catch (e) { return null; }
+  }
+  function avInner(s) {
+    if (s.avatar && FACE.test(s.avatar)) return '<img src="/v3/avatars/' + s.avatar + '.svg" alt="" width="256" height="256" style="width:100%;height:100%;border-radius:50%">';
+    return esc(plainName(s.name).charAt(0).toUpperCase());
+  }
   function sideHTML(s, win, label) {
     return '<div class="cvd-side' + (win ? " win" : "") + '">' +
-      '<div class="cvd-av">' + esc(plainName(s.name).charAt(0).toUpperCase()) + "</div>" +
+      '<div class="cvd-av">' + avInner(s) + "</div>" +
       "<b>" + esc(s.label || plainName(s.name)) + "</b>" +
       '<div class="cvd-big">' + esc(s.score == null ? "–" : s.score) + "</div>" +
       '<div class="cvd-sub">' + esc(s.sub || "") + "</div>" +
@@ -114,7 +124,7 @@
       '<section class="cvd-card cvd-vs">' +
       sideHTML({ name: m.creatorName, label: m.creatorName, score: m.scoreToBeat, sub: m.scoreToBeat == null ? "not played yet" : "score to beat" }, false, "Challenger") +
       '<div class="cvd-vsx" aria-hidden="true">VS</div>' +
-      sideHTML({ name: "You", label: "You", score: null, sub: "not played yet" }, false, "") +
+      sideHTML({ name: "You", avatar: myFace(), label: "You", score: null, sub: "not played yet" }, false, "") +
       "</section>" +
       '<p class="cvd-note">Same questions, same clock. Points for speed and streaks. Every answer shows its verse.</p>' +
       (needName ? '<section class="cvd-card cvd-form"><label class="cvd-lab" for="nm">Your name</label><input id="nm" class="cvd-in" maxlength="40" placeholder="e.g. Ade" value="' + esc(m.nameVal || "") + '">' +
@@ -154,7 +164,7 @@
       '<section class="cvd-hero"><div class="cvd-badge big">' + badge + "</div>" +
       "<h1>" + esc(m.headline) + "</h1><p class=\"cvd-sub\">" + esc(m.sub) + "</p></section>" +
       '<section class="cvd-card cvd-scores">' +
-      sideHTML({ name: "You", label: "You", score: m.me.score, sub: m.me.correct + "/" + m.me.total + " · " + m.me.time }, st === "won" || st === "draw", st === "won" ? "Winner" : "") +
+      sideHTML({ name: "You", avatar: myFace(), label: "You", score: m.me.score, sub: m.me.correct + "/" + m.me.total + " · " + m.me.time }, st === "won" || st === "draw", st === "won" ? "Winner" : "") +
       '<div class="cvd-vsx" aria-hidden="true">VS</div>' +
       (m.opp ? sideHTML({ name: m.oppName, label: firstName(m.oppName), score: m.opp.score, sub: m.opp.correct + "/" + m.opp.total + " · " + m.opp.time }, st === "lost" || st === "draw", st === "lost" ? "Winner" : "") :
         sideHTML({ name: "Waiting", label: "Waiting", score: null, sub: "send the link" }, false, "")) +

@@ -53,7 +53,7 @@ async function profile() {
     ${peek.ko ? `<div class="tiny" style="color:var(--gold)">⚔️ Bible knockout</div><h2>${esc(peek.ko.host)} challenges you!</h2><p class="muted small" style="margin:0">${peek.n} in so far · ${peek.phase === "lobby" ? "waiting to start" : "game on: you'll watch this one and play the next"}</p>`
       : `<div class="tiny" style="color:var(--gold)">${esc(peek.church || "Chever Live")}</div><h2>${esc(peek.title)}</h2>`}
     <input class="namein" id="name" maxlength="18" placeholder="Your name" value="${esc(me.name || "")}" autocomplete="nickname" enterkeyhint="go">
-    <div class="avs" id="avs">${peek.avatars.map((a) => `<button data-a="${a}" class="${a === avatar ? "on" : ""}" aria-label="avatar ${a}">${a}</button>`).join("")}</div>
+    <div class="avs" id="avs">${peek.avatars.map((a) => `<button data-a="${a}" class="${a === avatar ? "on" : ""}" aria-label="avatar ${a}">${BAFace.html(a, "100%")}</button>`).join("")}</div>
     ${peek.teams ? `<div class="tiny muted" style="margin-top:4px">Pick your team</div><div class="teams" id="teams">${peek.teams.map((t) => `<button data-t="${t.id}" style="--tc:${t.color}"><span class="dot"></span>${t.emoji} ${esc(t.name)}</button>`).join("")}</div>` : ""}
     <div class="err" id="err"></div>
     <button class="btn primary" id="join">I'm in! 🙌</button>
@@ -108,7 +108,7 @@ function live(first) {
 function top(s) {
   const me = s.me || {};
   const tm = s.teams && me.team ? s.teams.find((t) => t.id === me.team) : null;
-  return `<div class="top"><span class="net ${net === "live" ? "" : net}" id="net"></span><span class="me"><span class="av">${me.avatar || ""}</span><span class="nm">${esc(me.name || "")}</span></span>${tm ? `<span class="tag" style="--tc:${tm.color};padding:4px 10px;font-size:13px">${tm.emoji} ${esc(tm.name)}</span>` : ""}<span class="sp"></span><span class="pts" id="pts">${fmt(me.score || 0)}</span></div>`;
+  return `<div class="top"><span class="net ${net === "live" ? "" : net}" id="net"></span><span class="me"><span class="av">${BAFace.html(me.avatar, "26px")}</span><span class="nm">${esc(me.name || "")}</span></span>${tm ? `<span class="tag" style="--tc:${tm.color};padding:4px 10px;font-size:13px">${tm.emoji} ${esc(tm.name)}</span>` : ""}<span class="sp"></span><span class="pts" id="pts">${fmt(me.score || 0)}</span></div>`;
 }
 function onState(s) {
   if (!s) return;
@@ -131,7 +131,7 @@ function onState(s) {
 }
 function lobby(s) {
   const me = s.me || {}, tm = s.teams && me.team ? s.teams.find((t) => t.id === me.team) : null;
-  app.innerHTML = `${top(s)}<div class="center"><div class="bigav">${me.avatar}</div><h1>You're in!</h1>
+  app.innerHTML = `${top(s)}<div class="center"><div class="bigav">${BAFace.html(me.avatar, "96px")}</div><h1>You're in!</h1>
     <p class="muted" style="margin:0">Look for <b style="color:var(--ivory)">${esc(me.name)}</b> on the big screen.</p>
     ${tm ? `<span class="tag" style="--tc:${tm.color}">${tm.emoji} Team ${esc(tm.name)}</span>` : ""}
     <div class="card" style="width:100%;margin-top:8px"><div class="tiny muted">Waiting for the host to start</div><div style="font-size:30px;font-weight:900;margin-top:6px" id="pn">${s.n}</div><div class="small muted">players so far</div></div>
@@ -219,7 +219,7 @@ function final(s) {
   app.innerHTML = `${top(s)}<div class="center" style="gap:10px"><div class="medal">${medal}</div>
     <h1>${me.rank ? ord(me.rank) + " place" : "Thanks for playing"}</h1><div class="muted">${fmt(me.score)} pts · ${s.n} players</div>
     ${tw ? `<div class="tag" style="--tc:${tw.color}">${tw.emoji} ${esc(tw.name)} won the team battle${mine && mine.id === tw.id ? " — that's you! 🎉" : ""}</div>` : ""}
-    <div class="podl">${(f.podium || []).map((p, i) => `<div>${["🥇", "🥈", "🥉"][i]} ${p.avatar} ${esc(p.name)}<b>${fmt(p.score)}</b></div>`).join("")}</div>
+    <div class="podl">${(f.podium || []).map((p, i) => `<div>${["🥇", "🥈", "🥉"][i]} ${BAFace.html(p.avatar, "1.3em")} ${esc(p.name)}<b>${fmt(p.score)}</b></div>`).join("")}</div>
     <button class="btn primary" id="share" style="margin-top:6px">📲 Share my result</button>
     ${f.podium && f.podium.length > 1 ? `<a class="btn ghost" id="chw" href="/#/qm?room=${encodeURIComponent(code)}&lt=${encodeURIComponent(sess && sess.token || "")}" style="text-decoration:none;border-color:rgba(245,185,66,.6)">${me.rank === 1 ? "🏆 Winner stays on: take on all comers" : `⚔️ Challenge the winner (${esc(f.podium[0].name)})`}</a>` : ""}
     <a class="btn ghost" href="/" style="text-decoration:none">Keep playing Chever</a>
@@ -300,7 +300,7 @@ function koList(s, opts) {
   const o = opts || {};
   const rows = s.ko.list.filter((x) => (o.alive ? !x.out : true)).slice(0, o.limit || 60);
   return `<div class="kol">${rows.map((x, i) => `<div class="${x.me ? "me " : ""}${x.out ? "out " : ""}${x.justOut ? "just " : ""}${x.on ? "" : "off"}"${x.me ? "" : ` data-pid="${esc(x.id)}" data-k="${esc(x.k || "")}" data-n="${esc(x.name)}" data-a="${esc(x.avatar)}" role="button" tabindex="0" aria-label="${esc(x.name)}: mute, block or report"`}>
-    <span class="kp">${o.lobby ? "" : x.out ? "❌" : i + 1}</span><span class="ka">${x.avatar}</span><span class="kn">${esc(x.name)}${x.host ? " 👑" : ""}${x.me ? " (you)" : ""}</span>
+    <span class="kp">${o.lobby ? "" : x.out ? "❌" : i + 1}</span><span class="ka">${BAFace.html(x.avatar, "1.5em")}</span><span class="kn">${esc(x.name)}${x.host ? " 👑" : ""}${x.me ? " (you)" : ""}</span>
     <b>${o.lobby ? (x.on ? "" : "away") : x.out ? (x.out === -1 ? "watching" : s.phase === "final" && x.out === s.ko.round ? "2nd 🥈" : "out R" + x.out) : o.round ? "+" + fmt(x.rp) : fmt(x.score)}</b></div>`).join("")}</div>`;
 }
 function koRefreshList(s) {
@@ -380,7 +380,7 @@ function koBoard(s) {
     ${justOut ? `<div class="medal">😢</div><h1>You're out!</h1><p class="muted" style="margin:0">Good fight. Stay and watch who wins, then play the next one.</p>`
       : k.meOut ? `<div class="medal">👀</div><h1>${k.left} left</h1>`
       : `<div class="medal">🔥</div><h1>You're through to ${next}!</h1>`}
-    ${k.lastOut.length ? `<div class="card" style="width:100%"><div class="tiny" style="color:#FF8A9A">Knocked out</div><div class="koout">${k.lastOut.map((x) => `<span>${x.avatar} ${esc(x.name)}</span>`).join("")}</div></div>` : ""}
+    ${k.lastOut.length ? `<div class="card" style="width:100%"><div class="tiny" style="color:#FF8A9A">Knocked out</div><div class="koout">${k.lastOut.map((x) => `<span>${BAFace.html(x.avatar, "1.2em")} ${esc(x.name)}</span>`).join("")}</div></div>` : ""}
     <div class="card" style="width:100%;text-align:left"><div class="row3"><b>Still in: <span id="kon">${k.left}</span></b><span class="small muted">${next} starts soon</span></div><div id="kolist" data-mode="round">${koList(s, { alive: true, round: true })}</div></div></div>`;
   if (!justOut && !k.meOut) L.buzz([20, 60, 30]); else if (justOut) L.buzz(150);
 }
@@ -389,7 +389,7 @@ function koFinal(s) {
   const iWon = w.id && me.id === w.id;
   app.innerHTML = `${top(s)}<div class="center" style="justify-content:flex-start;gap:10px;padding-top:8px">
     <div class="medal">🏆</div><div class="tiny" style="color:var(--gold)">Winner</div>
-    <h1 class="kowin">${w.avatar || ""} ${esc(w.name || "")}</h1>
+    <h1 class="kowin">${BAFace.html(w.avatar, "0.9em")} ${esc(w.name || "")}</h1>
     <p class="muted" style="margin:0">${iWon ? "That's you! Last one standing 🎉" : k.meOut > 0 && k.meOut === k.round ? "So close! You made the final and came 2nd 🥈" : k.meOut > 0 ? `You were knocked out in round ${k.meOut}. Next time!` : k.meOut === -1 ? "You'll play in the next one." : "So close! You made the final 💪"}</p>
     ${k.again != null ? `<div class="card small" style="width:100%">🔁 Next game starts in <b id="koag">${Math.ceil(k.again / 1000)}</b>s. Stay here to play!</div>` : ""}
     <div id="pushask" style="width:100%"></div>
@@ -439,7 +439,7 @@ async function results(c) {
     <div class="muted small">${new Date(f.at).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · ${f.players} players · ${f.questions} questions</div>
     <div class="medal">🏆</div>
     ${tw ? `<div class="tag" style="--tc:${tw.color}">${tw.emoji} ${esc(tw.name)} won the team battle</div>` : ""}
-    <div class="podl">${(f.top || f.podium || []).map((p, i) => `<div>${i < 3 ? ["🥇", "🥈", "🥉"][i] : `<span style="width:22px;text-align:center;color:var(--muted)">${p.rank || i + 1}</span>`} ${p.avatar} ${esc(p.name)}<b>${fmt(p.score)}</b></div>`).join("")}</div>
+    <div class="podl">${(f.top || f.podium || []).map((p, i) => `<div>${i < 3 ? ["🥇", "🥈", "🥉"][i] : `<span style="width:22px;text-align:center;color:var(--muted)">${p.rank || i + 1}</span>`} ${BAFace.html(p.avatar, "1.3em")} ${esc(p.name)}<b>${fmt(p.score)}</b></div>`).join("")}</div>
     <div class="muted small">🎯 ${f.accuracy}% answered right${f.fastest ? ` · ⚡ fastest: ${esc(f.fastest.name)} ${(f.fastest.ms / 1000).toFixed(1)} s` : ""}</div>
     <button class="btn primary" id="share">📲 Share on WhatsApp</button>
     <a class="btn ghost" href="/live" style="text-decoration:none">Host your own quiz night (free)</a></div>`;
