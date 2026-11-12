@@ -33,7 +33,8 @@ describe("home guide: content and order", () => {
   const html = full.slice(full.indexOf("return `<div class=\"gh\">"));
 
   it("says what the app is, with the brand name", () => {
-    expect(html).toMatch(/cv2-brand">Chever</);
+    // The brand mark and wordmark are drawn once, by render(), on every screen (see brand-mark.test.ts).
+    expect(app).toMatch(/app\.innerHTML = `\$\{brandBar\(\)\}/);
     expect(html).toMatch(/Know the Word\. Challenge the world\./);
   });
 

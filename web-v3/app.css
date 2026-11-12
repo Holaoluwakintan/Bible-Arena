@@ -361,3 +361,13 @@ body.cv2-on .cv2-home .gh-joinrow{display:flex;gap:8px}
 body.cv2-on .cv2-home .gh-joinrow input{flex:1;min-width:0;height:48px;border:1.5px solid #DDE3EE;border-radius:14px;padding:0 14px;font-size:18px;letter-spacing:.14em;color:#0B1F4B;background:#F8FAFD;font-family:var(--sans)}
 body.cv2-on .cv2-home .gh-joinrow button{height:48px;border:0;border-radius:14px;background:#0B1F4B;color:#FFC300;font-weight:800;font-size:15px;padding:0 20px}
 body.cv2-on .cv2-home .tabbar a i svg{width:22px;height:22px}
+
+/* ---- Chever brand mark (C + wordmark): the same bar, same size, on every screen. Dark by default; navy on the Chever light look. ---- */
+.cvm-bar{display:flex;align-items:center;gap:10px;height:52px;padding:0 4px;margin:0 0 4px}
+.cvm-mark{width:34px;height:36px;flex:0 0 34px;display:block}
+.cvm-body{fill:#F5F7FB}
+.cvm-sw{fill:#FFC300}
+.cvm-word{font-family:var(--serif, Cinzel, Georgia, serif);font-size:21px;font-weight:800;letter-spacing:.06em;color:#F5F7FB;line-height:1}
+body.cv2-on .cvm-body{fill:#022569}
+body.cv2-on .cvm-sw{fill:#8FB7E0}
+body.cv2-on .cvm-word{color:#0B1F4B}
