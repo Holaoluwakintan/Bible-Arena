@@ -2585,7 +2585,7 @@ async function profile() {
 function featureScripts() {
   const f = window.BA_FLAGS || {};
   const want = [];
-  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.12.6");
+  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.12.8");
   if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.12.6");
   if (!want.length) return null;
   return Promise.all(want.map((src) => new Promise((done) => {

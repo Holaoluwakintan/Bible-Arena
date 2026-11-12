@@ -13,6 +13,7 @@ function fresh(): Db {
 }
 const PORTION = { book: "Mark", startChapter: 8, endChapter: 14, lengthDays: 7, version: "KJV", lengthLabel: "7 days" };
 const NOW = 1_800_000_000_000;
+const DAY = 24 * 60 * 60 * 1000;
 
 function makePlan(d: Db) {
   const r = createPlan(d, "owner", { name: "Ada", ...PORTION }, NOW);
@@ -96,17 +97,21 @@ describe("shared reading plan: ticks and progress", () => {
     const { code } = makePlan(d);
     joinPlan(d, "m1", code, "Ben", NOW);
     joinPlan(d, "m2", code, "Cy", NOW);
-    // Ada (owner) reads days 1,2,3; Ben reads 1 and 3; Cy reads 3 twice and 6 once.
-    for (const day of [1, 2, 3]) tickDay(d, "owner", day, NOW);
-    for (const day of [1, 3, 1]) tickDay(d, "m1", day, NOW);
-    tickDay(d, "m2", 3, NOW); tickDay(d, "m2", 3, NOW); tickDay(d, "m2", 6, NOW);
-    const view = planViewFor(d, "m2").plan as any;
+    // One mark per Lagos day, in order: day k is marked on day k-1 of the test (NOW + k days).
+    const on = (k: number) => NOW + k * DAY;
+    // Ada (owner) reads days 1,2,3 on three days; Ben reads 1 and 2 (a repeat on day 1 does nothing); Cy reads 1,2,3
+    // and a repeat of 3 on the same day, and a day 6 that is not today (refused).
+    tickDay(d, "owner", 1, on(0)); tickDay(d, "owner", 2, on(1)); tickDay(d, "owner", 3, on(2));
+    tickDay(d, "m1", 1, on(0)); tickDay(d, "m1", 1, on(0)); tickDay(d, "m1", 2, on(1));
+    tickDay(d, "m2", 1, on(0)); tickDay(d, "m2", 2, on(1)); tickDay(d, "m2", 3, on(2)); tickDay(d, "m2", 3, on(2));
+    expect(tickDay(d, "m2", 6, on(2)).ok).toBe(false);
+    const view = planViewFor(d, "m2", on(2)).plan as any;
     const readCounts = view.days.map((x: any) => x.readCount);
-    expect(readCounts).toEqual([2, 1, 3, 0, 0, 1, 0]);
-    expect([...view.days[2].readers].sort()).toEqual(["Ada", "Ben", "Cy"]);
+    expect(readCounts).toEqual([3, 3, 2, 0, 0, 0, 0]);
+    expect([...view.days[2].readers].sort()).toEqual(["Ada", "Cy"]);
     const byName = Object.fromEntries(view.members.map((m: any) => [m.name, m.daysRead]));
-    expect(byName).toEqual({ Ada: 3, Ben: 2, Cy: 2 });
-    expect(view.myTicks).toEqual([3, 6]);
+    expect(byName).toEqual({ Ada: 3, Ben: 2, Cy: 3 });
+    expect(view.myTicks).toEqual([1, 2, 3]);
     expect(view.members.find((m: any) => m.isYou).name).toBe("Cy");
   });
 

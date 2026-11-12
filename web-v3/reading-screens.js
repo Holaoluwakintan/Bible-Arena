@@ -254,7 +254,10 @@
 
     function progressHTML() {
       var p = view.portion, days = view.days, ticks = myDone(), n = ticks.length;
-      var today = firstOpenDay(days, ticks), td = days[today];
+      // Today's reading comes from the server: the day marked today (checked until midnight Lagos), else the next unread day.
+      var todayNo = view.today ? view.today.day : firstOpenDay(days, ticks) + 1;
+      var today = todayNo - 1, td = days[today];
+      var markedToday = !!(view.today && view.today.marked);
       var chapters = td.endChapter >= td.startChapter ? td.endChapter - td.startChapter + 1 : 0;
       var todayRef = chapters ? td.ref : "Catch-up day";
       var todayMeta = chapters ? chapters + (chapters === 1 ? " chapter" : " chapters") : "No new chapters today";
@@ -274,7 +277,10 @@
       var listNote = days.length > to - from
         ? '<p class="br-small">Showing days ' + (from + 1) + " to " + to + " of " + days.length + ".</p>" : "";
       var pct = Math.round((100 * n) / days.length), streak = streakOf(days, ticks);
-      var action = '<button type="button" class="br-cta" data-act="day" data-day="' + td.day + '"' + (busy ? " disabled" : "") + ">" + ICON.check + " Mark as Read</button>";
+      var action = markedToday
+        ? '<button type="button" class="br-cta" disabled>' + ICON.check + " Read today</button>" +
+          '<p class="br-small">Marked. The next reading opens at midnight, Lagos time.</p>'
+        : '<button type="button" class="br-cta" data-act="day" data-day="' + td.day + '"' + (busy ? " disabled" : "") + ">" + ICON.check + " Mark as Read</button>";
       var invite = '<div class="br-card br-codecard" data-act="copy" role="button" tabindex="0" aria-label="Copy the plan code"><span class="br-ico">' + ICON.share + '</span><div><span class="br-cardlabel">Plan code</span><b class="br-code-s">' + esc(view.code) + '</b><span class="br-small">Tap code to copy. Up to ' + MEMBER_CAP + ' people can join with it.</span></div></div>';
       var people = view.members.map(function (m) {
         return '<li>' + esc(m.name) + (m.isYou ? " (you)" : "") + (m.role === "owner" ? ", plan owner" : "") + ": " + m.daysRead + " of " + days.length + (days.length === 1 ? " day" : " days") + "</li>";

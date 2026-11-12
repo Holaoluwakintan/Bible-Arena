@@ -107,6 +107,24 @@ export function joinPlan(d: DatabaseSync, openId: string, rawCode: unknown, name
 }
 
 /** Tick one day as read for one member. Idempotent: a second tick of the same day adds nothing. */
+/** Africa/Lagos is UTC+1 all year (no daylight saving since 1996), so a fixed offset gives its calendar date exactly. */
+const LAGOS_OFFSET_MS = 60 * 60 * 1000;
+/** The calendar date in Africa/Lagos at an instant, YYYY-MM-DD. The date rolls over at 00:00 Lagos time (23:00 UTC). */
+export function lagosDate(at: number): string {
+  return new Date(at + LAGOS_OFFSET_MS).toISOString().slice(0, 10);
+}
+/** The first day of the plan this person has not ticked, or undefined when every day is ticked. */
+function nextOpenDay(lengthDays: number, ticked: number[]): number | undefined {
+  const done = new Set(ticked);
+  for (let day = 1; day <= lengthDays; day++) if (!done.has(day)) return day;
+  return undefined;
+}
+
+/**
+ * Mark a day as read. Only today's reading can be marked: the next day of the plan the person has not ticked. One mark
+ * per Africa/Lagos calendar day, so a second click that day does nothing, and the next reading opens at midnight Lagos.
+ * Past and future days are refused.
+ */
 export function tickDay(d: DatabaseSync, openId: string, day: unknown, now: number): ReadingResult<{ newlyTicked: boolean; ticked: number }> {
   const m = memberOf(d, openId);
   if (!m) return fail(403, "not_in_plan", "Join a reading plan first.");
@@ -114,8 +132,20 @@ export function tickDay(d: DatabaseSync, openId: string, day: unknown, now: numb
   if (!plan) return fail(404, "no_such_plan", "That reading plan is gone.");
   const n = Number(day);
   if (!Number.isInteger(n) || n < 1 || n > plan.length_days) return fail(400, "invalid_day", `Pick a day from 1 to ${plan.length_days}.`);
+  const rows = myTickRows(d, plan.id, openId);
+  const ticked = rows.map((r) => r.day);
+  const count = ticked.length;
+  if (ticked.includes(n)) return { ok: true, value: { newlyTicked: false, ticked: count } };
+  if (n !== nextOpenDay(plan.length_days, ticked)) return fail(409, "not_today", "Only today's reading can be marked.");
+  const today = lagosDate(now);
+  if (rows.some((r) => lagosDate(r.ticked_at) === today)) return { ok: true, value: { newlyTicked: false, ticked: count } };
   const r = d.prepare("INSERT OR IGNORE INTO v3_reading_ticks (plan_id, open_id, day, ticked_at) VALUES (?, ?, ?, ?)").run(plan.id, openId, n, now);
-  return { ok: true, value: { newlyTicked: Number(r.changes) === 1, ticked: myTicks(d, plan.id, openId).length } };
+  return { ok: true, value: { newlyTicked: Number(r.changes) === 1, ticked: count + (Number(r.changes) === 1 ? 1 : 0) } };
+}
+
+function myTickRows(d: DatabaseSync, planId: string, openId: string): Array<{ day: number; ticked_at: number }> {
+  return (d.prepare("SELECT day, ticked_at FROM v3_reading_ticks WHERE plan_id = ? AND open_id = ? ORDER BY day").all(planId, openId) as Array<{ day: number; ticked_at: number }>)
+    .map((r) => ({ day: Number(r.day), ticked_at: Number(r.ticked_at) }));
 }
 
 function myTicks(d: DatabaseSync, planId: string, openId: string): number[] {
@@ -128,7 +158,7 @@ function portionOf(p: PlanRow): ReadingPortion {
 }
 
 /** The plan a member is in, with the shared progress. Counts come straight from the member and tick rows. */
-export function planViewFor(d: DatabaseSync, openId: string): { plan: null } | { plan: Record<string, unknown> } {
+export function planViewFor(d: DatabaseSync, openId: string, now: number = Date.now()): { plan: null } | { plan: Record<string, unknown> } {
   const m = memberOf(d, openId);
   if (!m) return { plan: null };
   const p = planById(d, m.plan_id);
@@ -146,6 +176,13 @@ export function planViewFor(d: DatabaseSync, openId: string): { plan: null } | {
     countByMember.set(t.open_id, (countByMember.get(t.open_id) || 0) + 1);
   }
   const mine = myTicks(d, p.id, openId);
+  // Today's reading: the day marked today if there is one (it stays shown, checked, until midnight Lagos), else the next
+  // day not yet ticked. marked is true when today's reading is already marked, or the whole plan is done.
+  const rows = myTickRows(d, p.id, openId);
+  const today = lagosDate(now);
+  const markedToday = rows.filter((r) => lagosDate(r.ticked_at) === today).sort((a, b) => b.day - a.day)[0];
+  const next = nextOpenDay(p.length_days, mine);
+  const todayDay = markedToday ? markedToday.day : (next ?? p.length_days);
   return {
     plan: {
       id: p.id,
@@ -157,6 +194,7 @@ export function planViewFor(d: DatabaseSync, openId: string): { plan: null } | {
       memberCount: members.length,
       memberCap: READING_MEMBER_CAP,
       myTicks: mine,
+      today: { day: todayDay, marked: !!markedToday || next === undefined },
     },
   };
 }

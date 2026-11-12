@@ -207,13 +207,17 @@ describe("reading scope: the shared plan still works with the larger plans", () 
     const code = codeOf(d, made.value.planId);
     const j = joinPlan(d, "reader-2", code, "Ben", NOW + 1);
     expect(j.ok).toBe(true);
-    const last = tickDay(d, "reader-2", 298, NOW + 2);
-    expect(last.ok).toBe(true);
-    const beyond = tickDay(d, "reader-2", 299, NOW + 3);
+    // One mark per Lagos day: the reader marks day 1 on the first day, then each day after, up to the last.
+    const DAY = 24 * 60 * 60 * 1000;
+    for (let k = 1; k <= 298; k++) {
+      const r = tickDay(d, "reader-2", k, NOW + 2 + k * DAY);
+      expect(r.ok && r.value.newlyTicked).toBe(true);
+    }
+    const beyond = tickDay(d, "reader-2", 299, NOW + 2 + 299 * DAY);
     expect(beyond.ok).toBe(false);
-    const view = planViewFor(d, "reader-2") as { plan: { memberCount: number; myTicks: number[]; days: Array<{ readCount: number }> } };
+    const view = planViewFor(d, "reader-2", NOW + 2 + 298 * DAY) as { plan: { memberCount: number; myTicks: number[]; days: Array<{ readCount: number }> } };
     expect(view.plan.memberCount).toBe(2);
-    expect(view.plan.myTicks).toEqual([298]);
+    expect(view.plan.myTicks).toHaveLength(298);
     expect(view.plan.days[297].readCount).toBe(1);
   });
 
