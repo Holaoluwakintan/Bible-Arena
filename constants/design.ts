@@ -1,19 +1,20 @@
 import { Platform, type TextStyle } from "react-native";
+import brand from "./chever-brand.json";
 
 /** Chever v2 design tokens — "Midnight & Gold". */
 export const C = {
-  bg: "#0A1020",
+  bg: brand.night,
   bg2: "#0D1526",
-  surface: "#121B2E",
+  surface: brand.nightCard,
   surface2: "#17223A",
   raised: "#1C2945",
   border: "#22304A",
   hairline: "rgba(255,255,255,0.07)",
-  text: "#F6F1E7",
+  text: brand.white,
   textDim: "#C8CFDC",
-  muted: "#8E9AB0",
+  muted: brand.nightMuted,
   faint: "#5D6982",
-  gold: "#F5B942",
+  gold: brand.gold,
   goldDeep: "#D99A2B",
   goldSoft: "rgba(245,185,66,0.14)",
   goldLine: "rgba(245,185,66,0.35)",
@@ -24,7 +25,7 @@ export const C = {
   flame: "#FF8A3D",
   heart: "#FF5D73",
   violet: "#A78BFA",
-  ink: "#0A1020",
+  ink: brand.navy,
 } as const;
 
 export const S = { xxs: 2, xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32, huge: 44 } as const;

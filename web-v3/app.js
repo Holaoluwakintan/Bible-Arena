@@ -1,7 +1,9 @@
+import { rankOf, RANKS } from "./hall-of-fame.mjs?v=3.13.2";
+import { lagosDay, msUntilLagosMidnight, verseForDay } from "./daily-verse.mjs?v=3.13.2";
 /* Chever v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.13.1";
+window.BA_V = "3.13.2";
 
 // Flat icon set (Chever look): every emoji on a game screen is drawn with these inline SVGs in the palette
 // (gold #FFC300, red #D62828, navy #0B1F4B, white). Cross = duel, church, reading, loading. Crown = ranks, wins, perfect round, mastery.
@@ -179,16 +181,6 @@ const ACH = {
   rematch: ["🔄", "Seventy Times Seven", "Ask for a rematch"], church: ["⛪", "One Body", "Join a church team"],
   rank_elder: ["🧔", "Elder", "Reach Elder (135,000 XP)"], rank_apostle: ["✨", "Apostle", "Reach Apostle (500,000 XP)"],
 };
-const RANKS = [["Seeker", 0], ["Disciple", 2500], ["Servant", 7500], ["Watchman", 18000], ["Scribe", 38000], ["Teacher", 75000], ["Elder", 135000], ["Prophet", 225000], ["Theologian", 360000], ["Apostle", 500000]];
-function rankOf(xp) {
-  xp = xp || 0; let i = 0;
-  while (i + 1 < RANKS.length && xp >= RANKS[i + 1][1]) i++;
-  const cur = RANKS[i], next = RANKS[i + 1];
-  const p = next ? (xp - cur[1]) / (next[1] - cur[1]) : 1;
-  const div = next ? Math.min(3, Math.floor(p * 3) + 1) : 3;
-  return { index: i, name: cur[0], division: ["I", "II", "III"][div - 1], next: next ? next[0] : null, nextXp: next ? next[1] : null, progress: p };
-}
-
 // ---------- local state ----------
 const LS = "ba3:v1";
 const S = Object.assign({ name: "", church: "", tier: "s", sound: true, haptics: true, onboarded: false, imported: false, seen: {} }, safeJSON(localStorage.getItem(LS)) || {});
@@ -292,7 +284,10 @@ function guestNoteHTML() {
 async function loadBank() {
   if (BANK) return BANK;
   const r = await fetch("/v3/bank.json?v=" + (window.BA_V || "1"));
-  BANK = await r.json(); BANK.items.forEach((i) => (BY[i.id] = i));
+  if (!r.ok) throw Error("question bank unavailable");
+  const bank = await r.json();
+  if (!Array.isArray(bank?.items) || !bank.items.length) throw Error("question bank invalid");
+  bank.items.forEach((i) => (BY[i.id] = i)); BANK = bank;
   return BANK;
 }
 function legacyXp() {
@@ -339,8 +334,8 @@ function render(html, cls) {
 const NAV_OF = { home: "home", game: "game", duels: "game", live: "game", community: "game", bible: "bible", reading: "bible", groups: "groups", church: "groups", me: "profile", profile: "profile", ranks: "profile" };
 function navBar(active) {
   const key = NAV_OF[active] || "home";
-  const item = (k, href, icon, label) => `<a href="${href}" class="${key === k ? "on" : ""}${k === "bible" ? " nb-centre" : ""}"><i>${homeIco(icon)}</i><span>${label}</span></a>`;
-  return `<div class="tabbar"><nav>${item("home", "#/", "home", "Home")}${item("game", "#/game", "controller", "Game")}${item("bible", "#/reading", "openbook", "Bible")}${item("groups", "#/church", "users", "Groups")}${item("profile", "#/me", "me", "Profile")}</nav></div>`;
+  const item = (k, href, icon, label) => `<a href="${href}" class="${key === k ? "on" : ""}${k === "bible" ? " nb-centre" : ""}"${key === k ? ' aria-current="page"' : ""}><i>${homeIco(icon)}</i><span>${label}</span></a>`;
+  return `<div class="tabbar"><nav aria-label="Main navigation">${item("home", "#/", "home", "Home")}${item("game", "#/game", "controller", "Game")}${item("bible", "#/reading", "openbook", "Bible")}${item("groups", "#/church", "users", "Groups")}${item("profile", "#/me", "me", "Profile")}</nav></div>`;
 }
 function tabbar(active) { return navBar(active); }
 // The reading plan and the duel pages share the same bar.
@@ -354,7 +349,7 @@ async function route() {
   if (pathDuel && !parts.length) { history.replaceState(null, "", "/#/d/" + pathDuel[1].toUpperCase()); return route(); }
   const pathChurch = location.pathname.match(/^\/c\/([A-Za-z0-9]{4,8})/);
   if (pathChurch && !parts.length) { history.replaceState(null, "", "/#/c/" + pathChurch[1].toUpperCase()); return route(); }
-  if (!S.onboarded && parts[0] !== "d" && parts[0] !== "c") return ["qm", "live", "ko", "online", "bot", "public"].includes(parts[0]) ? onboarding(() => route()) : onboarding();
+  if (!S.onboarded && parts[0] !== "d" && parts[0] !== "c" && parts[0] !== "verse") return ["qm", "live", "ko", "online", "bot", "public"].includes(parts[0]) ? onboarding(() => route()) : onboarding();
   const [a, b] = parts;
   if (window.BAS) { BAS.setBusy(false); BAS.watchLive(!a || a === "live" || a === "online" || a === "public"); }
   if (!a) return home();
@@ -366,10 +361,11 @@ async function route() {
   if (a === "bot") return playBot(MODES[q.get("mode")] ? q.get("mode") : "mixed", TIER[q.get("tier")] ? q.get("tier") : S.tier);
   if (a === "play") return startMode(b || q.get("mode") || "arena", q.get("tier") || S.tier);
   if (a === "duels") return duelsScreen();
-  if (a === "reading") {
-    // Shared reading (preview): only when the flag is on and the screens file loaded.
-    if (!(window.BA_FLAGS && window.BA_FLAGS.sharedReading) || !window.BAReading) return home();
-    render('<div id="reading-root"></div>' + readingTabbar("bible"), "cv2 cv2-reading");
+  if (a === "verse" || a === "reading") {
+    const shared = Boolean(window.BA_FLAGS?.sharedReading && window.BAReading);
+    render(`<div class="col"><header class="gh-intro"><h1>Bible</h1><p>Daily Scripture in the King James Version</p></header>${verseCardHTML()}${shared ? (a === "reading" ? '<div id="reading-root"></div>' : '<a class="btn ghost" href="#/reading">Shared reading plans</a>') : ""}</div>${readingTabbar("bible")}`, "cv2 cv2-reading");
+    mountVerse();
+    if (!shared || a === "verse") return;
     window.BAReading.mount(document.getElementById("reading-root"), {
       startDuel: async (portion) => {
         if (!portion) return;
@@ -494,16 +490,48 @@ async function joinKo(code) {
 }
 
 // ---------- home ----------
-let VOD = [
-  ["Thy word is a lamp unto my feet, and a light unto my path.", "Psalm 119:105"],
-  ["Study to shew thyself approved unto God, a workman that needeth not to be ashamed, rightly dividing the word of truth.", "2 Timothy 2:15"],
-  ["Thy word have I hid in mine heart, that I might not sin against thee.", "Psalm 119:11"],
-  ["The grass withereth, the flower fadeth: but the word of our God shall stand for ever.", "Isaiah 40:8"],
-  ["So then faith cometh by hearing, and hearing by the word of God.", "Romans 10:17"],
-  ["Heaven and earth shall pass away, but my words shall not pass away.", "Matthew 24:35"],
-  ["All scripture is given by inspiration of God, and is profitable for doctrine, for reproof, for correction, for instruction in righteousness:", "2 Timothy 3:16"],
-];
-fetch("/v3/vod-365.json?v=" + (window.BA_V || "1")).then((r) => r.json()).then((list) => { if (Array.isArray(list) && list.length) VOD = list; }).catch(() => {});
+let verseCorpus;
+const verseCardHTML = () => `<section class="card chever-panel chever-verse" aria-labelledby="chever-verse-heading">
+  <h2 id="chever-verse-heading">Verse of the day</h2>
+  <div data-daily-verse aria-live="polite"><p class="muted">Loading today’s KJV verse…</p></div>
+</section>`;
+function mountVerse() {
+  const el = $("[data-daily-verse]"); if (!el) return;
+  let timer, currentDay = "", inflight = false;
+  const update = async () => {
+    if (inflight || !el.isConnected) return;
+    clearTimeout(timer); inflight = true;
+    const query = "?v=" + (window.BA_V || "3.13.2");
+    try {
+      if (!verseCorpus) {
+        const request = new AbortController();
+        const deadline = setTimeout(() => request.abort(), 8000);
+        const response = await fetch("/v3/vod-365.json" + query, { signal: request.signal }).finally(() => clearTimeout(deadline));
+        if (!response.ok) throw Error("verse unavailable");
+        const list = await response.json();
+        if (!Array.isArray(list) || list.length !== 365 || !list.every((row) => Array.isArray(row) && row.length === 2 && row.every((v) => typeof v === 'string' && v))) throw Error("invalid verse list");
+        verseCorpus = list;
+      }
+      if (!el.isConnected) return;
+      const day = lagosDay(), verse = verseForDay(verseCorpus, day);
+      if (day !== currentDay) {
+        el.innerHTML = `<blockquote class="vod">${esc(verse[0])}</blockquote><div class="small muted">${esc(verse[1])} · KJV</div>`;
+        currentDay = day;
+      }
+      timer = setTimeout(update, msUntilLagosMidnight());
+    } catch (e) {
+      if (!el.isConnected) return;
+      currentDay = "";
+      el.innerHTML = `<p class="muted">Today’s verse couldn’t load. Reconnect and try again.</p><button class="chip" type="button">Try again</button>`;
+      el.querySelector("button").onclick = update;
+    } finally { inflight = false; }
+  };
+  document.addEventListener("visibilitychange", update);
+  window.addEventListener("online", update);
+  window.addEventListener("pageshow", update);
+  onLeave(() => { clearTimeout(timer); document.removeEventListener("visibilitychange", update); window.removeEventListener("online", update); window.removeEventListener("pageshow", update); });
+  update();
+}
 function topbar() {
   const p = ME.player || {}; const rk = rankOf(p.xp);
   return `<div class="topbar">
@@ -587,6 +615,7 @@ function homeGuideHTML() {
       <form class="gh-join" id="homejoin" autocomplete="off"><label for="homecodein">Join with code</label>
         <div class="gh-joinrow"><input id="homecodein" name="c" inputmode="numeric" maxlength="8" placeholder="6-digit code" autocomplete="one-time-code" enterkeyhint="go"><button type="submit">Join</button></div></form>
     </section>
+    ${verseCardHTML()}
     ${readingBlock}
     ${navBar("home")}
   </div>`;
@@ -626,6 +655,7 @@ async function publicScreen() {
 function homeGuide() {
   render(`${homeGuideHTML()}`, "cv2 cv2-home");
   bindCodeBox("homejoin");
+  mountVerse();
 }
 // The Game tab (2026-11-12): every way to play sits under this one bar item: solo modes (Bible or Myth included), multiplayer,
 // private rooms, join with code, group knockouts and live now. Same routes as before; nothing here is new behaviour.
@@ -661,27 +691,28 @@ function gameScreen() {
 }
 async function home() {
   if (homeGuideOn()) return homeGuide();
-  render(`${topbar()}<div id="h"></div>${tabbar("home")}`);
+  render(`${topbar()}<div class="col"><div id="homelead"></div>${verseCardHTML()}<div id="h"></div></div>${tabbar("home")}`);
+  mountVerse();
   onLeave(lenPickerWire());
-  const day = Math.floor((Date.now() + 3600e3) / 864e5);
-  const vod = VOD[day % VOD.length];
+  const h = $("#h"), lead = $("#homelead");
   let daily = null;
   try { daily = await api("/api/v3/daily"); } catch (e) {}
   await ensureSession();
   const p = ME.player || { xp: 0 };
   const rk = rankOf(p.xp);
   const hello = new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 17 ? "Good afternoon" : "Good evening";
-  const h = $("#h"); if (!h) return;
-  h.innerHTML = `
-  <div class="col" style="gap:14px">
+  if (!h.isConnected) return;
+  lead.innerHTML = flatIcons(`
     <div class="row between"><div><div class="small muted">${hello},</div><h2>${esc(S.name || "friend")}</h2><a class="onlinepill" href="#/online" id="onlpill"><i class="dot"></i><span data-online>${onlineText()}</span></a></div>
       <button class="chip on" id="tierchip">${TIER[S.tier].icon} ${TIER[S.tier].name}</button></div>
     ${guestNoteHTML()}
-    <div class="card">
+    <section class="card chever-panel home-rank">
       <div class="row between"><b>Rank: <span class="gold">${rk.name} ${rk.division}</span></b><span class="small gold">${fmt(p.xp)} XP</span></div>
-      <div class="xpbar" style="margin:10px 0 6px"><i style="width:${Math.round(rk.progress * 100)}%"></i></div>
+      <progress aria-label="Progress toward next rank" value="${rk.progress}" max="1"></progress>
       <div class="row between small muted"><span>${rk.next ? `${fmt(rk.nextXp - p.xp)} XP to ${rk.next}` : "Apostle (Highest Rank)"}</span><a class="gold" href="#/ranks">Hall of Fame ›</a></div>
-    </div>
+    </section>`);
+  h.innerHTML = `
+  <div class="col" style="gap:14px">
     <div class="sechead"><b>How do you want to play?</b></div>
     <div class="card way">
       <div class="row" style="gap:12px"><div class="wayico">🎯</div><div class="grow"><b class="wayt">Play solo</b><div class="small muted">Just you and the Word. Pick a game, play as much as you like.</div></div></div>
@@ -714,11 +745,6 @@ async function home() {
     <div class="grid2">
       ${modeTile("gap", true)}${modeTile("who")}${modeTile("myth")}${modeTile("arena")}${modeTile("mixed")}${modeTile("sudden")}
     </div>
-    </div>
-    <div class="card">
-      <div class="tiny gold">Verse of the day</div>
-      <p class="vod" style="margin:8px 0 6px">“${esc(vod[0])}”</p>
-      <div class="small muted">${esc(vod[1])} (KJV)</div>
     </div>
     <div class="sechead"><b>More</b></div>
     <div id="homechurch"></div>
@@ -882,11 +908,20 @@ function bookSet(books, n, tier, seed) {
 function mixedSet(tier) { return shuffled([].concat(drawSet("arena", tier, 4), drawSet("gap", tier, 2), drawSet("myth", tier, 2), drawSet("who", tier, 2)), Math.random() + ""); }
 
 async function startMode(mode, tier) {
+  const seq = ROUND_SEQ;
   render(`<div class="boot"><div class="boot-mark">✦</div><div class="boot-sub">Preparing your round…</div></div>`);
-  await loadBank();
+  try { await loadBank(); } catch {
+    if (seq === ROUND_SEQ) {
+      render(`<section class="card chever-panel col"><h2>Questions couldn’t load</h2><p class="muted">Reconnect and try again.</p><button id="retry-bank" class="btn primary" type="button">Try again</button><a class="btn ghost" href="#/game">Back to Game</a></section>${navBar("game")}`);
+      $("#retry-bank").onclick = () => startMode(mode, tier);
+    }
+    return;
+  }
+  if (seq !== ROUND_SEQ) return;
   if (!["b", "s", "t"].includes(tier)) tier = S.tier;
   if (mode === "daily") {
-    let d = null; try { d = await api("/api/v3/daily"); } catch (e) { toast("Couldn't reach the server. Check your data."); return go("#/"); }
+    let d = null; try { d = await api("/api/v3/daily"); } catch (e) { if (seq === ROUND_SEQ) { toast("Couldn't reach the server. Check your data."); go("#/"); } return; }
+    if (seq !== ROUND_SEQ) return;
     if (d.played) { toast("You've played today's challenge. See the board!"); return go("#/ranks?tab=daily"); }
     const qn = Number(parseHash().q.get("n")); if (DAILY_LENS.indexOf(qn) >= 0) { S.dailyLen = qn; save(); }
     const n = dailyLen(), ids = (d.sets && d.sets[n]) || d.ids;
@@ -895,7 +930,8 @@ async function startMode(mode, tier) {
   if (mode === "practice") {
     // Practice replays today's Daily Challenge set on this phone only. Nothing is sent to the server,
     // so the board, streak, XP and leagues are untouched. It opens only after the official try.
-    let d = null; try { d = await api("/api/v3/daily"); } catch (e) { toast("Couldn't reach the server. Check your data."); return go("#/"); }
+    let d = null; try { d = await api("/api/v3/daily"); } catch (e) { if (seq === ROUND_SEQ) { toast("Couldn't reach the server. Check your data."); go("#/"); } return; }
+    if (seq !== ROUND_SEQ) return;
     if (!d.played) { toast("Play today's official try first. Practice opens after."); return go("#/play/daily"); }
     const pids = (d.sets && d.sets[d.played.total]) || d.ids;
     return runRound({ ids: pids, tier: "s", mode: "practice", title: "Practice — not scored", practice: true });
@@ -2092,12 +2128,14 @@ function startMatch(r, creator) {
   return loadBank().then(() => runRound({ ids: r.ids, tier: r.tier, mode: "duel", title: "Quick Match vs " + r.opp, duel: { code: r.code, creator: !!creator, mode: r.mode, quick: true, opp: r.opp } }));
 }
 async function playBot(mode, tier) {
+  const seq = ROUND_SEQ;
   render(`<div class="boot"><div class="boot-mark">🤖</div><div class="boot-sub">The Arena Bot is warming up…</div></div>`);
   try {
     const [r] = await Promise.all([api("/api/v3/social/bot", { body: { mode, tier, name: S.name } }), loadBank()]);
+    if (seq !== ROUND_SEQ) return;
     toast(`Beat the Arena Bot's ${fmt(r.bot.score)}! 🤖`);
     runRound({ ids: r.ids, tier: r.tier, mode: "duel", title: "vs Arena Bot 🤖", duel: { code: r.code, creator: true, mode: r.mode, bot: true } });
-  } catch (e) { toast("Couldn't start the bot. Try again."); go("#/live"); }
+  } catch (e) { if (seq === ROUND_SEQ) { toast("Couldn't start the bot. Try again."); go("#/live"); } }
 }
 async function quickMatch(q) {
   const mode = MODES[q.get("mode")] && q.get("mode") !== "sudden" ? q.get("mode") : "mixed";
@@ -2127,7 +2165,7 @@ async function quickMatch(q) {
   }
   if (!alive()) return;
   if (r.status === "matched") return startMatch(r, r.role === "creator");
-  // waiting: poll every 2.5 s; after 60 s offer the bot or solo
+  // waiting: poll every 2.5 s; after 8 s offer the bot or solo
   const id = r.id; const t0 = Date.now(); let done = false, fallback = false;
   const cancel = () => { if (done) return; done = true; fetch("/api/v3/social/match/" + id + "/cancel", { method: "POST", credentials: "same-origin", keepalive: true, headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => {}); };
   render(`<div class="row" style="margin-bottom:12px"><a class="iconbtn" href="#/live" aria-label="Back">‹</a><div class="grow tiny gold">⚡ Quick Match · ${TIER[tier].name} · ${esc(modeName(mode))}</div></div>
@@ -2149,14 +2187,14 @@ async function quickMatch(q) {
   drawPush();
   const showFallback = () => {
     fallback = true; const fb = $("#qmfb"); if (!fb) return;
-    fb.innerHTML = `<div class="card gold col" style="gap:10px"><b>No challenger yet</b><div class="small muted">You're still listed in Live now. Keep waiting, or play now:</div>
-      <button class="btn primary block" id="qmbot">🤖 Play the Arena Bot</button><div class="row" style="gap:8px"><button class="btn ghost grow" id="qmsolo">Play solo</button><button class="btn ghost grow" id="qmwait">Keep waiting</button></div></div>`;
+    fb.innerHTML = flatIcons(`<div class="card gold col" style="gap:10px"><b>No challenger yet</b><div class="small muted">You're still listed in Live now. Keep waiting, or play now:</div>
+      <button class="btn primary block" id="qmbot">🤖 Play the Arena Bot</button><div class="row" style="gap:8px"><button class="btn ghost grow" id="qmsolo">Play solo</button><button class="btn ghost grow" id="qmwait">Keep waiting</button></div></div>`);
     $("#qmbot").onclick = () => { cancel(); playBot(mode, tier); };
     $("#qmsolo").onclick = () => { cancel(); go("#/play/" + mode); };
     $("#qmwait").onclick = () => { fb.innerHTML = ""; };
     sfx.chip();
   };
-  const tick = setInterval(() => { const el = $("#qmt"); if (!el) return clearInterval(tick); const s = Math.floor((Date.now() - t0) / 1000); el.textContent = ago(s); if (s >= 60 && !fallback) showFallback(); }, 500);
+  const tick = setInterval(() => { const el = $("#qmt"); if (!el) return clearInterval(tick); const s = Math.floor((Date.now() - t0) / 1000); el.textContent = ago(s); if (s >= 8 && !fallback) showFallback(); }, 500);
   onLeave(() => clearInterval(tick));
   const poll = async () => {
     if (done || !alive()) return;
@@ -2427,15 +2465,19 @@ async function duelsScreen() {
 // ---------- leaderboards / hall of fame ----------
 async function ranks(tab) {
   const tabs = [["week", "This week"], ["church", "Churches"], ["rivals", "Rivals"], ["daily", "Today"], ["all", "All-time"]];
-  render(`<h2 style="margin-bottom:12px">Hall of Fame</h2><div class="segs">${tabs.map(([k, l]) => `<a class="chip ${tab === k ? "on" : ""}" href="#/ranks?tab=${k}">${l}</a>`).join("")}</div>${tab === "daily" ? `<p class="small muted" style="margin:0 0 10px">Global Scoreboard for today's Daily Challenge: one official try each. Longer sets can score more.</p>` : ""}<div id="lb" class="card"><div class="muted small">Loading…</div></div>${chTabbar("ranks")}`, "cv2 cv2-ranks");
+  if (!tabs.some(([key]) => key === tab)) tab = "week";
+  render(`<header class="gh-intro"><h1>Hall of Fame</h1><p>See who leads across Chever.</p></header><div class="segs">${tabs.map(([k, l]) => `<a class="chip ${tab === k ? "on" : ""}"${tab === k ? ' aria-current="page"' : ""} href="#/ranks?tab=${k}">${l}</a>`).join("")}</div>${tab === "daily" ? `<p class="small muted" style="margin:0 0 10px">Global Scoreboard for today's Daily Challenge: one official try each. Longer sets can score more.</p>` : ""}<div id="lb" class="card"><div class="muted small">Loading…</div></div>${chTabbar("ranks")}`, "cv2 cv2-ranks");
+  const el = $("#lb");
+  const period = parseHash().q.get("p") === "all" ? "all" : "week";
   await ensureSession();
-  if (tab === "church") { const l = $("#lb"); if (l) leagueBoard(l, parseHash().q.get("p") === "all" ? "all" : "week"); return; }
-  let r; try { r = await api("/api/v3/leaderboard?scope=" + tab); } catch (e) { const l = $("#lb"); if (l) l.innerHTML = "Couldn't load the board."; return; }
-  const el = $("#lb"); if (!el) return;
-  if (tab === "church") {
-    el.innerHTML = `<div class="small muted" style="margin-bottom:8px">Churches and groups ranked by their players' total XP. ${S.church ? `You play for <b class="gold">${esc(S.church)}</b>.` : `<a href="#/me">Add your church</a> to join.`}</div>` + (r.churches.length ? r.churches.map((c, i) => `<div class="lb"><div class="pos p${i + 1}">${i + 1}</div><div class="grow"><b><span class="chin">${pfIco("church")}</span>${esc(c.church)}</b><div class="small muted">${c.players} player${c.players > 1 ? "s" : ""}</div></div><div class="gold serif" style="font-weight:800">${fmt(c.score)}</div></div>`).join("") : `<div class="muted">No churches yet. Be the first!</div>`);
+  if (!el?.isConnected) return;
+  if (tab === "church") return leagueBoard(el, period);
+  let r; try { r = await api("/api/v3/leaderboard?scope=" + tab); } catch (e) {
+    if (el.isConnected) el.innerHTML = `<p class="muted">Couldn’t load the board.</p><button class="chip" type="button">Try again</button>`;
+    if (el.isConnected) el.querySelector("button").onclick = () => ranks(tab);
     return;
   }
+  if (!el.isConnected) return;
   const rows = r.rows || [];
   const empty = { week: "No rounds this week yet. Play one and top the board!", daily: "Nobody has played today's challenge yet.", rivals: "Your rivals appear here after your first duel.", all: "No players yet." }[tab];
   el.innerHTML = rows.length ? rows.map((x, i) => `<div class="lb ${x.isMe ? "me" : ""}"><div class="pos p${i + 1}">${i + 1}</div><div class="grow"><b>${esc(x.name)}</b>${x.isMe ? ` <span class="small gold">you</span>` : ""}<div class="small muted">${esc(x.rank)}${x.church ? " · " + esc(x.church) : ""}${tab === "rivals" ? ` · You ${x.wins}–${x.losses}${x.draws ? ` · ${x.draws} draw${x.draws > 1 ? "s" : ""}` : ""}` : ""}${tab === "daily" && x.total ? ` · ${x.correct}/${x.total}` : ""}</div></div><div class="gold serif" style="font-weight:800">${fmt(x.score)}</div></div>`).join("") : `<div class="muted">${empty}</div>${tab === "rivals" ? `<a class="btn primary block" style="margin-top:12px" href="#/ko/new">${homeIco("swords")}Challenge someone</a>` : ""}`;
@@ -2607,7 +2649,7 @@ async function profile() {
     <div class="stats3"><div class="stat"><b>${pfIco("flame")} ${p.streak || 0}</b><span>Day streak</span></div><div class="stat"><b>${p.bestStreak || 0}</b><span>Best streak</span></div><div class="stat"><b>${p.rounds || 0}</b><span>Rounds</span></div></div>
     <div class="small muted center pfinl" style="margin-top:-6px">${pfIco("shield")} Streak saves: <b>${saves(p)}</b> · earn one every 7 days in a row (max 2). Miss a day and a save keeps your streak going.</div>
     <div class="stats3"><div class="stat"><b>${st.correct || 0}</b><span>Correct</span></div><div class="stat"><b>${st.gapPerfect || 0}</b><span>Perfect gaps</span></div><div class="stat"><b>${st.duelsWon || 0}</b><span>Duels won</span></div></div>
-    <div class="card"><div class="row between"><b>Ranks</b><span class="small muted">Seeker → Apostle</span></div><div class="row" style="flex-wrap:wrap;gap:6px;margin-top:10px">${RANKS.map(([n, x], i) => `<span class="chip ${i <= rk.index ? "on" : ""}">${n}<span class="dim small">${x ? fmt(x) : ""}</span></span>`).join("")}</div></div>
+    <div class="card"><div class="row between"><b>Ranks</b><span class="small muted">Seeker → Apostle</span></div><div class="row" style="flex-wrap:wrap;gap:6px;margin-top:10px">${RANKS.map(({ name: n, xp: x }, i) => `<span class="chip ${i <= rk.index ? "on" : ""}">${n}<span class="dim small">${x ? fmt(x) : ""}</span></span>`).join("")}</div></div>
     <div class="card"><div class="row between"><b>Achievements</b><span class="small muted">${got.length}/${Object.keys(ACH).length}</span></div><div class="achs" style="margin-top:10px">${Object.keys(ACH).map((k) => `<div class="ach ${got.indexOf(k) >= 0 ? "got" : ""}"><div class="ai">${achIco(k)}</div><b>${ACH[k][1]}</b><span>${ACH[k][2]}</span></div>`).join("")}</div></div>
     <div class="card">
       <b>Settings</b>
@@ -2685,8 +2727,8 @@ async function profile() {
 function featureScripts() {
   const f = window.BA_FLAGS || {};
   const want = [];
-  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.1");
-  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.13.1");
+  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.2");
+  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.13.2");
   if (!want.length) return null;
   return Promise.all(want.map((src) => new Promise((done) => {
     const s = document.createElement("script"); s.src = src; s.onload = done; s.onerror = done; document.head.appendChild(s);

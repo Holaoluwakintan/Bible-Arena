@@ -25,7 +25,7 @@ describe("brand mark: one bar on every screen", () => {
 
   it("the mark has a dark-theme and a light-theme colour, and the light look overrides it", () => {
     expect(css).toMatch(/\.cvm-body\{fill:#F5F7FB\}/);
-    expect(css).toMatch(/\.cvm-sw\{fill:#FFC300\}/);
+    expect(css).toMatch(/\.cvm-sw\{fill:var\(--ch-gold\)\}/);
     expect(css).toMatch(/body\.cv2-on \.cvm-body\{fill:#022569\}/);
   });
 

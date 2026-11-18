@@ -15,6 +15,7 @@ import { logger } from "../_core/logger";
 import { sendPush, vapidPublicKey, endpointOk, type PushSub } from "./webpush";
 import { badName } from "./names";
 import { vodForDay } from "./vod";
+import { lagosDay } from "../../web-v3/daily-verse.mjs";
 
 type Me = { openId: string; name: string };
 type Guard = (fn: (req: Request, res: Response, me: Me) => Promise<void>, needAuth?: boolean) => (req: Request, res: Response) => Promise<void>;
@@ -58,7 +59,6 @@ const clean = (v: unknown, max: number) => String(v ?? "").replace(/[\u0000-\u00
 const cleanPlayerName = (v: unknown, max: number) => { const s = clean(v, max); return badName(s) ? "" : s; };
 const pidOk = (v: unknown) => (typeof v === "string" && /^[A-Za-z0-9_-]{8,40}$/.test(v) ? v : "");
 const lagosHour = (t: number) => new Date(t + 3600_000).getUTCHours();
-const lagosDay = (t: number) => new Date(t + 3600_000).toISOString().slice(0, 10);
 export const quietHours = (t: number) => { const h = lagosHour(t); return h >= 22 || h < 7; };
 
 // ---------- presence ----------
@@ -220,18 +220,19 @@ const stats = { pushSent: 0, pushFailed: 0, pushGone: 0 };
 async function deliver(rows: SubRow[], data: Record<string, unknown>) {
   const now = nowFn(); const day = lagosDay(now);
   const d = db();
-  let i = 0;
+  let i = 0, delivered = 0;
   const worker = async () => {
     while (i < rows.length) {
       const row = rows[i++];
       const sub: PushSub = { endpoint: row.endpoint, p256dh: row.p256dh, auth: row.auth };
       const r = await pushImpl(sub, data, { ttl: 900, urgency: "high", topic: String(data.tag || "ba") });
       if (r.gone) { stats.pushGone++; d.prepare("DELETE FROM v3_push_subs WHERE endpoint = ?").run(row.endpoint); continue; }
-      if (r.ok) { stats.pushSent++; d.prepare("UPDATE v3_push_subs SET day = ?, sent = CASE WHEN day = ? THEN sent + 1 ELSE 1 END, last_at = ? WHERE endpoint = ?").run(day, day, now, row.endpoint); }
+      if (r.ok) { delivered++; stats.pushSent++; d.prepare("UPDATE v3_push_subs SET day = ?, sent = CASE WHEN day = ? THEN sent + 1 ELSE 1 END, last_at = ? WHERE endpoint = ?").run(day, day, now, row.endpoint); }
       else stats.pushFailed++;
     }
   };
   await Promise.all(Array.from({ length: Math.min(6, rows.length) }, worker));
+  return delivered;
 }
 
 // ---------- v3.10.3 daily 7 PM reminder (Michael, Oct 24: "a daily 7 PM reminder to play") ----------
@@ -319,10 +320,8 @@ export async function runDailyReminder(now = nowFn(), deps: ReminderDeps | null 
       if (!subs.length) continue; // cap or 1-hour gap: try again on a later tick in the window
       const s = st.get(id) || { streak: 0, lastDay: null };
       const txt = reminderText(day, s.streak, s.lastDay, verse);
-      const before = stats.pushSent;
-      await deliver(subs, { title: txt.title, body: txt.body, url: "/#/", tag: "ba-daily" });
-      mark.run(id, day);
-      if (stats.pushSent > before) sent++;
+      const delivered = await deliver(subs, { title: txt.title, body: txt.body, url: "/#/verse", tag: "ba-daily" });
+      if (delivered) { mark.run(id, day); sent++; }
     }
     reminderStats.sent += sent; reminderStats.lastSent = sent;
     if (sent) logger.info("v3_daily_reminder", { day, sent, eligible: todo.length });
@@ -526,9 +525,9 @@ export function registerSocial(app: Express, guard: Guard, send: Send, d: Social
     if (!allow("ptest:" + me.openId, 3, 600_000)) return send(res, 429, { error: "slow_down" });
     if (!vapidPublicKey()) return send(res, 503, { error: "push_not_configured" });
     const rows = subsOf(me.openId);
-    const v = vodForDay(lagosDay());
+    const v = vodForDay(lagosDay(nowFn()));
     const quote = v[0].length > 90 ? v[0].slice(0, 87) + "…" : v[0];
-    const results = await Promise.all(rows.map((r) => pushImpl({ endpoint: r.endpoint, p256dh: r.p256dh, auth: r.auth }, { title: "Verse of the Day · Chever 📖", body: `“${quote}” — ${v[1]} (Test notification ✓)`, url: "/#/", tag: "ba-test" }, { ttl: 300, urgency: "high" })));
+    const results = await Promise.all(rows.map((r) => pushImpl({ endpoint: r.endpoint, p256dh: r.p256dh, auth: r.auth }, { title: "Verse of the Day · Chever 📖", body: `“${quote}” — ${v[1]} (Test notification ✓)`, url: "/#/verse", tag: "ba-test" }, { ttl: 300, urgency: "high" })));
     for (let i = 0; i < rows.length; i++) if (results[i].gone) db().prepare("DELETE FROM v3_push_subs WHERE endpoint = ?").run(rows[i].endpoint);
     send(res, 200, { devices: rows.length, sent: results.filter((r) => r.ok).length, statuses: results.map((r) => r.status) });
   }));

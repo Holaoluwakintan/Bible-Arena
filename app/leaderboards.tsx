@@ -17,7 +17,7 @@ import { trpc } from "@/lib/trpc";
 type Board = "sessions" | "multiplayer" | "friends";
 interface Row { playerId: string; displayName: string; rank: number; value: number; unit: string; meta: string }
 
-const MEDAL = ["#F5B942", "#C8D1DC", "#D19A66"];
+const MEDAL = [C.gold, "#C8D1DC", "#D19A66"];
 
 export default function RanksScreen() {
   const { state, isAuthenticated, createChallenge } = useProgression();
@@ -38,6 +38,7 @@ export default function RanksScreen() {
   }, [board, mp.data, friends.data, remote.data, local, isAuthenticated]);
 
   const loading = isAuthenticated && ((board === "sessions" && remote.isLoading) || (board === "multiplayer" && mp.isLoading) || (board === "friends" && friends.isLoading));
+  const query = board === "sessions" ? remote : board === "multiplayer" ? mp : friends;
   const myId = user?.id != null ? String(user.id) : null;
   const podium = rows.length >= 3 ? rows.slice(0, 3) : [];
   const rest = rows.length >= 3 ? rows.slice(3) : rows;
@@ -52,7 +53,7 @@ export default function RanksScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <FadeIn>
           <Txt variant="overline" color={C.gold}>Compete</Txt>
-          <Txt variant="h1" style={{ marginTop: 4 }}>Rankings</Txt>
+          <Txt variant="h1" accessibilityRole="header" style={{ marginTop: 4 }}>Hall of Fame</Txt>
           <Txt variant="body" color={C.muted} style={{ marginTop: 4 }}>{isAuthenticated ? "Climb the board one round at a time." : "Your rounds on this device. Sign in to rank against everyone."}</Txt>
         </FadeIn>
 
@@ -86,6 +87,12 @@ export default function RanksScreen() {
           </Card>
         ) : loading ? (
           <Card><Txt variant="small" color={C.muted}>Loading rankings…</Txt></Card>
+        ) : isAuthenticated && query.isError && !query.data ? (
+          <Card style={{ gap: S.md }}>
+            <Txt variant="h3">Couldn’t load the board</Txt>
+            <Txt variant="small" color={C.muted}>Check your connection and try again.</Txt>
+            <Button label="Try again" onPress={() => void query.refetch()} />
+          </Card>
         ) : rows.length === 0 ? (
           <Card style={{ alignItems: "center", gap: S.md }}>
             <IconBadge icon="trophy.fill" size={52} />

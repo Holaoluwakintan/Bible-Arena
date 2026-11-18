@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-// The Chever home guide (web-v3/app.js): shown only when a Chever preview flag is on. Nothing sets the flags, so the live home
-// is the old one. These checks read the page source, since app.js is a browser script.
+// The Chever home guide (web-v3/app.js): preserved but disabled by Michael’s Nov 18 Home refresh.
+// These checks read the page source, since app.js is a browser script.
 const ROOT = join(__dirname, "..", "web-v3");
 const app = readFileSync(join(ROOT, "app.js"), "utf8");
 const css = readFileSync(join(ROOT, "app.css"), "utf8");
@@ -17,9 +17,11 @@ function fnBody(name: string): string {
 }
 
 describe("home guide: flags and routing", () => {
-  it("is gated by the existing preview flags, and the live home stays the default", () => {
-    expect(fnBody("homeGuideOn")).toMatch(/f\.sharedReading === true \|\| f\.chever2Duels === true/);
-    expect(fnBody("home")).toMatch(/^function home\(\) \{\n  if \(homeGuideOn\(\)\) return homeGuide\(\);/m);
+  it("preserves the refreshed dashboard as the current default", () => {
+    expect(app).toContain("function homeGuideOn() { return false; }");
+    const home = fnBody("home");
+    expect(home).toMatch(/if \(homeGuideOn\(\)\) return homeGuide\(\);/);
+    expect(home).toContain('class="card chever-panel home-rank"');
   });
 
   it("the guide renders on the cv2 light theme with its own class", () => {

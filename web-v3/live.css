@@ -1,5 +1,5 @@
 /* Chever Live — host stage (projector / TV). Sizes scale with --u so 720p, 1080p and 4K all read from the back row. */
-:root{--bg:#060A16;--navy:#0D1530;--card:#111B3B;--line:rgba(245,185,66,.18);--line2:rgba(255,255,255,.08);--gold:#F5B942;--gold2:#FFD98A;--gold3:#C98A1B;--ivory:#F6F1E7;--muted:#9AA6C2;--dim:#66729A;--ok:#3DDC97;--bad:#FF5D73;--red:#E5394F;--blue:#2E7CF6;--yel:#E8A317;--grn:#1FA971;--serif:"Cinzel",Georgia,serif;--sans:"Plus Jakarta Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;--u:min(1vw,1.78vh)}
+:root{--bg:#060A16;--navy:#0D1530;--card:#111B3B;--line:rgba(245,185,66,.18);--line2:rgba(255,255,255,.08);--gold:var(--ch-gold);--gold2:#FFD98A;--gold3:#C98A1B;--ivory:#F6F1E7;--muted:#9AA6C2;--dim:#66729A;--ok:#3DDC97;--bad:#FF5D73;--red:#E5394F;--blue:#2E7CF6;--yel:#E8A317;--grn:#1FA971;--serif:"Cinzel",Georgia,serif;--sans:"Plus Jakarta Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;--u:min(1vw,1.78vh)}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ivory);font-family:var(--sans)}
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
@@ -256,7 +256,7 @@ textarea.quick{width:100%;min-height:220px;font-family:ui-monospace,Menlo,Consol
 .pod .nm{font-weight:800;font-size:calc(var(--u)*2.8);max-width:calc(var(--u)*24);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pod .sc{font-weight:800;font-size:calc(var(--u)*2);color:var(--pc)}
 .pod .blk{width:100%;border-radius:calc(var(--u)*1.6) calc(var(--u)*1.6) 0 0;display:flex;justify-content:center;padding-top:calc(var(--u)*1.4);font-family:var(--serif);font-weight:900;font-size:calc(var(--u)*7);color:rgba(10,16,36,.85);background:linear-gradient(180deg,var(--pc),color-mix(in srgb,var(--pc) 40%,#0A1024));box-shadow:0 0 calc(var(--u)*5) color-mix(in srgb,var(--pc) 40%,transparent),inset 0 2px 0 rgba(255,255,255,.5)}
-.p1{--pc:#F5B942}.p1 .blk{height:calc(var(--u)*9)}.p2{--pc:#C9D2EA}.p2 .blk{height:calc(var(--u)*6.4)}.p3{--pc:#E08A4B}.p3 .blk{height:calc(var(--u)*4.6)}
+.p1{--pc:var(--ch-gold)}.p1 .blk{height:calc(var(--u)*9)}.p2{--pc:#C9D2EA}.p2 .blk{height:calc(var(--u)*6.4)}.p3{--pc:#E08A4B}.p3 .blk{height:calc(var(--u)*4.6)}
 .pod .blk{font-size:calc(var(--u)*4.4);padding-top:calc(var(--u)*.6)}
 .finalbar{display:flex;gap:calc(var(--u)*1.5);align-items:center;justify-content:center;flex-wrap:wrap;margin-top:calc(var(--u)*1.5);opacity:0}
 .finalbar.go{animation:sceneIn .7s forwards}
@@ -298,3 +298,9 @@ body.onfinal .hud .t,body.onfinal .hud .c{visibility:hidden}
 .fast{display:flex;flex-direction:column;align-items:flex-start}
 .revealrow .pct{font-size:calc(var(--u)*4)}
 .p3 .blk{font-size:calc(var(--u)*3.4)}
+
+/* Projector keeps high-contrast night panels, without animated room lighting. */
+html,body,.stagebg{background:var(--ch-night)}
+.stagebg .beam,.stagebg .dust{display:none}
+.bt span{color:#FF8A8A}
+button:focus-visible,a:focus-visible{outline:3px solid var(--ch-gold);outline-offset:4px}

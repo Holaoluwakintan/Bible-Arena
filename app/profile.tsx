@@ -54,6 +54,7 @@ export default function ProfileScreen() {
   return (
     <ScreenContainer>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <Button label="Hall of Fame" icon="trophy.fill" variant="ghost" onPress={() => router.push("/leaderboards")} />
         <FadeIn>
           <View style={styles.headerRow}>
             <Txt variant="overline" color={C.gold}>Profile</Txt>

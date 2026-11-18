@@ -1,3 +1,5 @@
+import { rankOf } from "../../web-v3/hall-of-fame.mjs";
+export { RANKS, rankOf } from "../../web-v3/hall-of-fame.mjs";
 // Chever v3 API: server-scored rounds, ranks, achievements, daily challenge, challenges
 // (challenge links), leaderboards (weekly, all-time, Church League, rivals, daily).
 // Durable data lives in Postgres (Supabase schema bible_arena) via ./pg.
@@ -108,20 +110,6 @@ export function scoreRound(tier: Tier, answers: Array<{ id: string; choice: unkn
 }
 
 // ---------- ranks & achievements ----------
-export const RANKS = [
-  { name: "Seeker", xp: 0 }, { name: "Disciple", xp: 2500 }, { name: "Servant", xp: 7500 }, { name: "Watchman", xp: 18000 },
-  { name: "Scribe", xp: 38000 }, { name: "Teacher", xp: 75000 }, { name: "Elder", xp: 135000 }, { name: "Prophet", xp: 225000 },
-  { name: "Theologian", xp: 360000 }, { name: "Apostle", xp: 500000 },
-];
-export function rankOf(xp: number) {
-  let i = 0;
-  while (i + 1 < RANKS.length && xp >= RANKS[i + 1].xp) i++;
-  const cur = RANKS[i], next = RANKS[i + 1];
-  const span = next ? next.xp - cur.xp : 1;
-  const into = xp - cur.xp;
-  const div = next ? Math.min(3, Math.floor((into / span) * 3) + 1) : 3;
-  return { index: i, name: cur.name, division: ["I", "II", "III"][div - 1], next: next?.name || null, nextXp: next?.xp || null, progress: next ? into / span : 1 };
-}
 const ACH: Array<[string, (s: any, p: any) => boolean]> = [
   ["first_round", (s) => s.rounds >= 1], ["ten_rounds", (s) => s.rounds >= 10], ["fifty_rounds", (s) => s.rounds >= 50],
   ["perfect", (s) => s.perfect >= 1], ["theologian_perfect", (s) => s.theoPerfect >= 1], ["combo_5", (s) => s.bestCombo >= 5],

@@ -515,11 +515,11 @@ async function results(c) {
   app.innerHTML = `<div class="center" style="gap:12px"><div class="logo">CHEVER<span>LIVE</span></div>
     <div class="tiny" style="color:var(--gold)">${esc(f.church || "")}</div><h1>${esc(f.title)}</h1>
     <div class="muted small">${new Date(f.at).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · ${f.players} players · ${f.questions} questions</div>
-    <div class="medal">🏆</div>
+    <div class="medal">${L.crown}</div>
     ${tw ? `<div class="tag" style="--tc:${tw.color}">${tw.emoji} ${esc(tw.name)} won the team battle</div>` : ""}
-    <div class="podl">${(f.top || f.podium || []).map((p, i) => `<div>${i < 3 ? ["🥇", "🥈", "🥉"][i] : `<span style="width:22px;text-align:center;color:var(--muted)">${p.rank || i + 1}</span>`} ${BAFace.html(p.avatar, "1.3em", p.name)} ${esc(p.name)}<b>${fmt(p.score)}</b></div>`).join("")}</div>
-    <div class="muted small">🎯 ${f.accuracy}% answered right${f.fastest ? ` · ⚡ fastest: ${esc(f.fastest.name)} ${(f.fastest.ms / 1000).toFixed(1)} s` : ""}</div>
-    <button class="btn primary" id="share">📲 Share on WhatsApp</button>
+    <div class="podl">${(f.top || f.podium || []).map((p, i) => `<div>${i < 3 ? ["1", "2", "3"][i] : `<span style="width:22px;text-align:center;color:var(--muted)">${p.rank || i + 1}</span>`} ${BAFace.html(p.avatar, "1.3em", p.name)} ${esc(p.name)}<b>${fmt(p.score)}</b></div>`).join("")}</div>
+    <div class="muted small">${f.accuracy}% answered right${f.fastest ? ` · ⚡ fastest: ${esc(f.fastest.name)} ${(f.fastest.ms / 1000).toFixed(1)} s` : ""}</div>
+    <button class="btn primary" id="share">Share on WhatsApp</button>
     <a class="btn ghost" href="/live" style="text-decoration:none">Host your own quiz night (free)</a></div>`;
   $("#share").onclick = () => L.shareCard(f);
 }

@@ -1,3 +1,4 @@
+import { CheverVerse } from "@/components/chever-verse";
 import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
@@ -7,7 +8,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { Button, Card, FadeIn, IconBadge, Pill, ProgressBar, Ring, SectionHeader, Stars, Txt } from "@/components/ui/kit";
 import { C, R, S } from "@/constants/design";
 import { ACHIEVEMENT_CATALOG, getLevelProgress } from "@/domain/progression";
-import { dailyDoneToday, getAllMastery, msUntilTomorrow, normalizeArena, suggestNextCategory, verseOfTheDay, xpToday } from "@/domain/arena";
+import { dailyDoneToday, getAllMastery, msUntilTomorrow, normalizeArena, suggestNextCategory, xpToday } from "@/domain/arena";
 import { useAuth } from "@/hooks/use-auth";
 import { useProgression } from "@/lib/progression-provider";
 import { feedback } from "@/lib/feedback";
@@ -42,7 +43,6 @@ export default function HomeScreen() {
   const next = suggestNextCategory(arena);
   const mastery = useMemo(() => getAllMastery(arena), [arena]);
   const nextMastery = mastery.find((m) => m.category.id === next.id)!;
-  const verse = verseOfTheDay(now);
   const streak = state.progression.currentStreak;
   const name = state.displayName || (user?.name && !/^guest/i.test(user.name) ? user.name.split(" ")[0] : "") || "friend";
   const unlocked = new Set(state.achievements.map((a) => a.key));
@@ -180,11 +180,7 @@ export default function HomeScreen() {
         <GetAndroidAppCard />
 
         <FadeIn delay={340}>
-          <Card style={styles.verse}>
-            <IconSymbol name="quote" size={26} color={C.gold} />
-            <Txt variant="h3" style={{ fontWeight: "600", lineHeight: 26, marginTop: S.sm }}>{verse.text}</Txt>
-            <Txt variant="smallStrong" color={C.gold} style={{ marginTop: S.md }}>{verse.ref} · KJV</Txt>
-          </Card>
+          <CheverVerse />
         </FadeIn>
         <Txt variant="caption" color={C.faint} style={{ textAlign: "center", marginTop: S.sm }}>Know the Word. Challenge the World.</Txt>
       </ScrollView>
@@ -210,5 +206,4 @@ const styles = StyleSheet.create({
   catRow: { flexDirection: "row", alignItems: "center", gap: S.md },
   badgeRow: { flexDirection: "row", gap: S.md, marginTop: S.md },
   badge: { flex: 1, alignItems: "center", backgroundColor: C.surface, borderRadius: R.lg, borderWidth: 1, borderColor: C.hairline, padding: S.md },
-  verse: { backgroundColor: "#111A2B" },
 });

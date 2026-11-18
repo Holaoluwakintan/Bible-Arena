@@ -5,6 +5,8 @@ const config = getDefaultConfig(__dirname, {
   isCSSEnabled: true,
 });
 
-config.resolver.sourceExts.push("sql");
+for (const ext of ["sql", "mjs"]) {
+  if (!config.resolver.sourceExts.includes(ext)) config.resolver.sourceExts.push(ext);
+}
 
 module.exports = withNativeWind(config, { input: "./global.css" });

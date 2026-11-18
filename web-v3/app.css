@@ -1,11 +1,11 @@
-:root{--bg:#070C1A;--bg2:#0E1730;--card:#121C3A;--card2:#0C1430;--line:rgba(245,185,66,.16);--line2:rgba(255,255,255,.07);--gold:#F5B942;--gold2:#FFD98A;--gold3:#C98A1B;--ivory:#F6F1E7;--muted:#9AA6C2;--dim:#66729A;--ok:#3DDC97;--bad:#FF5D73;--violet:#9B8CFF;--teal:#3CC9C0;--coral:#FF8A65;--sky:#5AB8FF;--r:22px;--serif:"Cinzel",Georgia,serif;--sans:"Plus Jakarta Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+:root{--bg:var(--ch-night);--bg2:#0E1730;--card:var(--ch-night-card);--card2:#0C1430;--line:rgba(245,185,66,.16);--line2:rgba(255,255,255,.07);--gold:var(--ch-gold);--gold2:#FFD98A;--gold3:#C98A1B;--ivory:#F6F1E7;--muted:#9AA6C2;--dim:#66729A;--ok:#3DDC97;--bad:#FF5D73;--violet:#9B8CFF;--teal:#3CC9C0;--coral:#FF8A65;--sky:#5AB8FF;--r:22px;--serif:"Cinzel",Georgia,serif;--sans:"Plus Jakarta Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ivory);font-family:var(--sans);font-size:16px;line-height:1.4;overscroll-behavior-y:none}
 body{min-height:100vh;min-height:100dvh}
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
 input{font:inherit}
 a{color:var(--gold2)}
-#sky{position:fixed;inset:0;z-index:-1;background:radial-gradient(1200px 600px at 50% -10%,#1C2B5C 0%,rgba(28,43,92,0) 60%),radial-gradient(800px 500px at 110% 110%,rgba(201,138,27,.16),rgba(0,0,0,0) 60%),linear-gradient(180deg,#0A1124,#070C1A 60%)}
+#sky{position:fixed;inset:0;z-index:-1;background:radial-gradient(1200px 600px at 50% -10%,#1C2B5C 0%,rgba(28,43,92,0) 60%),radial-gradient(800px 500px at 110% 110%,rgba(201,138,27,.16),rgba(0,0,0,0) 60%),linear-gradient(180deg,#0A1124,var(--ch-night) 60%)}
 #sky::after{content:"";position:absolute;inset:0;opacity:.5;background-image:radial-gradient(1px 1px at 20px 30px,#fff8,transparent),radial-gradient(1px 1px at 120px 80px,#fff6,transparent),radial-gradient(1.5px 1.5px at 200px 160px,#ffd98a88,transparent),radial-gradient(1px 1px at 300px 40px,#fff5,transparent),radial-gradient(1px 1px at 260px 260px,#fff4,transparent);background-size:340px 300px}
 #app{max-width:560px;margin:0 auto;padding:max(14px,env(safe-area-inset-top)) 18px calc(96px + env(safe-area-inset-bottom))}
 .boot{height:80vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
@@ -229,7 +229,7 @@ a.badge,a.lb{cursor:pointer}
 .olppl{display:flex;flex-wrap:wrap;gap:8px}
 .olp{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:99px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);font-size:13.5px;font-weight:700}
 .olp i{width:8px;height:8px;border-radius:50%;background:#3DDC97;flex:none}
-.olp.busy i{background:#F5B942}.olp em{font-style:normal;font-weight:600;color:#aab3c8;font-size:12px}
+.olp.busy i{background:var(--ch-gold)}.olp em{font-style:normal;font-weight:600;color:#aab3c8;font-size:12px}
 .olp.more{color:#aab3c8}
 
 /* v3.8.3 opt-in rewarded ads (Android app only) */
@@ -284,82 +284,82 @@ a.badge,a.lb{cursor:pointer}
 .strank h2{color:var(--gold2)}
 
 /* ---- Chever look (preview, cv2): light navy/blue screens for the quiz and the reading plan. Scoped to body.cv2-on. ---- */
-body.cv2-on{background:#F4F6FB;color:#0B1F4B}
+body.cv2-on{background:#F4F6FB;color:var(--ch-navy)}
 body.cv2-on #sky{display:none}
 body.cv2-on #app{max-width:560px;padding-top:12px}
 body.cv2-on .cv2 .playtop{display:flex;align-items:center;gap:12px;margin-bottom:10px}
-body.cv2-on .cv2 .iconbtn{background:#fff;border:1px solid #E3E8F2;color:#0B1F4B;width:40px;height:40px;border-radius:50%}
-body.cv2-on .cv2 .score-pill{color:#0B1F4B;font-family:var(--sans);font-weight:800;font-size:16px}
+body.cv2-on .cv2 .iconbtn{background:#fff;border:1px solid #E3E8F2;color:var(--ch-navy);width:40px;height:40px;border-radius:50%}
+body.cv2-on .cv2 .score-pill{color:var(--ch-navy);font-family:var(--sans);font-weight:800;font-size:16px}
 body.cv2-on .cv2 .timer{background:#E6E7E9;height:8px;border-radius:99px;margin:6px 0 14px}
-body.cv2-on .cv2 .timer>i{background:linear-gradient(90deg,#0648C2,#1E6BE6)}
+body.cv2-on .cv2 .timer>i{background:linear-gradient(90deg,var(--ch-blue),#1E6BE6)}
 body.cv2-on .cv2 .timer.low>i{background:linear-gradient(90deg,#D64545,#E85B5B)}
 body.cv2-on .cv2-quiz .dots{display:none}
-body.cv2-on .cv2-count{flex:1;font-size:15px;font-weight:800;color:#0B1F4B;text-align:center}
+body.cv2-on .cv2-count{flex:1;font-size:15px;font-weight:800;color:var(--ch-navy);text-align:center}
 body.cv2-on .cv2-quiz .playtop{justify-content:space-between}
 body.cv2-on .cv2-quiz .qcard{background:#fff;border:1px solid #E3E8F2;border-radius:20px;box-shadow:0 2px 10px rgba(11,31,75,.06);padding:20px 18px;margin-bottom:14px}
-body.cv2-on .cv2-quiz .qmeta{color:#0648C2;margin-bottom:8px}
-body.cv2-on .cv2-quiz .qmeta .tiny{color:#0648C2;font-weight:800}
-body.cv2-on .cv2-quiz .pill-tier{color:#0648C2;border-color:#C9D9F7;background:#EEF4FE}
-body.cv2-on .cv2-quiz .qtext{color:#0B1F4B;font-size:20px;font-family:var(--sans);font-weight:800}
+body.cv2-on .cv2-quiz .qmeta{color:var(--ch-blue);margin-bottom:8px}
+body.cv2-on .cv2-quiz .qmeta .tiny{color:var(--ch-blue);font-weight:800}
+body.cv2-on .cv2-quiz .pill-tier{color:var(--ch-blue);border-color:#C9D9F7;background:#EEF4FE}
+body.cv2-on .cv2-quiz .qtext{color:var(--ch-navy);font-size:20px;font-family:var(--sans);font-weight:800}
 body.cv2-on .cv2-quiz .opts{gap:10px}
-body.cv2-on .cv2-quiz .opt{background:#fff;border:1.5px solid #DDE3EE;border-radius:16px;color:#0B1F4B;min-height:60px;padding:12px 14px;box-shadow:0 1px 4px rgba(11,31,75,.04)}
-body.cv2-on .cv2-quiz .opt .k{background:#EEF4FE;color:#0648C2;font-weight:800;border-radius:50%;width:30px;height:30px}
+body.cv2-on .cv2-quiz .opt{background:#fff;border:1.5px solid var(--ch-line);border-radius:16px;color:var(--ch-navy);min-height:60px;padding:12px 14px;box-shadow:0 1px 4px rgba(11,31,75,.04)}
+body.cv2-on .cv2-quiz .opt .k{background:#EEF4FE;color:var(--ch-blue);font-weight:800;border-radius:50%;width:30px;height:30px}
 body.cv2-on .cv2-quiz .opt::after{content:"";margin-left:auto;flex:none;width:20px;height:20px;border-radius:50%;border:2px solid #B8C3D6;background:#fff}
-body.cv2-on .cv2-quiz .opt.ok{background:#EDF9F3;border-color:#1F9D5C;color:#0B1F4B}
+body.cv2-on .cv2-quiz .opt.ok{background:#EDF9F3;border-color:#1F9D5C;color:var(--ch-navy)}
 body.cv2-on .cv2-quiz .opt.ok::after{border-color:#1F9D5C;background:radial-gradient(circle,#1F9D5C 0 5px,#fff 6px)}
 body.cv2-on .cv2-quiz .opt.bad{background:#FDF0F0;border-color:#D64545}
 body.cv2-on .cv2-quiz .opt.bad::after{border-color:#D64545;background:radial-gradient(circle,#D64545 0 5px,#fff 6px)}
 body.cv2-on .cv2-quiz .opt.dim{opacity:.55}
-body.cv2-on .cv2-quiz .mythbtns .opt{background:#fff;color:#0B1F4B;font-family:var(--sans)}
+body.cv2-on .cv2-quiz .mythbtns .opt{background:#fff;color:var(--ch-navy);font-family:var(--sans)}
 body.cv2-on .cv2-quiz .mythbtns .opt::after{display:none}
-body.cv2-on .cv2-quiz .mythbtns .opt small{color:#5B6478}
-body.cv2-on .cv2-quiz .feedback{background:#fff;color:#0B1F4B;border:1px solid #E3E8F2;border-radius:16px}
-body.cv2-on .cv2-quiz .btn.primary{background:#0648C2;color:#fff;border-radius:16px;font-weight:800}
-body.cv2-on .cv2-quiz .ref{color:#0648C2}
-body.cv2-on .cv2-quiz .practicetag{color:#5B6478}
+body.cv2-on .cv2-quiz .mythbtns .opt small{color:var(--ch-muted)}
+body.cv2-on .cv2-quiz .feedback{background:#fff;color:var(--ch-navy);border:1px solid #E3E8F2;border-radius:16px}
+body.cv2-on .cv2-quiz .btn.primary{background:var(--ch-blue);color:#fff;border-radius:16px;font-weight:800}
+body.cv2-on .cv2-quiz .ref{color:var(--ch-blue)}
+body.cv2-on .cv2-quiz .practicetag{color:var(--ch-muted)}
 /* reading plan (preview) */
 body.cv2-on .cv2-reading{padding-top:4px}
-body.cv2-on .cv2-brand{font-family:var(--serif, Georgia, serif);font-size:20px;font-weight:800;color:#0B1F4B;letter-spacing:.02em;margin:4px 0 2px}
+body.cv2-on .cv2-brand{font-family:var(--serif, Georgia, serif);font-size:20px;font-weight:800;color:var(--ch-navy);letter-spacing:.02em;margin:4px 0 2px}
 body.cv2-on .cv2-reading .br-screen{max-width:none;padding:0}
 
 /* Reading plan tab bar (Chever look, preview): light bar with icons; the inactive tab is greyed and has no link. */
 body.cv2-on .tabbar nav{background:#fff;border:1px solid #E3E8F2;border-radius:22px;box-shadow:0 -2px 12px rgba(11,31,75,.06);max-width:560px;grid-template-columns:repeat(5,1fr);padding:6px 4px}
-body.cv2-on .tabbar a{color:#5B6478;font-size:12px;font-weight:700;gap:3px}
+body.cv2-on .tabbar a{color:var(--ch-muted);font-size:12px;font-weight:700;gap:3px}
 body.cv2-on .tabbar a i{font-size:0;line-height:0;height:24px;display:flex;align-items:center}
-body.cv2-on .tabbar a.on{color:#0B1F4B;background:transparent}
+body.cv2-on .tabbar a.on{color:var(--ch-navy);background:transparent}
 body.cv2-on .tabbar a.off{opacity:.45;pointer-events:none;cursor:default}
-body.cv2-on .tabbar a:not(.off):focus-visible{outline:2px solid #0648C2}
+body.cv2-on .tabbar a:not(.off):focus-visible{outline:2px solid var(--ch-blue)}
 
 /* ---- Chever home guide (preview, cv2-home): shown only when a Chever preview flag is on. Light navy and gold, no emoji. ---- */
 .cv2-home{padding:0 2px 120px}
-body.cv2-on .cv2-home .gh{display:flex;flex-direction:column;gap:20px;color:#0B1F4B}
+body.cv2-on .cv2-home .gh{display:flex;flex-direction:column;gap:20px;color:var(--ch-navy)}
 body.cv2-on .cv2-home .gh-top{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding-top:4px}
 body.cv2-on .cv2-home .gh-stats{display:flex;gap:6px;flex-wrap:wrap}
-body.cv2-on .cv2-home .gh-stat{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #E3E8F2;border-radius:99px;padding:6px 10px;font-size:12.5px;color:#5B6478;font-weight:700;white-space:nowrap}
-body.cv2-on .cv2-home .gh-stat b{color:#0B1F4B;font-size:14px;font-weight:800}
-body.cv2-on .cv2-home .gh-stat svg{width:16px;height:16px;color:#0B1F4B}
-body.cv2-on .cv2-home .gh-intro h1{font-family:var(--serif, Georgia, serif);font-size:27px;line-height:1.15;color:#0B1F4B;margin:0 0 8px}
-body.cv2-on .cv2-home .gh-intro p{margin:0;color:#5B6478;font-size:15px;line-height:1.45}
+body.cv2-on .cv2-home .gh-stat{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #E3E8F2;border-radius:99px;padding:6px 10px;font-size:12.5px;color:var(--ch-muted);font-weight:700;white-space:nowrap}
+body.cv2-on .cv2-home .gh-stat b{color:var(--ch-navy);font-size:14px;font-weight:800}
+body.cv2-on .cv2-home .gh-stat svg{width:16px;height:16px;color:var(--ch-navy)}
+body.cv2-on .cv2-home .gh-intro h1{font-family:var(--serif, Georgia, serif);font-size:27px;line-height:1.15;color:var(--ch-navy);margin:0 0 8px}
+body.cv2-on .cv2-home .gh-intro p{margin:0;color:var(--ch-muted);font-size:15px;line-height:1.45}
 body.cv2-on .cv2-home .gh-sec{display:flex;flex-direction:column;gap:10px}
-body.cv2-on .cv2-home .gh-sec h3{margin:0;font-size:12.5px;letter-spacing:.09em;text-transform:uppercase;color:#0B1F4B;font-weight:800}
-body.cv2-on .cv2-home .gh-hint{margin:-4px 0 0;font-size:13.5px;color:#5B6478}
-body.cv2-on .cv2-home .gh-row{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #E3E8F2;border-radius:18px;padding:13px 14px;box-shadow:0 2px 10px rgba(11,31,75,.06);text-decoration:none;color:#0B1F4B}
-body.cv2-on .cv2-home .gh-row.gh-primary{background:#0B1F4B;border-color:#0B1F4B;color:#fff}
-body.cv2-on .cv2-home .gh-row.gh-primary .gh-ico{background:#FFC300;color:#0B1F4B}
+body.cv2-on .cv2-home .gh-sec h3{margin:0;font-size:12.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ch-navy);font-weight:800}
+body.cv2-on .cv2-home .gh-hint{margin:-4px 0 0;font-size:13.5px;color:var(--ch-muted)}
+body.cv2-on .cv2-home .gh-row{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #E3E8F2;border-radius:18px;padding:13px 14px;box-shadow:0 2px 10px rgba(11,31,75,.06);text-decoration:none;color:var(--ch-navy)}
+body.cv2-on .cv2-home .gh-row.gh-primary{background:var(--ch-navy);border-color:var(--ch-navy);color:#fff}
+body.cv2-on .cv2-home .gh-row.gh-primary .gh-ico{background:var(--ch-gold);color:var(--ch-navy)}
 body.cv2-on .cv2-home .gh-row.gh-primary .gh-txt span{color:#C9D3E8}
-body.cv2-on .cv2-home .gh-row.gh-primary .gh-chev{color:#FFC300}
-body.cv2-on .cv2-home .gh-ico{width:42px;height:42px;border-radius:14px;background:#EEF2FA;color:#0B1F4B;display:grid;place-items:center;flex:0 0 auto}
+body.cv2-on .cv2-home .gh-row.gh-primary .gh-chev{color:var(--ch-gold)}
+body.cv2-on .cv2-home .gh-ico{width:42px;height:42px;border-radius:14px;background:#EEF2FA;color:var(--ch-navy);display:grid;place-items:center;flex:0 0 auto}
 body.cv2-on .cv2-home .gh-ico svg{width:22px;height:22px}
 body.cv2-on .cv2-home .gh-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 body.cv2-on .cv2-home .gh-txt b{font-size:16px;font-weight:800;color:inherit}
-body.cv2-on .cv2-home .gh-txt span{font-size:13.5px;color:#5B6478;line-height:1.35}
+body.cv2-on .cv2-home .gh-txt span{font-size:13.5px;color:var(--ch-muted);line-height:1.35}
 body.cv2-on .cv2-home .gh-chev{color:#8A93A6;display:flex}
 body.cv2-on .cv2-home .gh-chev svg{width:18px;height:18px}
 body.cv2-on .cv2-home .gh-join{background:#fff;border:1px solid #E3E8F2;border-radius:18px;padding:13px 14px;display:flex;flex-direction:column;gap:10px;box-shadow:0 2px 10px rgba(11,31,75,.06)}
-body.cv2-on .cv2-home .gh-join label{font-weight:800;font-size:16px;color:#0B1F4B}
+body.cv2-on .cv2-home .gh-join label{font-weight:800;font-size:16px;color:var(--ch-navy)}
 body.cv2-on .cv2-home .gh-joinrow{display:flex;gap:8px}
-body.cv2-on .cv2-home .gh-joinrow input{flex:1;min-width:0;height:48px;border:1.5px solid #DDE3EE;border-radius:14px;padding:0 14px;font-size:18px;letter-spacing:.14em;color:#0B1F4B;background:#F8FAFD;font-family:var(--sans)}
-body.cv2-on .cv2-home .gh-joinrow button{height:48px;border:0;border-radius:14px;background:#0B1F4B;color:#FFC300;font-weight:800;font-size:15px;padding:0 20px}
+body.cv2-on .cv2-home .gh-joinrow input{flex:1;min-width:0;height:48px;border:1.5px solid var(--ch-line);border-radius:14px;padding:0 14px;font-size:18px;letter-spacing:.14em;color:var(--ch-navy);background:#F8FAFD;font-family:var(--sans)}
+body.cv2-on .cv2-home .gh-joinrow button{height:48px;border:0;border-radius:14px;background:var(--ch-navy);color:var(--ch-gold);font-weight:800;font-size:15px;padding:0 20px}
 body.cv2-on .cv2-home .tabbar a i svg{width:22px;height:22px}
 
 /* ---- Me (profile) on the Chever light look (cv2-me): white cards, navy and blue, flat icons, no emoji. ---- */
@@ -371,106 +371,106 @@ body.cv2-on .cv2-home .tabbar a i svg{width:22px;height:22px}
 .stat b svg{display:inline-block;vertical-align:-3px;width:16px;height:16px}
 .chip svg{width:16px;height:16px;flex:0 0 auto}
 .ach .ai{display:flex;align-items:center;justify-content:center;height:30px;margin:0 auto}
-body.cv2-on .cv2-me .card{background:#fff;border:1px solid #E3E8F2;border-radius:18px;color:#0B1F4B;box-shadow:0 2px 10px rgba(11,31,75,.06)}
-body.cv2-on .cv2-me .card b,body.cv2-on .cv2-me h2{color:#0B1F4B}
+body.cv2-on .cv2-me .card{background:#fff;border:1px solid #E3E8F2;border-radius:18px;color:var(--ch-navy);box-shadow:0 2px 10px rgba(11,31,75,.06)}
+body.cv2-on .cv2-me .card b,body.cv2-on .cv2-me h2{color:var(--ch-navy)}
 body.cv2-on .cv2-me h2{font-family:var(--serif, Georgia, serif)}
-body.cv2-on .cv2-me .gold{color:#0648C2}
-body.cv2-on .cv2-me .muted{color:#5B6478}
+body.cv2-on .cv2-me .gold{color:var(--ch-blue)}
+body.cv2-on .cv2-me .muted{color:var(--ch-muted)}
 body.cv2-on .cv2-me .dim,body.cv2-on .cv2-me .small.dim{color:#8A93A6}
-body.cv2-on .cv2-me .hero{background:#fff;border:1px solid #E3E8F2;box-shadow:0 2px 14px rgba(11,31,75,.07);color:#0B1F4B}
+body.cv2-on .cv2-me .hero{background:#fff;border:1px solid #E3E8F2;box-shadow:0 2px 14px rgba(11,31,75,.07);color:var(--ch-navy)}
 body.cv2-on .cv2-me .hero .rays{display:none}
-body.cv2-on .cv2-me .emblem{background:#0B1F4B;color:#FFC300;box-shadow:none}
+body.cv2-on .cv2-me .emblem{background:var(--ch-navy);color:var(--ch-gold);box-shadow:none}
 body.cv2-on .cv2-me .xpbar{background:#E3E8F2}
-body.cv2-on .cv2-me .xpbar>i{background:linear-gradient(90deg,#0648C2,#1E6BE6)}
-body.cv2-on .cv2-me .pico{background:#EEF2FA;color:#0B1F4B}
-body.cv2-on .cv2-me .pfline{color:#5B6478}
-body.cv2-on .cv2-me .pfline svg,body.cv2-on .cv2-me .pfinl svg,body.cv2-on .cv2-me .stat b svg,body.cv2-on .cv2-me .chip svg{color:#0648C2}
-body.cv2-on .cv2-me .stat{background:#fff;border:1px solid #E3E8F2;color:#0B1F4B;border-radius:16px}
-body.cv2-on .cv2-me .stat b{color:#0B1F4B;font-family:var(--serif, Georgia, serif)}
-body.cv2-on .cv2-me .stat span{color:#5B6478}
-body.cv2-on .cv2-me .chip{background:#fff;border:1px solid #DDE3EE;color:#0B1F4B}
-body.cv2-on .cv2-me .chip.on{background:#EEF4FE;border-color:#C9D9F7;color:#0648C2}
+body.cv2-on .cv2-me .xpbar>i{background:linear-gradient(90deg,var(--ch-blue),#1E6BE6)}
+body.cv2-on .cv2-me .pico{background:#EEF2FA;color:var(--ch-navy)}
+body.cv2-on .cv2-me .pfline{color:var(--ch-muted)}
+body.cv2-on .cv2-me .pfline svg,body.cv2-on .cv2-me .pfinl svg,body.cv2-on .cv2-me .stat b svg,body.cv2-on .cv2-me .chip svg{color:var(--ch-blue)}
+body.cv2-on .cv2-me .stat{background:#fff;border:1px solid #E3E8F2;color:var(--ch-navy);border-radius:16px}
+body.cv2-on .cv2-me .stat b{color:var(--ch-navy);font-family:var(--serif, Georgia, serif)}
+body.cv2-on .cv2-me .stat span{color:var(--ch-muted)}
+body.cv2-on .cv2-me .chip{background:#fff;border:1px solid var(--ch-line);color:var(--ch-navy)}
+body.cv2-on .cv2-me .chip.on{background:#EEF4FE;border-color:#C9D9F7;color:var(--ch-blue)}
 body.cv2-on .cv2-me .switch{background:#D5DCE8}
 body.cv2-on .cv2-me .switch::after{background:#fff;box-shadow:0 1px 3px rgba(11,31,75,.2)}
-body.cv2-on .cv2-me .switch.on{background:#0648C2}
+body.cv2-on .cv2-me .switch.on{background:var(--ch-blue)}
 body.cv2-on .cv2-me .setrow{border-bottom:1px solid #EEF1F6}
-body.cv2-on .cv2-me .sechead b{color:#0B1F4B}
+body.cv2-on .cv2-me .sechead b{color:var(--ch-navy)}
 body.cv2-on .cv2-me .ach{background:#F8FAFD;border:1px solid #E3E8F2}
 body.cv2-on .cv2-me .ach .ai{color:#A3ACBE;filter:none;opacity:1}
 body.cv2-on .cv2-me .ach.got{background:#FFF8E7;border-color:#E2C77A}
-body.cv2-on .cv2-me .ach.got .ai{color:#0648C2}
-body.cv2-on .cv2-me .ach b{color:#0B1F4B}
-body.cv2-on .cv2-me .ach span{color:#5B6478}
-body.cv2-on .cv2-me .btn.ghost{background:#fff;border:1px solid #DDE3EE;color:#0B1F4B}
-body.cv2-on .cv2-me .faceopt.on{border-color:#FFC300;box-shadow:0 0 0 2px rgba(255,195,0,.35)}
+body.cv2-on .cv2-me .ach.got .ai{color:var(--ch-blue)}
+body.cv2-on .cv2-me .ach b{color:var(--ch-navy)}
+body.cv2-on .cv2-me .ach span{color:var(--ch-muted)}
+body.cv2-on .cv2-me .btn.ghost{background:#fff;border:1px solid var(--ch-line);color:var(--ch-navy)}
+body.cv2-on .cv2-me .faceopt.on{border-color:var(--ch-gold);box-shadow:0 0 0 2px rgba(255,195,0,.35)}
 body.cv2-on .cv2-me #delacct{color:#C23B3B !important}
-body.cv2-on .cv2-me .reportlink{color:#0B1F4B}
+body.cv2-on .cv2-me .reportlink{color:var(--ch-navy)}
 /* ---- Ranks and Duels on the Chever light look (cv2-ranks, cv2-duels): white cards, navy and blue, flat icons, no emoji. ---- */
 .chin{display:inline-flex;align-items:center;vertical-align:-3px;margin-right:4px}
 .chin svg{width:16px;height:16px;display:block}
-.chbig{display:flex;justify-content:center;align-items:center;color:#0648C2;margin:0 auto}
+.chbig{display:flex;justify-content:center;align-items:center;color:var(--ch-blue);margin:0 auto}
 .chbig svg{width:42px;height:42px}
 body.cv2-on .cv2-ranks .btn svg,body.cv2-on .cv2-duels .btn svg{width:20px;height:20px;flex:0 0 auto}
-body.cv2-on .cv2-ranks h2,body.cv2-on .cv2-duels h2{color:#0B1F4B;font-family:var(--serif, Georgia, serif)}
-body.cv2-on .cv2-ranks .card,body.cv2-on .cv2-duels .card,body.cv2-on .cv2-ranks .badge,body.cv2-on .cv2-duels .hero{background:#fff;border:1px solid #E3E8F2;border-radius:18px;color:#0B1F4B;box-shadow:0 2px 10px rgba(11,31,75,.06)}
-body.cv2-on .cv2-ranks .card b,body.cv2-on .cv2-duels .card b,body.cv2-on .cv2-ranks .badge b,body.cv2-on .cv2-duels .hero h2{color:#0B1F4B}
-body.cv2-on .cv2-ranks .muted,body.cv2-on .cv2-duels .muted{color:#5B6478}
+body.cv2-on .cv2-ranks h2,body.cv2-on .cv2-duels h2{color:var(--ch-navy);font-family:var(--serif, Georgia, serif)}
+body.cv2-on .cv2-ranks .card,body.cv2-on .cv2-duels .card,body.cv2-on .cv2-ranks .badge,body.cv2-on .cv2-duels .hero{background:#fff;border:1px solid #E3E8F2;border-radius:18px;color:var(--ch-navy);box-shadow:0 2px 10px rgba(11,31,75,.06)}
+body.cv2-on .cv2-ranks .card b,body.cv2-on .cv2-duels .card b,body.cv2-on .cv2-ranks .badge b,body.cv2-on .cv2-duels .hero h2{color:var(--ch-navy)}
+body.cv2-on .cv2-ranks .muted,body.cv2-on .cv2-duels .muted{color:var(--ch-muted)}
 body.cv2-on .cv2-ranks .dim,body.cv2-on .cv2-duels .dim{color:#8A93A6}
-body.cv2-on .cv2-ranks .gold,body.cv2-on .cv2-duels .gold{color:#0648C2}
-body.cv2-on .cv2-ranks .chip,body.cv2-on .cv2-duels .chip{background:#fff;border:1px solid #DDE3EE;color:#0B1F4B}
-body.cv2-on .cv2-ranks .chip.on,body.cv2-on .cv2-duels .chip.on{background:#EEF4FE;border-color:#C9D9F7;color:#0648C2}
-body.cv2-on .cv2-ranks .btn.primary,body.cv2-on .cv2-duels .btn.primary{background:#0648C2;color:#fff;box-shadow:0 4px 14px rgba(6,72,194,.22)}
-body.cv2-on .cv2-ranks .btn.ghost,body.cv2-on .cv2-duels .btn.ghost{background:#fff;border:1px solid #DDE3EE;color:#0B1F4B}
+body.cv2-on .cv2-ranks .gold,body.cv2-on .cv2-duels .gold{color:var(--ch-blue)}
+body.cv2-on .cv2-ranks .chip,body.cv2-on .cv2-duels .chip{background:#fff;border:1px solid var(--ch-line);color:var(--ch-navy)}
+body.cv2-on .cv2-ranks .chip.on,body.cv2-on .cv2-duels .chip.on{background:#EEF4FE;border-color:#C9D9F7;color:var(--ch-blue)}
+body.cv2-on .cv2-ranks .btn.primary,body.cv2-on .cv2-duels .btn.primary{background:var(--ch-blue);color:#fff;box-shadow:0 4px 14px rgba(6,72,194,.22)}
+body.cv2-on .cv2-ranks .btn.ghost,body.cv2-on .cv2-duels .btn.ghost{background:#fff;border:1px solid var(--ch-line);color:var(--ch-navy)}
 body.cv2-on .cv2-duels .hero .rays{display:none}
-body.cv2-on .cv2-ranks .lb{border-bottom:1px solid #EEF1F6;color:#0B1F4B}
-body.cv2-on .cv2-ranks .lb b{color:#0B1F4B}
+body.cv2-on .cv2-ranks .lb{border-bottom:1px solid #EEF1F6;color:var(--ch-navy)}
+body.cv2-on .cv2-ranks .lb b{color:var(--ch-navy)}
 body.cv2-on .cv2-ranks .lb .pos{color:#8A93A6}
 body.cv2-on .cv2-ranks .lb .pos.p1{color:#B7791F}
 body.cv2-on .cv2-ranks .lb .pos.p2{color:#6B7689}
 body.cv2-on .cv2-ranks .lb .pos.p3{color:#A8642E}
 body.cv2-on .cv2-ranks .lb.me{background:#EEF4FE;border-radius:12px}
-body.cv2-on .cv2-ranks .vtick{color:#0648C2;display:inline-flex;vertical-align:-2px}
-body.cv2-on .cv2-duels .codebox input{background:#F8FAFD;border:1.5px solid #DDE3EE;color:#0B1F4B}
-body.cv2-on .cv2-duels .codebox input:focus{border-color:#0648C2}
-body.cv2-on .cv2-duels .sechead b{color:#0B1F4B}
+body.cv2-on .cv2-ranks .vtick{color:var(--ch-blue);display:inline-flex;vertical-align:-2px}
+body.cv2-on .cv2-duels .codebox input{background:#F8FAFD;border:1.5px solid var(--ch-line);color:var(--ch-navy)}
+body.cv2-on .cv2-duels .codebox input:focus{border-color:var(--ch-blue)}
+body.cv2-on .cv2-duels .sechead b{color:var(--ch-navy)}
 /* Your face (profile): forty avatar faces, the chosen one ringed in gold */
 .facegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));gap:8px;max-height:300px;overflow-y:auto;padding:4px 2px}
 .faceopt{width:100%;aspect-ratio:1;border-radius:50%;padding:0;border:2px solid transparent;background:none;display:block;line-height:0}
-.faceopt.on{border-color:#FFC300;box-shadow:0 0 0 2px rgba(255,195,0,.35)}
+.faceopt.on{border-color:var(--ch-gold);box-shadow:0 0 0 2px rgba(255,195,0,.35)}
 
 /* ---- Chever brand mark (C + wordmark): the same bar, same size, on every screen. Dark by default; navy on the Chever light look. ---- */
 .cvm-bar{display:flex;align-items:center;gap:10px;height:52px;padding:0 4px;margin:0 0 4px}
 .cvm-mark{width:34px;height:36px;flex:0 0 34px;display:block}
 .cvm-body{fill:#F5F7FB}
-.cvm-sw{fill:#FFC300}
+.cvm-sw{fill:var(--ch-gold)}
 .cvm-word{font-family:var(--serif, Cinzel, Georgia, serif);font-size:21px;font-weight:800;letter-spacing:.06em;color:#F5F7FB;line-height:1}
 body.cv2-on .cvm-body{fill:#022569}
 body.cv2-on .cvm-sw{fill:#8FB7E0}
-body.cv2-on .cvm-word{color:#0B1F4B}
+body.cv2-on .cvm-word{color:var(--ch-navy)}
 
 /* Level icons (flat line icons, no emoji) */
-.lvl-ico{width:26px;height:26px;display:block;margin:0 auto 4px;color:#FFC300;flex:none}
+.lvl-ico{width:26px;height:26px;display:block;margin:0 auto 4px;color:var(--ch-gold);flex:none}
 .tierpick .lvl-ico{margin:0}
 .chip .lvl-ico{width:16px;height:16px;display:inline-block;margin:0;vertical-align:-3px}
-body.cv2-on .lvl-ico{color:#0648C2}
+body.cv2-on .lvl-ico{color:var(--ch-blue)}
 /* Onboarding on the Chever light look */
-body.cv2-on .cv2-onboard .field input{background:#fff;border:1.5px solid #DDE3EE;color:#0B1F4B;border-radius:14px;min-height:50px;font-size:17px;font-family:var(--sans)}
-body.cv2-on .cv2-onboard .field label,body.cv2-on .cv2-onboard .tiny.muted{color:#5B6478}
-body.cv2-on .cv2-onboard .tier{background:#fff;border:1.5px solid #DDE3EE;color:#0B1F4B;box-shadow:0 1px 4px rgba(11,31,75,.05)}
-body.cv2-on .cv2-onboard .tier b{color:#0B1F4B}
-body.cv2-on .cv2-onboard .tier small{color:#5B6478}
-body.cv2-on .cv2-onboard .tier.on{border-color:#FFC300;box-shadow:0 0 0 2px rgba(255,195,0,.35)}
-body.cv2-on .cv2-onboard .small.dim{color:#5B6478}
-body.cv2-on .cv2-onboard .card{background:#fff;color:#0B1F4B;border:1px solid #E3E8F2}
-body.cv2-on .cv2-onboard .card .gold{color:#0648C2}
+body.cv2-on .cv2-onboard .field input{background:#fff;border:1.5px solid var(--ch-line);color:var(--ch-navy);border-radius:14px;min-height:50px;font-size:17px;font-family:var(--sans)}
+body.cv2-on .cv2-onboard .field label,body.cv2-on .cv2-onboard .tiny.muted{color:var(--ch-muted)}
+body.cv2-on .cv2-onboard .tier{background:#fff;border:1.5px solid var(--ch-line);color:var(--ch-navy);box-shadow:0 1px 4px rgba(11,31,75,.05)}
+body.cv2-on .cv2-onboard .tier b{color:var(--ch-navy)}
+body.cv2-on .cv2-onboard .tier small{color:var(--ch-muted)}
+body.cv2-on .cv2-onboard .tier.on{border-color:var(--ch-gold);box-shadow:0 0 0 2px rgba(255,195,0,.35)}
+body.cv2-on .cv2-onboard .small.dim{color:var(--ch-muted)}
+body.cv2-on .cv2-onboard .card{background:#fff;color:var(--ch-navy);border:1px solid #E3E8F2}
+body.cv2-on .cv2-onboard .card .gold{color:var(--ch-blue)}
 /* Fill-in-the-gap on the Chever light look: light word tiles, dark navy text, a gold selected blank */
-body.cv2-on .cv2-quiz .wchip{background:#FFF8E7;border:1.5px solid #E2C77A;color:#0B1F4B;box-shadow:0 1px 4px rgba(11,31,75,.06);font-weight:800}
+body.cv2-on .cv2-quiz .wchip{background:#FFF8E7;border:1.5px solid #E2C77A;color:var(--ch-navy);box-shadow:0 1px 4px rgba(11,31,75,.06);font-weight:800}
 body.cv2-on .cv2-quiz .wchip.used{opacity:.35}
-body.cv2-on .cv2-quiz .blank{color:#0B1F4B;background:#FFF8E7;border:1.5px solid #E2C77A;border-radius:10px;padding:2px 10px;min-width:72px}
-body.cv2-on .cv2-quiz .blank.next{background:#fff;border:2px dashed #FFC300;animation:none}
-body.cv2-on .cv2-quiz .blank.filled{background:#FFC300;border-color:#FFC300;color:#0B1F4B}
-body.cv2-on .cv2-quiz .blank.ok{background:#EDF9F3;border-color:#1F9D5C;color:#0B1F4B}
-body.cv2-on .cv2-quiz .blank.bad{background:#FDF0F0;border-color:#D64545;color:#0B1F4B}
+body.cv2-on .cv2-quiz .blank{color:var(--ch-navy);background:#FFF8E7;border:1.5px solid #E2C77A;border-radius:10px;padding:2px 10px;min-width:72px}
+body.cv2-on .cv2-quiz .blank.next{background:#fff;border:2px dashed var(--ch-gold);animation:none}
+body.cv2-on .cv2-quiz .blank.filled{background:var(--ch-gold);border-color:var(--ch-gold);color:var(--ch-navy)}
+body.cv2-on .cv2-quiz .blank.ok{background:#EDF9F3;border-color:#1F9D5C;color:var(--ch-navy)}
+body.cv2-on .cv2-quiz .blank.bad{background:#FDF0F0;border-color:#D64545;color:var(--ch-navy)}
 
 /* Flat icons on game screens (inline SVG that replaces the emoji): sized to the text around it. */
 .fi{width:1em;height:1em;display:inline-block;vertical-align:-0.15em;flex:0 0 auto}
@@ -480,16 +480,41 @@ body.cv2-on .cv2-quiz .blank.bad{background:#FDF0F0;border-color:#D64545;color:#
 .tabbar a i svg{width:22px;height:22px}
 .tabbar a span{line-height:1.1}
 .tabbar a.nb-centre{position:relative;padding-top:26px}
-.tabbar a.nb-centre i{position:absolute;top:-30px;left:50%;transform:translateX(-50%);width:56px;height:56px;margin:0;border-radius:50%;background:#0B1F4B;color:#fff;box-shadow:0 4px 14px rgba(11,31,75,.3)}
+.tabbar a.nb-centre i{position:absolute;top:-30px;left:50%;transform:translateX(-50%);width:56px;height:56px;margin:0;border-radius:50%;background:var(--ch-navy);color:#fff;box-shadow:0 4px 14px rgba(11,31,75,.3)}
 .tabbar a.nb-centre i svg{width:26px;height:26px}
 body.cv2-on .tabbar a.nb-centre i{width:56px;height:56px;margin:0}
 body.cv2-on .tabbar a.on i{background:#FFF3C4}
-body.cv2-on .tabbar a.nb-centre.on i{background:#0B1F4B;box-shadow:0 0 0 3px #FFC300}
-body.cv2-on .tabbar a.nb-centre{color:#0B1F4B}
+body.cv2-on .tabbar a.nb-centre.on i{background:var(--ch-navy);box-shadow:0 0 0 3px var(--ch-gold)}
+body.cv2-on .tabbar a.nb-centre{color:var(--ch-navy)}
 
 /* v3.13 Public lobby */
-body.cv2-on .cv2-home.cv2-public .pubplay{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:58px;border:0;border-radius:18px;background:#0B1F4B;color:#fff;font-size:19px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(11,31,75,.25)}
-body.cv2-on .cv2-home.cv2-public .pubplay svg{width:24px;height:24px;color:#FFC300;fill:#FFC300}
+body.cv2-on .cv2-home.cv2-public .pubplay{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:58px;border:0;border-radius:18px;background:var(--ch-navy);color:#fff;font-size:19px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(11,31,75,.25)}
+body.cv2-on .cv2-home.cv2-public .pubplay svg{width:24px;height:24px;color:var(--ch-gold);fill:var(--ch-gold)}
 body.cv2-on .cv2-home.cv2-public .pubrow .gh-txt b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-body.cv2-on .cv2-home.cv2-public .pubbtn{flex:none;border:0;border-radius:12px;padding:9px 16px;background:#FFC300;color:#0B1F4B;font-weight:800;font-size:14px;cursor:pointer}
-body.cv2-on .cv2-home.cv2-public .pubbtn.ghost{background:#fff;border:1.5px solid #0B1F4B}
+body.cv2-on .cv2-home.cv2-public .pubbtn{flex:none;border:0;border-radius:12px;padding:9px 16px;background:var(--ch-gold);color:var(--ch-navy);font-weight:800;font-size:14px;cursor:pointer}
+body.cv2-on .cv2-home.cv2-public .pubbtn.ghost{background:#fff;border:1.5px solid var(--ch-navy)}
+
+/* Hall of Fame panel vocabulary; light and night explicitly preserve contrast. */
+body:not(.cv2-on){color-scheme:dark}
+body.cv2-on{color-scheme:light}
+body:not(.cv2-on) .screen{background:var(--ch-night)}
+body:not(.cv2-on) .screen :is(.card,.badge,.hero,.ans,.stat){background-image:none;border-color:var(--line);box-shadow:none}
+body:not(.cv2-on) .screen .btn.primary{background:var(--ch-gold);color:var(--ch-navy);box-shadow:none}
+body:not(.cv2-on) .screen :is(.rays,.burst){display:none}
+.chever-panel{border-radius:18px}
+body.cv2-on .chever-panel{background:var(--ch-white);color:var(--ch-navy);border:1px solid var(--ch-line);box-shadow:none}
+.cv2-on .chever-panel .muted{color:var(--ch-muted)}
+.chever-verse h2{font-size:1rem}
+.chever-verse .vod{margin:.45rem 0 .6rem;overflow-wrap:anywhere}
+.home-rank{display:grid;gap:8px;margin-block:12px}
+.home-rank progress{width:100%;height:10px;accent-color:var(--ch-gold)}
+.cv2-ranks .segs{overflow-x:auto;scrollbar-width:thin;padding-block:4px}
+.cv2-ranks .lb .grow{min-width:0;overflow-wrap:anywhere}
+.cv2-ranks .lb .pos{flex:none}
+:where(a,button,input,select,textarea):focus-visible{outline:2px solid var(--ch-gold);outline-offset:3px}
+.cv2-on :where(a,button,input,select,textarea):focus-visible{outline-color:var(--ch-blue)}
+/* Keep each Hall of Fame filter visible on narrow phones; no dark fade on light screens. */
+.cv2-ranks .segs{flex-wrap:wrap;overflow:visible}
+body.cv2-on .tabbar{background:var(--ch-paper)}
+body:not(.cv2-on) .tabbar{background:var(--ch-night)}
+body.cv2-on .cv2-quiz .voicebar .muted,body.cv2-on .cv2-quiz .voicebar .dim{color:var(--ch-muted)}

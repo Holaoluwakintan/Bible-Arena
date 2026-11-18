@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Platform } from "react-native";
+import { Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -13,7 +13,7 @@ import { configureFeedback } from "@/lib/feedback";
 import { useProgression } from "@/lib/progression-provider";
 
 /** Internal routes that must never appear in the tab bar. */
-const HIDDEN_ROUTES = ["settings", "quiz", "who-am-i", "onboarding", "room", "challenges", "ai-battle", "friends", "callback", "groups", "moderation", "notifications", "+not-found"];
+const HIDDEN_ROUTES = ["settings", "quiz", "who-am-i", "onboarding", "room", "challenges", "ai-battle", "friends", "callback", "leaderboards", "moderation", "notifications", "+not-found"];
 const IMMERSIVE_ROUTES = ["quiz", "onboarding", "who-am-i", "callback"];
 
 function FeedbackSync() {
@@ -70,7 +70,7 @@ export default function RootLayout() {
               headerShown: false,
               sceneStyle: { backgroundColor: C.bg },
               tabBarActiveTintColor: C.gold,
-              tabBarInactiveTintColor: C.faint,
+              tabBarInactiveTintColor: C.muted,
               tabBarButton: HapticTab,
               tabBarStyle: {
                 height: 64 + bottomPadding,
@@ -84,8 +84,9 @@ export default function RootLayout() {
             }}
           >
             <Tabs.Screen name="index" options={{ title: "Home", tabBarIcon: ({ color }) => <IconSymbol name="house.fill" size={24} color={color} /> }} />
-            <Tabs.Screen name="play" options={{ title: "Play", tabBarIcon: ({ color }) => <IconSymbol name="play.fill" size={26} color={color} /> }} />
-            <Tabs.Screen name="leaderboards" options={{ title: "Ranks", tabBarIcon: ({ color }) => <IconSymbol name="trophy.fill" size={22} color={color} /> }} />
+            <Tabs.Screen name="play" options={{ title: "Game", tabBarIcon: ({ color }) => <IconSymbol name="play.fill" size={26} color={color} /> }} />
+            <Tabs.Screen name="bible" options={{ title: "Bible", tabBarIcon: ({ focused }) => <View style={{ width: 44, height: 44, borderRadius: 22, marginTop: -13, backgroundColor: C.ink, borderColor: focused ? C.gold : C.hairline, borderWidth: 2, alignItems: "center", justifyContent: "center" }}><IconSymbol name="book.fill" size={24} color={focused ? C.gold : C.text} /></View> }} />
+            <Tabs.Screen name="groups" options={{ title: "Groups", tabBarIcon: ({ color }) => <IconSymbol name="person.2.fill" size={24} color={color} /> }} />
             <Tabs.Screen name="profile" options={{ title: "Profile", tabBarIcon: ({ color }) => <IconSymbol name="person.crop.circle.fill" size={24} color={color} /> }} />
             {HIDDEN_ROUTES.map((name) => (
               <Tabs.Screen key={name} name={name} options={{ href: null, ...(IMMERSIVE_ROUTES.includes(name) ? { tabBarStyle: { display: "none" } } : {}) }} />

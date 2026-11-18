@@ -71,7 +71,11 @@ describe("merged build: the menu has both entry points", () => {
     expect(menu).not.toMatch(EMOJI);
   });
 
-  it("the reading route still needs its flag and script", () => {
-    expect(app).toMatch(/if \(a === "reading"\) \{[\s\S]*?window\.BA_FLAGS\.sharedReading\) \|\| !window\.BAReading\) return home\(\)/);
+  it("keeps the daily Bible verse independent of optional shared reading", () => {
+    const route = fnBody("route");
+    expect(route).toContain('if (a === "verse" || a === "reading")');
+    expect(route).toContain('window.BA_FLAGS?.sharedReading && window.BAReading');
+    expect(route).toContain('mountVerse();');
+    expect(route).toContain('if (!shared || a === "verse") return;');
   });
 });

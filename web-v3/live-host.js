@@ -37,33 +37,33 @@ function drawSetup() {
       <div class="fields"><label class="f">Event name<input id="title" maxlength="60" placeholder="Youth Quiz Night" value="${esc(cfg.title)}"></label>
       <label class="f">Church or group<input id="church" maxlength="60" placeholder="Grace Chapel" value="${esc(cfg.church)}"></label></div></section>
     <section class="panel"><h3><span class="n">2</span>How do people play?</h3><p class="hint">Teams are scored by average points per player, so a bigger team has no advantage.</p>
-      <div class="seg">${teamOpt("none", "🙋", "Everyone for themselves", "Classic leaderboard")}${teamOpt("youth-choir", "🔥🎶", "Youth vs Choir", "Two teams")}${teamOpt("men-women", "🛡️👑", "Men vs Women", "Two teams")}${teamOpt("custom", "⛪", "Your own teams", "2 to 4 teams")}</div>
+      <div class="seg">${teamOpt("none", "", "Everyone for themselves", "Classic leaderboard")}${teamOpt("youth-choir", "", "Youth vs Choir", "Two teams")}${teamOpt("men-women", "", "Men vs Women", "Two teams")}${teamOpt("custom", "⛪", "Your own teams", "2 to 4 teams")}</div>
       ${cfg.teams === "custom" ? `<div class="fields" style="margin-top:12px;grid-template-columns:repeat(4,1fr)">${[0, 1, 2, 3].map((i) => `<label class="f">Team ${i + 1}<input class="tname" data-i="${i}" maxlength="18" placeholder="${i < 2 ? "Required" : "Optional"}" value="${esc(cfg.teamNames[i] || "")}"></label>`).join("")}</div>` : ""}
     </section>
     <section class="panel"><h3><span class="n">3</span>Questions</h3><p class="hint">From our ${fmt(meta.total)} checked questions (every answer with its verse), or write your own for this Sunday's text.</p>
-      <div class="tabs">${[["bank", "📚 Question bank"], ["book", "📖 By book"], ["custom", "✍️ Your own quiz"]].map(([k, l]) => `<button data-tab="${k}" class="${cfg.tab === k ? "on" : ""}">${l}</button>`).join("")}</div>
+      <div class="tabs">${[["bank", "Question bank"], ["book", "By book"], ["custom", "✍Your own quiz"]].map(([k, l]) => `<button data-tab="${k}" class="${cfg.tab === k ? "on" : ""}">${l}</button>`).join("")}</div>
       <div id="src"></div>
       <div class="countline" id="countline">…</div>
     </section>`;
   right.innerHTML = `
-    <section class="panel"><h3>⏱️ Game settings</h3>
+    <section class="panel"><h3>⏱Game settings</h3>
       <div class="sub">Number of questions</div><div class="chips" id="cnt">${[10, 15, 20, 30].map((n) => `<button class="chip ${cfg.count === n ? "on" : ""}" data-n="${n}">${n}</button>`).join("")}</div>
       <div class="sub">Time per question</div><div class="chips" id="tmr">${[10, 15, 20, 30, 45].map((n) => `<button class="chip ${cfg.timer === n ? "on" : ""}" data-n="${n}">${n} s</button>`).join("")}</div>
       <div style="margin-top:12px">
       <div class="switchrow"><div><b>Instant feedback on phones</b><span>Right or wrong shows the moment they tap. Turn off for strict competitions.</span></div><button class="sw ${cfg.instant ? "on" : ""}" id="sw-instant" aria-label="Instant feedback"></button></div>
       <div class="switchrow"><div><b>Auto-play</b><span>Moves from answer to leaderboard to next question by itself. Off means you press Next (or Space).</span></div><button class="sw ${cfg.auto ? "on" : ""}" id="sw-auto" aria-label="Auto-play"></button></div>
-      <div class="switchrow"><div><b>List in "Live now" 🌍</b><span>Anyone in the Chever app can see this game and jump in, even mid-game (up to 200). Off keeps it to people with the code.</span></div><button class="sw ${cfg.public ? "on" : ""}" id="sw-public" aria-label="List in Live now"></button></div>
+      <div class="switchrow"><div><b>List in "Live now" </b><span>Anyone in the Chever app can see this game and jump in, even mid-game (up to 200). Off keeps it to people with the code.</span></div><button class="sw ${cfg.public ? "on" : ""}" id="sw-public" aria-label="List in Live now"></button></div>
       </div></section>
-    <section class="panel"><h3>📽️ On the night</h3><div class="howto">
+    <section class="panel"><h3>On the night</h3><div class="howto">
       <div><i>1</i><span>Connect this laptop to the projector or TV and open the lobby.</span></div>
       <div><i>2</i><span>People scan the QR code or go to <b>${esc(joinHost)}/join</b> and type the code.</span></div>
       <div><i>3</i><span>Press <b>Space</b> (or a presenter clicker) to move on. <b>M</b> mutes, <b>F</b> goes full screen.</span></div>
       <div><i>4</i><span>At the end: podium, confetti, and a results card for your WhatsApp group.</span></div></div></section>
-    <section class="panel premium"><h3>💎 Church Premium</h3><p class="hint" style="margin:0">For churches that run quiz nights often.</p>
+    <section class="panel premium"><h3>Church Premium</h3><p class="hint" style="margin:0">For churches that run quiz nights often.</p>
       <div class="prem-list">
-        <div class="prem"><span class="e">🗂️</span><div><b>Saved quiz sets</b><span>Keep and reuse your own quizzes</span></div><span class="soon">Coming soon</span></div>
-        <div class="prem"><span class="e">🎨</span><div><b>Church branding</b><span>Your logo and colours on the stage</span></div><span class="soon">Coming soon</span></div>
-        <div class="prem"><span class="e">🏟️</span><div><b>More than 200 players</b><span>Conventions, camps, crusades</span></div><span class="soon">Coming soon</span></div>
+        <div class="prem"><div><b>Saved quiz sets</b><span>Keep and reuse your own quizzes</span></div><span class="soon">Coming soon</span></div>
+        <div class="prem"><div><b>Church branding</b><span>Your logo and colours on the stage</span></div><span class="soon">Coming soon</span></div>
+        <div class="prem"><div><b>More than 200 players</b><span>Conventions, camps, crusades</span></div><span class="soon">Coming soon</span></div>
       </div></section>`;
   drawSource();
   $("#title").oninput = (e) => { cfg.title = e.target.value; save(); };
@@ -89,7 +89,7 @@ const parsed = () => window.parseQuick(cfg.quick);
 
 function drawSource() {
   const box = $("#src");
-  const tierChips = `<div class="sub">Difficulty</div><div class="chips" id="tiers">${Object.entries(meta.levels).map(([k, v]) => `<button class="chip ${cfg.tiers.includes(k) ? "on" : ""}" data-t="${k}">${{ b: "🕊️", s: "📜", t: "👑" }[k]} ${v}</button>`).join("")}</div>`;
+  const tierChips = `<div class="sub">Difficulty</div><div class="chips" id="tiers">${Object.entries(meta.levels).map(([k, v]) => `<button class="chip ${cfg.tiers.includes(k) ? "on" : ""}" data-t="${k}">${({ b: "", s: "", t: L.crown })[k]} ${v}</button>`).join("")}</div>`;
   if (cfg.tab === "bank") {
     box.innerHTML = `<div class="sub" style="margin-top:0">Categories</div><div class="chips" id="cats">${meta.cats.map((c) => `<button class="chip ${cfg.cats.includes(c.id) ? "on" : ""}" data-c="${c.id}">${c.icon} ${esc(c.name)} <small>${c.counts.all}</small></button>`).join("")}</div>
       ${tierChips}<div class="sub">Testament</div><div class="chips" id="test">${[["", "Whole Bible"], ["ot", "Old Testament"], ["nt", "New Testament"]].map(([k, l]) => `<button class="chip ${cfg.testament === k ? "on" : ""}" data-k="${k}">${l}</button>`).join("")}</div>`;
@@ -115,7 +115,7 @@ function drawSource() {
     const showParsed = () => {
       const r = parsed();
       $("#parsed").innerHTML = r.questions.map((q, i) => `<div class="pq"><b>${i + 1}.</b> ${esc(q.q)} <span class="ok">✓ ${esc(q.o[q.a])}</span>${q.r ? ` <span class="small" style="color:var(--muted)">· ${esc(q.r)}</span>` : ""}</div>`).join("");
-      $("#perr").innerHTML = r.errors.slice(0, 4).map((e) => `<div class="err">⚠️ ${esc(e)}</div>`).join("");
+      $("#perr").innerHTML = r.errors.slice(0, 4).map((e) => `<div class="err">⚠${esc(e)}</div>`).join("");
     };
     showParsed();
     let t;
@@ -171,9 +171,9 @@ function stage() {
   app.innerHTML = `<div class="stage"><div class="hud">
       <span class="net" id="net" title="Connection"></span><span class="t" id="ht"></span><span class="c" id="hc"></span><span class="sp"></span>
       <span class="qcount" id="qc" hidden></span><span class="codepill" id="cp" hidden>Code <b></b></span>
-      <button class="ctl" id="c-lock" title="Lock the room (no new players)">🔓</button>
-      <button class="ctl" id="c-auto" title="Auto-play">⏩</button>
-      <button class="ctl" id="c-snd" title="Sound (M)">🔊</button>
+      <button class="ctl" id="c-lock" title="Lock the room (no new players)">Lock</button>
+      <button class="ctl" id="c-auto" title="Auto-play">Auto</button>
+      <button class="ctl" id="c-snd" title="Sound (M)">Sound on</button>
       <button class="ctl" id="c-fs" title="Full screen (F)">⛶</button>
       <button class="ctl" id="c-menu" title="More">⋯</button>
     </div><div class="body" id="body"></div><div class="nextbar" id="nb"></div></div>`;
@@ -185,7 +185,7 @@ function stage() {
   conn = L.connect("/lv/r/" + room.code, "key=" + encodeURIComponent(room.key), onState, (n) => { const el = $("#net"); if (el) el.className = "net " + (n === "live" ? "" : n); },
     () => { toast("That game has ended or expired."); localStorage.removeItem(KEY); setTimeout(setup, 1500); });
 }
-function syncSound() { const b = $("#c-snd"); if (b) { b.textContent = snd.on ? "🔊" : "🔇"; b.classList.toggle("on", !snd.on); } }
+function syncSound() { const b = $("#c-snd"); if (b) { b.textContent = snd.on ? "Sound on" : "Sound off"; b.classList.toggle("on", !snd.on); } }
 function toggleSound() { snd.init(); snd.setOn(!snd.on); store.set("bal:sound", snd.on); syncSound(); if (snd.on && S && S.phase === "lobby") snd.startLoop(); if (!snd.on) snd.stopLoop(); }
 function fullscreen() { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (e) {} }
 async function act(action, extra) {
@@ -199,7 +199,7 @@ function menu() {
     <div class="switchrow"><div><b>Instant feedback on phones</b><span>Players see right/wrong the moment they tap</span></div><button class="sw ${S && S.instant ? "on" : ""}" data-a="instant"></button></div>
     <div class="switchrow"><div><b>Auto-play</b><span>Advance automatically after each reveal</span></div><button class="sw ${S && S.auto ? "on" : ""}" data-a="auto"></button></div>
     <div class="switchrow"><div><b>Lock the room</b><span>No new players can join</span></div><button class="sw ${S && S.locked ? "on" : ""}" data-a="lock"></button></div>
-    <div class="switchrow"><div><b>List in "Live now" 🌍</b><span>Anyone in the app can find this game and join</span></div><button class="sw ${S && S.public ? "on" : ""}" data-a="public"></button></div>
+    <div class="switchrow"><div><b>List in "Live now" </b><span>Anyone in the app can find this game and join</span></div><button class="sw ${S && S.public ? "on" : ""}" data-a="public"></button></div>
     ${S && S.phase === "question" ? `<div class="switchrow"><div><b>+10 seconds</b><span>Give everyone a little more time</span></div><button class="btn ghost" data-x="extend">+10 s</button></div>` : ""}
     <div class="sub">Remove a player</div><div class="plist" id="plist">${(S && S.players ? S.players : []).map((p) => `<button data-pid="${p.id}">${BAFace.html(p.avatar, "1.2em", p.name)} ${esc(p.name)} ✕</button>`).join("") || `<span class="hint">Open on the lobby or leaderboard to see players.</span>`}</div>
     <div class="acts"><button class="btn ghost" data-x="close">Close</button>${S && S.phase !== "final" ? `<button class="btn ghost" data-x="end" style="border-color:rgba(255,93,115,.5)">End game now</button>` : ""}<button class="btn ghost" data-x="new">New game</button></div></div>`;
@@ -217,7 +217,7 @@ function menu() {
 
 const wordsHTML = (t, d0) => esc(t).split(/(\s+)/).map((w, i) => (/^\s+$/.test(w) ? w : `<span class="w" style="animation-delay:${(d0 || 0) + i * 0.035}s">${w}</span>`)).join("");
 const lenClass = (t) => (t.length > 170 ? "xlong" : t.length > 95 ? "long" : "");
-const CAT = { people: "👤 People", events: "⚡ Events", places: "🗺️ Places", teachings: "📖 Teachings", numbers: "🔢 Numbers", books: "📚 Books", said: "💬 Who said it?", who: "🎭 Who am I?", myth: "🧐 Bible or Myth?", verse: "✍️ Complete the verse", custom: "⛪ This Sunday" };
+const CAT = { people: "People", events: "⚡ Events", places: "Places", teachings: "Teachings", numbers: "Numbers", books: "Books", said: "Who said it?", who: "Who am I?", myth: "Bible or Myth?", verse: "✍Complete the verse", custom: "⛪ This Sunday" };
 
 function onState(s) {
   const prev = S; S = s;
@@ -225,7 +225,7 @@ function onState(s) {
   $("#ht").textContent = s.title; $("#hc").textContent = s.church ? "· " + s.church : "";
   const qc = $("#qc"); qc.hidden = s.phase === "lobby" || s.phase === "final"; qc.textContent = `Question ${s.qi + 1} / ${s.qn}`;
   const cp = $("#cp"); cp.hidden = s.phase === "lobby"; cp.querySelector("b").textContent = s.code;
-  $("#c-lock").textContent = s.locked ? "🔒" : "🔓"; $("#c-lock").classList.toggle("on", !!s.locked);
+  $("#c-lock").textContent = s.locked ? "Unlock" : "Lock"; $("#c-lock").classList.toggle("on", !!s.locked);
   $("#c-auto").classList.toggle("on", !!s.auto);
   const key = s.phase + ":" + s.qi;
   if (key !== scene) { const was = scene; scene = key; enter(s, prev, was); } else update(s, prev);
@@ -235,7 +235,7 @@ function onState(s) {
 function nextBar(s) {
   const nb = $("#nb"); if (!nb) return;
   const last = s.qi >= s.qn - 1;
-  const label = { lobby: s.n ? "Start the quiz ▶" : "Waiting for players…", intro: "Show answers ▶", question: "Reveal now ▶", reveal: last ? "Final results 🏆" : "Leaderboard ▶", board: "Next question ▶" }[s.phase];
+  const label = { lobby: s.n ? "Start the quiz ▶" : "Waiting for players…", intro: "Show answers ▶", question: "Reveal now ▶", reveal: last ? "Final results " : "Leaderboard ▶", board: "Next question ▶" }[s.phase];
   if (!label) { nb.innerHTML = ""; return; }
   const dis = s.phase === "lobby" && !s.n;
   nb.innerHTML = `${s.auto && (s.phase === "reveal" || s.phase === "board") ? `<span class="keyhint">auto-play on</span>` : `<span class="keyhint">Space ▸</span>`}<button class="btn primary nextbtn" id="next" ${dis ? "disabled" : ""}>${label}</button>`;
@@ -360,7 +360,7 @@ function toReveal(s, instant) {
   $("#mid").innerHTML = `<div class="revealrow"><div class="pctbox"><div class="pct">${pct}%</div><div class="pctl">got it right · ${total} answered</div></div>${s.fastest ? `<div class="fast">⚡ Fastest<b>${BAFace.html(s.fastest.avatar, "1.2em", s.fastest.name)} ${esc(s.fastest.name)}</b>${(s.fastest.ms / 1000).toFixed(1)} s</div>` : ""}</div>`;
   if (s.q.r || s.q.x) {
     const ref = document.createElement("div"); ref.className = "refline";
-    ref.innerHTML = `${s.q.r ? `<b>📖 ${esc(s.q.r)}</b>` : ""}${s.q.x ? ` · ${esc(s.q.x)}` : ""}`;
+    ref.innerHTML = `${s.q.r ? `<b>${esc(s.q.r)}</b>` : ""}${s.q.x ? ` · ${esc(s.q.x)}` : ""}`;
     qw.querySelector(".qbox").appendChild(ref);
   }
   fitQ();
@@ -392,7 +392,7 @@ function animateBoard(s) {
     const move = p.prev ? p.prev - p.rank : 0;
     return `<div class="row ${p.rank === 1 ? "r1" : ""}" style="height:${H}px;top:${from * (H + gap)}px" data-to="${i * (H + gap)}">
       <span class="pos">${p.rank}</span><span class="av">${BAFace.html(p.avatar, "1.6em", p.name)}</span>${p.team && tcol[p.team] ? `<span class="tm" style="background:${tcol[p.team]}"></span>` : ""}<span class="nm">${esc(p.name)}</span>
-      ${p.streak >= 3 ? `<span class="fl">🔥${p.streak}</span>` : ""}${move > 0 ? `<span class="up">▲${move}</span>` : move < 0 ? `<span class="dn">▼${-move}</span>` : ""}
+      ${p.streak >= 3 ? `<span class="fl">${p.streak} streak</span>` : ""}${move > 0 ? `<span class="up">▲${move}</span>` : move < 0 ? `<span class="dn">▼${-move}</span>` : ""}
       ${p.last ? `<span class="gain">+${fmt(p.last)}</span>` : ""}<span class="sc" data-from="${p.score - (p.last || 0)}" data-to="${p.score}">${fmt(p.score - (p.last || 0))}</span></div>`;
   }).join("");
   requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -410,9 +410,9 @@ function finale(s) {
   const body = $("#body");
   body.innerHTML = `<div class="scene final"><div class="fh">${esc(s.title)}</div><div class="fs">${s.church ? esc(s.church) + " · " : ""}${f.players || 0} players · ${f.questions || 0} questions</div>
     ${f.teams && f.teams.length ? `<div class="teamwin" id="tw" style="--tc:${f.teams[0].color};opacity:0">${f.teams[0].emoji} ${esc(f.teams[0].name)} win the team battle! <span style="opacity:.75;font-weight:700">(${fmt(f.teams[0].avg)} avg${f.teams[1] ? " vs " + fmt(f.teams[1].avg) : ""})</span></div>` : ""}
-    <div class="podium">${[1, 0, 2].map((i) => pod[i] ? `<div class="pod p${i + 1}" id="pod${i + 1}"><div class="who">${i === 0 ? `<div class="crown">👑</div>` : ""}<div class="av">${BAFace.html(pod[i].avatar, "1.3em", pod[i].name)}</div><div class="nm">${i === 0 ? "👑 " : ""}${esc(pod[i].name)}</div><div class="sc">${fmt(pod[i].score)} pts</div></div><div class="blk">${i + 1}</div></div>` : "").join("")}</div>
-    <div class="finalbar" id="fbar"><span class="stat">🎯 <b>${f.accuracy || 0}%</b> answered right</span>${f.fastest ? `<span class="stat">⚡ Fastest answer <b>${esc(f.fastest.name)}</b> ${(f.fastest.ms / 1000).toFixed(1)} s</span>` : ""}${f.hardest ? `<span class="stat">🧠 Hardest question: only <b>${f.hardest.pct}%</b> got it</span>` : ""}</div>
-    <div class="finalact" id="fact" style="opacity:0"><button class="btn primary" id="share">📲 Share results</button><button class="btn ghost" id="again">🔁 New game</button></div></div>`;
+    <div class="podium">${[1, 0, 2].map((i) => pod[i] ? `<div class="pod p${i + 1}" id="pod${i + 1}"><div class="who">${i === 0 ? `<div class="crown" aria-hidden="true">${L.crown}</div>` : ""}<div class="av">${BAFace.html(pod[i].avatar, "1.3em", pod[i].name)}</div><div class="nm">${esc(pod[i].name)}</div><div class="sc">${fmt(pod[i].score)} pts</div></div><div class="blk">${i + 1}</div></div>` : "").join("")}</div>
+    <div class="finalbar" id="fbar"><span class="stat"><b>${f.accuracy || 0}%</b> answered right</span>${f.fastest ? `<span class="stat">⚡ Fastest answer <b>${esc(f.fastest.name)}</b> ${(f.fastest.ms / 1000).toFixed(1)} s</span>` : ""}${f.hardest ? `<span class="stat">Hardest question: only <b>${f.hardest.pct}%</b> got it</span>` : ""}</div>
+    <div class="finalact" id="fact" style="opacity:0"><button class="btn primary" id="share">Share results</button><button class="btn ghost" id="again">New game</button></div></div>`;
   const seq = finalShown ? [0, 0, 0, 0] : [3200, 4600, 6200, 7400];
   if (!finalShown) snd.drumroll(3);
   finalShown = true;

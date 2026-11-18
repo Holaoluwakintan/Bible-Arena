@@ -7,6 +7,7 @@ L.$$ = (s, el) => Array.from((el || document).querySelectorAll(s));
 L.esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 L.fmt = (n) => Number(n || 0).toLocaleString("en-US");
 L.ord = (n) => { const s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
+L.crown = '<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="currentColor"><path d="M2.5 7.5 7.5 12 12 5.5l4.5 6.5 5-4.5-2 11h-15z"/></svg>';
 L.reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 L.OPT = [
   { c: "#E5394F", s: "▲", n: "red" }, { c: "#2E7CF6", s: "◆", n: "blue" },

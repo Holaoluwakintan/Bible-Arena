@@ -1,3 +1,5 @@
+import verseCorpus from "../web-v3/vod-365.json";
+import { lagosDay, verseForDay } from "../web-v3/daily-verse.mjs";
 import { ARENA_POOL, type BibleQuestion, type Difficulty, type QuestionCategory } from "./questions";
 import { toLocalDateKey } from "./progression";
 
@@ -236,23 +238,7 @@ export function correctAnswerLabel(question: BibleQuestion): string {
 /* Verse of the day (KJV, public domain)                               */
 /* ------------------------------------------------------------------ */
 
-const VERSES: Array<{ text: string; ref: string }> = [
-  { text: "Thy word is a lamp unto my feet, and a light unto my path.", ref: "Psalm 119:105" },
-  { text: "Study to shew thyself approved unto God, a workman that needeth not to be ashamed, rightly dividing the word of truth.", ref: "2 Timothy 2:15" },
-  { text: "Trust in the LORD with all thine heart; and lean not unto thine own understanding.", ref: "Proverbs 3:5" },
-  { text: "I can do all things through Christ which strengtheneth me.", ref: "Philippians 4:13" },
-  { text: "Thy word have I hid in mine heart, that I might not sin against thee.", ref: "Psalm 119:11" },
-  { text: "Be strong and of a good courage; be not afraid, neither be thou dismayed: for the LORD thy God is with thee.", ref: "Joshua 1:9" },
-  { text: "The grass withereth, the flower fadeth: but the word of our God shall stand for ever.", ref: "Isaiah 40:8" },
-  { text: "Heaven and earth shall pass away, but my words shall not pass away.", ref: "Matthew 24:35" },
-  { text: "This is the day which the LORD hath made; we will rejoice and be glad in it.", ref: "Psalm 118:24" },
-  { text: "Let the word of Christ dwell in you richly in all wisdom.", ref: "Colossians 3:16" },
-  { text: "The entrance of thy words giveth light; it giveth understanding unto the simple.", ref: "Psalm 119:130" },
-  { text: "For the word of God is quick, and powerful, and sharper than any twoedged sword.", ref: "Hebrews 4:12" },
-  { text: "Blessed are they that hear the word of God, and keep it.", ref: "Luke 11:28" },
-  { text: "Seek ye first the kingdom of God, and his righteousness; and all these things shall be added unto you.", ref: "Matthew 6:33" },
-];
-
 export function verseOfTheDay(now = Date.now()) {
-  return VERSES[hashString(todayKey(now)) % VERSES.length];
+  const [text, ref] = verseForDay(verseCorpus, lagosDay(now))!;
+  return { text, ref };
 }
