@@ -3,62 +3,59 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#070C1A">
-<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#F5F7FC">
+<meta name="color-scheme" content="light">
 <title>Chever — Know the Word. Challenge the World.</title>
 <meta name="description" content="Play solo, play online, or challenge your friends with a code: Fill in the Gap, Who Am I, Bible or Myth and more. Every answer with its verse.">
 <!--OG--><meta property="og:title" content="Chever — Know the Word. Challenge the World."><meta property="og:image" content="/v3/og.jpg"><!--/OG-->
-<link rel="manifest" href="/v3/manifest.webmanifest">
+<link rel="manifest" href="/v3/manifest.webmanifest?v=3.13.4">
 <link rel="icon" href="/v3/icon-192.png">
 <link rel="apple-touch-icon" href="/v3/icon-192.png">
 <link rel="preload" href="/v3/fonts/jakarta-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/v3/fonts/cinzel-latin.woff2" as="font" type="font/woff2" crossorigin>
-<style>
-@font-face{font-family:'Cinzel';font-style:normal;font-weight:700 800;font-display:swap;src:url(/v3/fonts/cinzel-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:500 800;font-display:swap;src:url(/v3/fonts/jakarta-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-</style>
-<style id="blcss">#bl{position:fixed;inset:0;z-index:9000;overflow-y:auto;-webkit-overflow-scrolling:touch;background:radial-gradient(1200px 600px at 50% -10%,#1C2B5C 0%,rgba(28,43,92,0) 60%),radial-gradient(800px 500px at 110% 110%,rgba(201,138,27,.16),rgba(0,0,0,0) 60%),linear-gradient(180deg,#0A1124,#070C1A 60%);color:#F6F1E7;font-family:"Plus Jakarta Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;transition:opacity .35s ease;-webkit-tap-highlight-color:transparent}
+<style id="blcss">#bl{position:fixed;inset:0;z-index:9000;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--ui-canvas,#F5F7FC);color:var(--ui-ink,#0B1F4B);font-family:"Plus Jakarta Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;transition:opacity .35s ease;-webkit-tap-highlight-color:transparent}
 #bl.bl-out{opacity:0;pointer-events:none}
 #bl .bl-w{max-width:460px;margin:0 auto;padding:max(28px,env(safe-area-inset-top)) 18px 28px;min-height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:14px}
 #bl .bl-hd{text-align:center;padding-top:4vh}
-#bl .bl-mk{font-size:38px;color:#F5B942;animation:blp 1.6s ease-in-out infinite;line-height:1}
-#bl .bl-tt{font-family:"Cinzel",Georgia,serif;font-weight:800;letter-spacing:.18em;font-size:24px;margin-top:6px;background:linear-gradient(180deg,#FFD98A,#C98A1B);-webkit-background-clip:text;background-clip:text;color:transparent}
-#bl .bl-bar{height:6px;border-radius:6px;background:rgba(255,255,255,.08);overflow:hidden;margin:14px auto 0;max-width:280px}
-#bl .bl-bar i{display:block;height:100%;width:3%;border-radius:6px;background:linear-gradient(90deg,#C98A1B,#FFD98A);box-shadow:0 0 12px rgba(245,185,66,.6);transition:width .4s ease}
-#bl .bl-st{color:#9AA6C2;font-size:13px;margin-top:8px;min-height:18px}
+#bl .bl-mk{font-size:38px;color:var(--ui-primary,#FFC300);animation:blp 1.6s ease-in-out infinite;line-height:1}
+#bl .bl-tt{font-family:"Cinzel",Georgia,serif;font-weight:800;letter-spacing:.18em;font-size:24px;margin-top:6px;color:var(--ui-ink,#0B1F4B)}
+#bl .bl-bar{height:6px;border-radius:6px;background:var(--ui-border,#DDE3EE);overflow:hidden;margin:14px auto 0;max-width:280px}
+#bl .bl-bar i{display:block;height:100%;width:3%;border-radius:6px;background:var(--ui-primary,#FFC300);box-shadow:0 0 12px rgba(245,185,66,.6);transition:width .4s ease}
+#bl .bl-st{color:var(--ui-muted,#5B6478);font-size:13px;margin-top:8px;min-height:18px}
 #bl .bl-more{opacity:0;transform:translateY(8px);transition:opacity .4s ease,transform .4s ease;display:flex;flex-direction:column;gap:14px}
 #bl.bl-show .bl-more{opacity:1;transform:none}
-#bl .bl-cd{background:rgba(18,28,58,.78);border:1px solid rgba(245,185,66,.16);border-radius:20px;padding:16px}
-#bl .bl-lb{font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#F5B942;display:flex;justify-content:space-between;gap:8px}
-#bl .bl-lb b{color:#9AA6C2;font-weight:700;letter-spacing:.04em;text-transform:none}
+#bl .bl-cd{background:var(--ui-surface,#FFFFFF);border:1px solid var(--ui-border,#DDE3EE);border-radius:20px;padding:16px}
+#bl .bl-lb{font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--ui-link,#0648C2);display:flex;justify-content:space-between;gap:8px}
+#bl .bl-lb b{color:var(--ui-muted,#5B6478);font-weight:700;letter-spacing:.04em;text-transform:none}
 #bl .bl-q{font-size:17px;font-weight:700;line-height:1.35;margin:10px 0 12px}
 #bl .bl-os{display:grid;gap:8px}
 #bl .bl-os.bl-two{grid-template-columns:1fr 1fr}
-#bl .bl-o{font:inherit;color:inherit;text-align:left;padding:12px 14px;min-height:48px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);font-weight:700;font-size:15px;cursor:pointer;transition:background .2s,border-color .2s,transform .1s}
+#bl .bl-o{font:inherit;color:inherit;text-align:left;padding:12px 14px;min-height:48px;border-radius:14px;background:var(--ui-inset,#F8FAFD);border:1px solid var(--ui-border,#DDE3EE);font-weight:700;font-size:15px;cursor:pointer;transition:background .2s,border-color .2s,transform .1s}
 #bl .bl-os.bl-two .bl-o{text-align:center}
 #bl .bl-o:active{transform:scale(.98)}
-#bl .bl-o.bl-ok{background:rgba(61,220,151,.18);border-color:#3DDC97}
-#bl .bl-o.bl-no{background:rgba(255,93,115,.16);border-color:#FF5D73}
+#bl .bl-o.bl-ok{background:rgba(61,220,151,.18);border-color:var(--ui-success,#147247)}
+#bl .bl-o.bl-no{background:rgba(255,93,115,.16);border-color:var(--ui-danger,#D62828)}
 #bl .bl-o:disabled{cursor:default}
-#bl .bl-fb{font-size:14px;line-height:1.45;color:#C9D0E2;margin-top:10px;display:none}
+#bl .bl-fb{font-size:14px;line-height:1.45;color:var(--ui-ink,#0B1F4B);margin-top:10px;display:none}
 #bl .bl-fb.bl-on{display:block}
 #bl .bl-fb em{font-style:normal;font-weight:800}
-#bl .bl-fb .bl-y{color:#3DDC97}#bl .bl-fb .bl-n{color:#FF8A9A}
-#bl .bl-fb small{display:block;color:#9AA6C2;margin-top:4px}
-#bl .bl-nx{font:inherit;margin-top:10px;width:100%;min-height:44px;border-radius:14px;border:0;background:linear-gradient(180deg,#FFD98A,#F5B942);color:#1A1205;font-weight:800;font-size:15px;cursor:pointer;display:none}
+#bl .bl-fb .bl-y{color:var(--ui-success,#147247)}#bl .bl-fb .bl-n{color:var(--ui-danger,#D62828)}
+#bl .bl-fb small{display:block;color:var(--ui-muted,#5B6478);margin-top:4px}
+#bl .bl-nx{font:inherit;margin-top:10px;width:100%;min-height:44px;border-radius:14px;border:0;background:var(--ui-primary,#FFC300);color:#1A1205;font-weight:800;font-size:15px;cursor:pointer;display:none}
 #bl .bl-nx.bl-on{display:block}
-#bl .bl-vs{font-family:Georgia,"Times New Roman",serif;font-size:17px;line-height:1.5;margin:10px 0 6px;color:#F6F1E7}
-#bl .bl-vr{font-size:13px;color:#F5B942;font-weight:700}
-#bl .bl-tp{text-align:center;color:#9AA6C2;font-size:13px;line-height:1.45;min-height:38px;transition:opacity .3s}
+#bl .bl-vs{font-family:Georgia,"Times New Roman",serif;font-size:17px;line-height:1.5;margin:10px 0 6px;color:var(--ui-ink,#0B1F4B)}
+#bl .bl-vr{font-size:13px;color:var(--ui-link,#0648C2);font-weight:700}
+#bl .bl-tp{text-align:center;color:var(--ui-muted,#5B6478);font-size:13px;line-height:1.45;min-height:38px;transition:opacity .3s}
 @keyframes blp{0%,100%{opacity:.55;transform:scale(.94)}50%{opacity:1;transform:scale(1.06)}}
 @media (prefers-reduced-motion:reduce){#bl .bl-mk{animation:none}#bl .bl-bar i{transition:none}}</style>
-<link rel="stylesheet" href="/v3/brand-tokens.css?v=3.13.3">
-<link rel="stylesheet" id="bacss" href="/v3/app.css?v=3.13.3" media="print" onload="this.media='all'">
-<noscript><link rel="stylesheet" href="/v3/app.css?v=3.13.3"></noscript>
+<link rel="stylesheet" href="/v3/brand-tokens.css?v=3.13.4">
+<link rel="stylesheet" href="/v3/chever-ui.css?v=3.13.4">
+<link rel="stylesheet" id="bacss" href="/v3/app.css?v=3.13.4" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="/v3/app.css?v=3.13.4"></noscript>
 </head>
 <body>
-<div id="sky" aria-hidden="true"></div>
-<main id="app"><div class="boot"><div class="boot-mark"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="1em" height="1em" fill="currentColor"><path d="M10 2.5h4v6.5h6.5v4H14v9h-4v-9H3.5v-4H10z"/></svg></div><div class="boot-title">CHEVER</div><div class="boot-sub">Loading the Word…</div></div></main>
+
+<main id="app" class="chever-frame"><div class="boot"><div class="boot-mark"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="1em" height="1em" fill="currentColor"><path d="M10 2.5h4v6.5h6.5v4H14v9h-4v-9H3.5v-4H10z"/></svg></div><div class="boot-title">CHEVER</div><div class="boot-sub">Loading the Word…</div></div></main>
 <div id="toast" role="status" aria-live="polite"></div>
 <div id="bl" role="dialog" aria-label="Chever is loading"><div class="bl-w">
 <div class="bl-hd"><div class="bl-mk"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="1em" height="1em" fill="currentColor"><path d="M10 2.5h4v6.5h6.5v4H14v9h-4v-9H3.5v-4H10z"/></svg></div><div class="bl-tt">CHEVER</div><div class="bl-bar"><i id="blb"></i></div><div class="bl-st" id="bls">Getting the arena ready…</div></div>
@@ -113,9 +110,9 @@ setInterval(check,150);
 try{new MutationObserver(check).observe(document.getElementById("app"),{childList:true,subtree:true})}catch(e){}
 window.BALoader={finish:finish};
 })();</script>
-<script src="/v3/social.js?v=3.13.3" defer></script>
-<script src="/v3/avatars.js?v=3.13.3" defer></script>
-<script type="module" src="/v3/app.js?v=3.13.3"></script>
+<script src="/v3/social.js?v=3.13.4" defer></script>
+<script src="/v3/avatars.js?v=3.13.4" defer></script>
+<script type="module" src="/v3/app.js?v=3.13.4"></script>
 <script>if("serviceWorker"in navigator)addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").catch(function(){})});</script>
 </body>
 </html>

@@ -1,0 +1,47 @@
+/* Chever's shared Hall of Fame design. Layout/state rules live in the surface CSS. */
+@font-face{font-family:Cinzel;font-style:normal;font-weight:700 800;font-display:swap;src:url(/v3/fonts/cinzel-latin.woff2) format('woff2')}
+@font-face{font-family:"Plus Jakarta Sans";font-style:normal;font-weight:500 800;font-display:swap;src:url(/v3/fonts/jakarta-latin.woff2) format('woff2')}
+:root{
+  color-scheme:light;
+  --ui-canvas:var(--ch-paper);--ui-surface:var(--ch-white);--ui-inset:#F8FAFD;
+  --ui-ink:var(--ch-navy);--ui-muted:var(--ch-muted);--ui-border:var(--ch-line);--ui-input-border:#A8B5CE;
+  --ui-link:var(--ch-blue);--ui-focus:var(--ch-blue);--ui-tint:#EEF4FE;--ui-selected:#FFF4CC;
+  --ui-primary:var(--ch-gold);--ui-primary-ink:var(--ch-navy);
+  --ui-success:#147247;--ui-success-bg:#EDF9F3;--ui-danger:var(--ch-red);--ui-danger-bg:#FDF0F0;
+  --ui-heading:Cinzel,Georgia,serif;--ui-body:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --ui-panel-radius:18px;--ui-control-radius:14px;--ui-pill-radius:999px;--ui-frame:560px;
+  --ui-shadow:0 2px 10px rgba(11,31,75,.06);
+}
+/* A presenter display, not a user theme: stronger projection contrast, same parts. */
+:root[data-chever-presentation]{
+  color-scheme:dark;
+  --ui-canvas:var(--ch-navy);--ui-surface:var(--ch-night-panel);--ui-inset:var(--ch-night-inset);
+  --ui-ink:var(--ch-white);--ui-muted:var(--ch-night-reading);--ui-border:var(--ch-night-line);--ui-input-border:#6785B7;
+  --ui-link:#BBD4FF;--ui-focus:var(--ch-gold);--ui-tint:var(--ch-night-soft);--ui-selected:var(--ch-night-selected);
+  --ui-success:#82E5B6;--ui-success-bg:#154034;--ui-danger:#FFA7AB;--ui-danger-bg:#532E49;
+  --ui-shadow:none;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--ui-canvas);color:var(--ui-ink);font-family:var(--ui-body)}
+:where(button){font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
+:where(input,textarea,select){font:inherit;color:inherit}
+:where(a){color:var(--ui-link)}
+:where(a,button,input,select,textarea):focus-visible{outline:2px solid var(--ui-focus);outline-offset:3px}
+.chever-frame{width:100%;max-width:var(--ui-frame);margin-inline:auto;padding-inline:max(16px,env(safe-area-inset-left)) max(16px,env(safe-area-inset-right));padding-top:max(14px,env(safe-area-inset-top));padding-bottom:max(16px,env(safe-area-inset-bottom))}
+.chever-title{font-family:var(--ui-heading);font-weight:800;line-height:1.18;letter-spacing:.01em;text-wrap:balance}
+.chever-kicker{color:var(--ui-link);text-transform:uppercase;font-size:.74rem;font-weight:800;letter-spacing:.08em}
+.chever-icon{display:inline-grid;place-items:center;flex:none;width:42px;height:42px;border-radius:var(--ui-control-radius);background:var(--ui-tint);color:var(--ui-ink);font-size:23px}
+:where(.chever-panel,.card,.hero,.badge,.qcard,.stat,.panel){background:var(--ui-surface);color:var(--ui-ink);border:1px solid var(--ui-border);border-radius:var(--ui-panel-radius);box-shadow:var(--ui-shadow)}
+:where(.chever-panel,.card,.panel){padding:16px}
+:where(.chever-button,.btn){display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:8px 16px;border:1px solid transparent;border-radius:var(--ui-control-radius);font:inherit;font-weight:800;line-height:1.3;text-align:center;text-decoration:none;color:var(--ui-ink);cursor:pointer}
+:where(.chever-button,.btn).primary{background:var(--ui-primary);color:var(--ui-primary-ink);box-shadow:none}
+:where(.chever-button,.btn).ghost{background:var(--ui-surface);border-color:var(--ui-input-border);color:var(--ui-ink)}
+:where(.chever-button,.btn):disabled{cursor:default;opacity:.55}
+:where(.chever-button,.btn) svg{width:1.2em;height:1.2em;flex:none}
+:where(.chever-chip,.chip){display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:5px 11px;border:1px solid var(--ui-border);background:var(--ui-surface);color:var(--ui-ink);border-radius:var(--ui-pill-radius);font-size:.8125rem;font-weight:800;text-decoration:none}
+:where(button,a):is(.chever-chip,.chip){min-height:44px}
+:where(.chever-chip,.chip).on{background:var(--ui-selected);border-color:var(--ui-primary);color:var(--ui-ink)}
+:where(.chever-input,.field input,.field select,.field textarea,.codebox input,.f input,.f select,.codein,.namein){min-width:0;min-height:48px;border-radius:var(--ui-control-radius);border:1px solid var(--ui-input-border);background:var(--ui-inset);color:var(--ui-ink);font:inherit;font-size:max(16px,1em);padding:8px 12px}
+:where(.chever-input,.field input,.field textarea,.codebox input)::placeholder{color:var(--ui-muted);opacity:1;letter-spacing:normal}
+:where(.chever-input,.field input,.field select,.field textarea,.codebox input,.f input,.f select,.codein,.namein):focus{border-color:var(--ui-focus)}
+.chever-error{color:var(--ui-danger)}

@@ -56,12 +56,12 @@ describe("one app: level icons are flat line icons", () => {
 
 describe("one app: fill-in-the-gap tiles read on the light look", () => {
   it("the word tiles are light with navy text on the Chever quiz screen", () => {
-    expect(css).toMatch(/body\.cv2-on \.cv2-quiz \.wchip\{background:#FFF8E7;[^}]*color:var\(--ch-navy\)/);
+    expect(css).toMatch(/\.cv2-quiz \.wchip\{background:#FFF8E7;[^}]*color:var\(--ch-navy\)/);
   });
 
   it("the blanks are light, and the chosen one is gold with dark text", () => {
-    expect(css).toMatch(/body\.cv2-on \.cv2-quiz \.blank\{color:var\(--ch-navy\);background:#FFF8E7/);
-    expect(css).toMatch(/body\.cv2-on \.cv2-quiz \.blank\.filled\{background:var\(--ch-gold\);border-color:var\(--ch-gold\);color:var\(--ch-navy\)\}/);
+    expect(css).toMatch(/\.cv2-quiz \.blank\{color:var\(--ch-navy\);background:#FFF8E7/);
+    expect(css).toMatch(/\.cv2-quiz \.blank\.filled\{background:var\(--ch-gold\);border-color:var\(--ch-gold\);color:var\(--ch-navy\)\}/);
   });
 
   it("a filled blank carries the filled class", () => {

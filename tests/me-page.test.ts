@@ -43,10 +43,10 @@ describe("Me page: light look and flat icons", () => {
     expect(profile).not.toMatch(/tabbar\("me"\)/);
   });
 
-  it("the Me page styles are scoped to the light theme and do not restyle other screens", () => {
-    expect(css).toMatch(/body\.cv2-on \.cv2-me \.card\{background:#fff/);
-    expect(css).toMatch(/body\.cv2-on \.cv2-me \.hero \.rays\{display:none\}/);
-    expect(css).toMatch(/body\.cv2-on \.cv2-me \.ach\.got\{/);
+  it("Profile keeps local achievement styles and inherits shared panels", () => {
+    expect(css).not.toMatch(/\.cv2-me \.card\{background:/);
+    expect(css).toMatch(/\.hero \.rays,\.rankup \.burst\{display:none\}/);
+    expect(css).toMatch(/\.cv2-me \.ach\.got\{/);
     expect(css).not.toMatch(/^\.card\{background:#fff/m);
   });
 

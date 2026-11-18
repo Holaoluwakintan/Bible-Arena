@@ -39,11 +39,11 @@
   schedule();
 
   // ---------- pop-up ----------
-  var css = ".bas-pop{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:9999;max-width:460px;margin:0 auto;background:linear-gradient(160deg,#1b2650,#0f1734);border:1px solid rgba(245,185,66,.55);border-radius:18px;padding:14px;box-shadow:0 18px 50px rgba(0,0,0,.55);color:#F4EFE3;font-family:'Plus Jakarta Sans',-apple-system,Segoe UI,Roboto,sans-serif;transform:translateY(140%);transition:transform .35s cubic-bezier(.2,.9,.3,1.2)}" +
-    ".bas-pop.in{transform:none}.bas-pop .r{display:flex;gap:12px;align-items:center}.bas-pop .av{width:44px;height:44px;border-radius:14px;background:#F5B942;color:#1a1200;display:grid;place-items:center;font-weight:900;font-size:20px;flex:none}" +
-    ".bas-pop .t{font-size:15px;line-height:1.35}.bas-pop .s{font-size:12.5px;color:#aab3c8;margin-top:2px}.bas-pop .b{display:flex;gap:8px;margin-top:12px}.bas-pop button{flex:1;border:0;border-radius:12px;min-height:44px;font-weight:800;font-size:15px;font-family:inherit;cursor:pointer}" +
-    ".bas-pop .y{background:linear-gradient(180deg,#FFD36B,#F5B942);color:#1a1200}.bas-pop .n{background:rgba(255,255,255,.08);color:#F4EFE3}.bas-pop .m{flex:none;background:none;color:#8e97ad;font-size:12.5px;font-weight:600;min-height:0;padding:6px 0 0}" +
-    ".bas-pop .live{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.08em;color:#3DDC97}";
+  var css = ".bas-pop{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:9999;max-width:460px;margin:0 auto;background:var(--ui-surface);border:1px solid var(--ui-border);border-radius:var(--ui-panel-radius);padding:14px;box-shadow:var(--ui-shadow);color:var(--ui-ink);font-family:'Plus Jakarta Sans',-apple-system,Segoe UI,Roboto,sans-serif;transform:translateY(140%);transition:transform .35s cubic-bezier(.2,.9,.3,1.2)}" +
+    ".bas-pop.in{transform:none}.bas-pop .r{display:flex;gap:12px;align-items:center}.bas-pop .av{width:44px;height:44px;border-radius:14px;background:var(--ui-primary);color:#1a1200;display:grid;place-items:center;font-weight:900;font-size:20px;flex:none}" +
+    ".bas-pop .t{font-size:15px;line-height:1.35}.bas-pop .s{font-size:12.5px;color:var(--ui-muted);margin-top:2px}.bas-pop .b{display:flex;gap:8px;margin-top:12px}.bas-pop button{flex:1;border:0;border-radius:12px;min-height:44px;font-weight:800;font-size:15px;font-family:inherit;cursor:pointer}" +
+    ".bas-pop .y{background:var(--ui-primary);color:var(--ui-primary-ink)}.bas-pop .n{background:var(--ui-tint);color:var(--ui-ink)}.bas-pop .m{flex:none;background:none;color:var(--ui-muted);font-size:12.5px;font-weight:600;min-height:44px;padding:6px 0 0}" +
+    ".bas-pop .live{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.08em;color:var(--ui-success)}";
   var TN = { b: "Believer", s: "Scholar", t: "Theologian" }, MN = { mixed: "Mixed Arena", arena: "Arena Quiz", gap: "Fill in the Gap", who: "Who Am I", myth: "Bible or Myth" };
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   var popEl = null, popT = null;

@@ -23,10 +23,9 @@ describe("brand mark: one bar on every screen", () => {
     expect(EMOJI.test(body)).toBe(false);
   });
 
-  it("the mark has a dark-theme and a light-theme colour, and the light look overrides it", () => {
-    expect(css).toMatch(/\.cvm-body\{fill:#F5F7FB\}/);
+  it("the wordmark stays navy with the shared gold accent", () => {
+    expect(css).toMatch(/\.cvm-body\{fill:var\(--ch-navy\)\}/);
     expect(css).toMatch(/\.cvm-sw\{fill:var\(--ch-gold\)\}/);
-    expect(css).toMatch(/body\.cv2-on \.cvm-body\{fill:#022569\}/);
   });
 
   it("the old per-screen wordmarks are gone, so the name shows once", () => {

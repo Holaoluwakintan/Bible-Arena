@@ -9,5 +9,11 @@
   "blue": "#0648C2",
   "night": "#070C1A",
   "nightCard": "#121C3A",
-  "nightMuted": "#A9B5CD"
+  "nightMuted": "#A9B5CD",
+  "nightPanel": "#142D60",
+  "nightInset": "#102655",
+  "nightLine": "#365382",
+  "nightSoft": "#203F74",
+  "nightSelected": "#31477A",
+  "nightReading": "#C7D3EC"
 }

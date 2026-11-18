@@ -51,10 +51,10 @@ describe("Ranks and Duels: light look and flat icons", () => {
     expect(EMOJI.test(league)).toBe(false);
   });
 
-  it("the Ranks and Duels styles are scoped to their own screens", () => {
-    expect(css).toMatch(/body\.cv2-on \.cv2-ranks \.card,body\.cv2-on \.cv2-duels \.card/);
-    expect(css).toMatch(/body\.cv2-on \.cv2-ranks \.lb\.me\{/);
-    expect(css).toMatch(/body\.cv2-on \.cv2-duels \.hero \.rays\{display:none\}/);
+  it("Ranks and Duels inherit the shared palette while keeping leaderboard row styles", () => {
+    expect(css).not.toMatch(/\.cv2-(?:ranks|duels) \.card\{background:/);
+    expect(css).toMatch(/\.cv2-ranks \.lb\.me\{/);
+    expect(css).toMatch(/\.hero \.rays,\.rankup \.burst\{display:none\}/);
     expect(css).not.toMatch(/^\.card\{background:#fff/m);
   });
 

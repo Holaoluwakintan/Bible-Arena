@@ -1,9 +1,9 @@
-import { rankOf, RANKS } from "./hall-of-fame.mjs?v=3.13.3";
-import { lagosDay, msUntilLagosMidnight, verseForDay } from "./daily-verse.mjs?v=3.13.3";
+import { rankOf, RANKS } from "./hall-of-fame.mjs?v=3.13.4";
+import { lagosDay, msUntilLagosMidnight, verseForDay } from "./daily-verse.mjs?v=3.13.4";
 /* Chever v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.13.3";
+window.BA_V = "3.13.4";
 
 // Flat icon set (Chever look): every emoji on a game screen is drawn with these inline SVGs in the palette
 // (gold #FFC300, red #D62828, navy #0B1F4B, white). Cross = duel, church, reading, loading. Crown = ranks, wins, perfect round, mastery.
@@ -327,8 +327,6 @@ function render(html, cls) {
   html = flatIcons(html);
   cleanup.forEach((f) => { try { f(); } catch (e) {} }); cleanup = [];
   voiceStop();
-  // Chever look (preview): screens that ask for it get the light theme; every other screen is unchanged.
-  document.body.classList.toggle("cv2-on", /\bcv2\b/.test(cls || ""));
   // The tab bar lives outside the animated screen: a transformed ancestor would pin it mid-page.
   let tabs = "";
   html = html.replace(/<div class="tabbar">[\s\S]*?<\/nav><\/div>/, (m) => { tabs = m; return ""; });
@@ -405,7 +403,7 @@ async function route() {
   if (a === "report") return reportCard();
   if (a === "story") return storyMap();
   if (a === "endless") return endlessScreen();
-  if (a === "game") return gameScreen();
+  if (a === "game") return gameScreen(q.get("join") === "1");
   if (a === "me") { if (q.get("signedin")) { toast("Signed in with Google ✓"); history.replaceState(null, "", "#/me"); } return profile(); }
   return home();
 }
@@ -510,7 +508,7 @@ function mountVerse() {
   const update = async () => {
     if (inflight || !el.isConnected) return;
     clearTimeout(timer); inflight = true;
-    const query = "?v=" + (window.BA_V || "3.13.3");
+    const query = "?v=" + (window.BA_V || "3.13.4");
     try {
       if (!verseCorpus) {
         const request = new AbortController();
@@ -540,18 +538,6 @@ function mountVerse() {
   window.addEventListener("pageshow", update);
   onLeave(() => { clearTimeout(timer); document.removeEventListener("visibilitychange", update); window.removeEventListener("online", update); window.removeEventListener("pageshow", update); });
   update();
-}
-function topbar() {
-  const p = ME.player || {}; const rk = rankOf(p.xp);
-  return `<div class="topbar">
-    <div class="emblem" title="${rk.name}">${rk.name[0]}</div>
-    <div class="grow">
-      <div class="row between"><b>${esc(rk.name)} ${rk.division}</b><span class="small muted">${fmt(p.xp)} XP</span></div>
-      <div class="xpbar" style="margin-top:6px"><i style="width:${Math.round(rk.progress * 100)}%"></i></div>
-      <div class="small dim" style="margin-top:4px">${rk.next ? `${fmt(rk.nextXp - (p.xp || 0))} XP to ${rk.next}` : "Highest rank"}</div>
-    </div>
-    <div class="flame" title="Daily streak">🔥 ${p.streak || 0}${saves(p) ? `<small class="saves" title="Streak saves">🛡️${saves(p)}</small>` : ""}</div>
-  </div>`;
 }
 // Chever preview entries on the home screen. Each shows only when its flag is on and its script has loaded (see featureScripts).
 // Nothing sets the flags, so on the live site neither card renders. Icons are inline SVG; no emoji.
@@ -621,8 +607,8 @@ function homeGuideHTML() {
     </section>
     <section class="gh-sec"><h3>Play with people</h3>
       ${homeGuideRow("#/ko/new", "plus", "Create private room", "Get a code, send it, last one standing wins.")}
-      <form class="gh-join" id="homejoin" autocomplete="off"><label for="homecodein">Join with code</label>
-        <div class="gh-joinrow"><input id="homecodein" name="c" inputmode="numeric" maxlength="8" placeholder="6-digit code" autocomplete="one-time-code" enterkeyhint="go"><button type="submit">Join</button></div></form>
+      <form class="gh-join chever-panel" id="homejoin" autocomplete="off"><label for="homecodein">Join with code</label>
+        <div class="gh-joinrow"><input id="homecodein" name="c" inputmode="numeric" maxlength="8" placeholder="6-digit code" autocomplete="one-time-code" enterkeyhint="go"><button class="chever-button primary" type="submit">Join</button></div></form>
     </section>
     ${verseCardHTML()}
     ${readingBlock}
@@ -668,7 +654,7 @@ function homeGuide() {
 }
 // The Game tab (2026-11-12): every way to play sits under this one bar item: solo modes (Bible or Myth included), multiplayer,
 // private rooms, join with code, group knockouts and live now. Same routes as before; nothing here is new behaviour.
-function gameScreen() {
+function gameScreen(focusJoin = false) {
   const solo = ["mixed", "myth", "arena", "gap", "who", "daily", "sudden"];
   const soloRow = (k) => (k === "mixed"
     ? homeGuideRow(`#/play/${k}`, "play", "Solo match", "Just you and the Word. Start now.", true)
@@ -676,9 +662,11 @@ function gameScreen() {
   const ranked = duelV2();
   render(`<div class="gh">
     <section class="gh-intro"><h1>Game</h1><p>Play on your own, go head to head with people, or join a room.</p></section>
-    <section class="gh-sec"><h3>Hall of Fame</h3>
-      ${homeGuideRow("#/ranks", "trophy", "Hall of Fame", "Weekly champions, all-time ranks, church leagues, and rivals.", true)}
-    </section>
+    <form class="gh-join chever-panel" id="gamejoin" autocomplete="off">
+      <label for="gamecodein">Join with a code</label>
+      <div class="small muted" id="gamecodehelp">Enter the live PIN, duel code, or invite link you were sent.</div>
+      <div class="gh-joinrow"><input class="chever-input" id="gamecodein" name="c" maxlength="160" autocapitalize="characters" autocomplete="off" spellcheck="false" enterkeyhint="go" aria-describedby="gamecodehelp" placeholder="e.g. 482913"><button class="chever-button primary" type="submit">Join</button></div>
+    </form>
     <section class="gh-sec"><h3>Public games</h3>
       ${homeGuideRow("#/public", "live", "Public lobby", "No code, no password. Watch live games or play now with anyone online.", true)}
     </section>
@@ -691,16 +679,22 @@ function gameScreen() {
     </section>
     <section class="gh-sec"><h3>Private rooms and groups</h3>
       ${homeGuideRow("#/ko/new", "plus", "Create private room", "Get a code, send it, last one standing wins.")}
-      <form class="gh-join" id="gamejoin" autocomplete="off"><label for="gamecodein">Join with code</label>
-        <div class="gh-joinrow"><input id="gamecodein" name="c" inputmode="numeric" maxlength="8" placeholder="6-digit code" autocomplete="one-time-code" enterkeyhint="go"><button type="submit">Join</button></div></form>
       ${homeGuideRow("#/ko/quick", "flame", "Quick knockout", "Jump into an open group knockout.")}
+    </section>
+    <section class="gh-sec"><h3>Hall of Fame</h3>
+      ${homeGuideRow("#/ranks", "trophy", "Hall of Fame", "Weekly champions, all-time ranks, church leagues, and rivals.", false)}
     </section>
   </div>${navBar("game")}`, "cv2 cv2-home cv2-game");
   bindCodeBox("gamejoin");
+  if (focusJoin) $("#gamecodein").focus({ preventScroll: true });
 }
 async function home() {
   if (homeGuideOn()) return homeGuide();
-  render(`${topbar()}<div class="col"><div id="homelead"></div>${verseCardHTML()}<div id="h"></div></div>${tabbar("home")}`);
+  render(`<div class="col"><div id="homelead"></div>
+    <section class="chever-panel home-start" aria-label="Start playing">
+      <div class="row"><span class="chever-icon" aria-hidden="true">${FI.target}</span><div><h2>Ready to play?</h2><div class="small muted">Start a solo Bible quiz or join someone’s game.</div></div></div>
+      <div class="home-start-actions"><a class="btn primary" href="#/play/mixed">${FI.play} Play solo</a><a class="btn ghost" href="#/game?join=1">Join with a code</a></div>
+    </section>${verseCardHTML()}<div id="homerank"></div><div id="h"></div></div>${tabbar("home")}`);
   mountVerse();
   onLeave(lenPickerWire());
   const h = $("#h"), lead = $("#homelead");
@@ -714,26 +708,21 @@ async function home() {
   lead.innerHTML = flatIcons(`
     <div class="row between"><div><div class="small muted">${hello},</div><h2>${esc(S.name || "friend")}</h2><a class="onlinepill" href="#/online" id="onlpill"><i class="dot"></i><span data-online>${onlineText()}</span></a></div>
       <button class="chip on" id="tierchip">${TIER[S.tier].icon} ${TIER[S.tier].name}</button></div>
-    ${guestNoteHTML()}
+    ${guestNoteHTML()}`);
+  $("#homerank").innerHTML = flatIcons(`
     <section class="card chever-panel home-rank">
-      <div class="row between"><b>Rank: <span class="gold">${rk.name} ${rk.division}</span></b><span class="small gold">${fmt(p.xp)} XP</span></div>
+      <div class="row between home-rank-top"><div class="row"><span class="chever-icon" aria-hidden="true">${FI.crown}</span><div><div class="chever-kicker">Your rank</div><b>${esc(rk.name)} ${esc(rk.division)}</b></div></div><b>${fmt(p.xp)} XP</b></div>
       <progress aria-label="Progress toward next rank" value="${rk.progress}" max="1"></progress>
-      <div class="row between small muted"><span>${rk.next ? `${fmt(rk.nextXp - p.xp)} XP to ${rk.next}` : "Apostle (Highest Rank)"}</span><a class="gold" href="#/ranks">Hall of Fame ›</a></div>
+      <div class="row between small muted home-rank-meta"><span>${rk.next ? `${fmt(rk.nextXp - p.xp)} XP to ${rk.next}` : "Apostle (Highest Rank)"}</span><span class="rank-streak" aria-label="Daily streak: ${p.streak || 0}${saves(p) ? `; ${saves(p)} streak saves` : ""}">${FI.flame} ${p.streak || 0}${saves(p) ? ` <span title="Streak saves">${FI.shield} ${saves(p)}</span>` : ""}</span></div>
     </section>`);
   h.innerHTML = `
   <div class="col" style="gap:14px">
-    <div class="sechead"><b>How do you want to play?</b></div>
-    <div class="card way">
-      <div class="row" style="gap:12px"><div class="wayico">🎯</div><div class="grow"><b class="wayt">Play solo</b><div class="small muted">Just you and the Word. Pick a game, play as much as you like.</div></div></div>
-      <div class="row" style="gap:8px;margin-top:12px"><a class="btn primary grow" href="#/play/mixed">▶ Play now</a><button class="btn ghost grow" data-more>Choose a game ↓</button></div>
-    </div>
     ${chevrMenuHTML()}
     ${storyCardHTML()}
     <div id="homelive">${liveCardHTML()}</div>
     <div class="card way gold">
       <div class="row" style="gap:12px"><div class="wayico">⚔️</div><div class="grow"><b class="wayt">Challenge someone</b><div class="small muted">Get a code and send the link. Friends join, you play live: lose a round and you're out. Last one standing wins.</div></div></div>
       <button class="btn primary block" id="kocta" style="margin-top:12px">⚔️ Create a challenge</button>
-      <div style="margin-top:10px">${codeBoxHTML("homecode")}</div>
       <a class="small muted" href="#/duel/new" style="display:block;margin-top:10px;text-align:center">Or send a set they can play later ›</a>
     </div>
     <div class="card">
@@ -767,7 +756,6 @@ async function home() {
     ${androidCard()}
   </div>`;
   $("#kocta").onclick = () => { sfx.tap(); buzz(10); go("#/ko/new"); };
-  bindCodeBox("homecode");
   homeChurchCard();
   bindLiveCard();
   $("#tierchip").onclick = () => tierSheet(() => home());
@@ -1753,18 +1741,15 @@ async function churchHub() {
   if (mine && mine.church) { syncChurch(mine.church); return go("#/church/" + mine.church.id); }
   const el = $("#chh"); if (!el) return;
   el.innerHTML = `<div class="col" style="gap:14px">
-    <div class="hero"><div class="rays"></div><div class="tiny gold">⛪ Church League</div>
-      <h2 style="margin:6px 0 6px;font-family:var(--serif)">Play for your church</h2>
-      <p class="small muted" style="margin:0">Join your church, fellowship or campus team. Every round you play adds points to your church on the weekly league. The top church each week is crowned champion 🏆</p></div>
+    <header class="chever-panel league-intro"><span class="chever-icon" aria-hidden="true">${FI.cross}</span><div><div class="chever-kicker">Church League</div><h1 class="chever-title">Play for your church</h1><p class="small muted">Join your church, fellowship or campus team. Every round adds points to your team’s weekly league score.</p></div></header>
     <div class="card gold col">
       <div class="field"><label for="jc">Got an invite code?</label><input id="jc" maxlength="8" autocapitalize="characters" autocomplete="off" placeholder="e.g. K7Q2MX" style="text-transform:uppercase;letter-spacing:.2em;font-weight:800"></div>
-      <div id="jerr" class="small" style="color:#ff8a80;display:none"></div>
+      <div id="jerr" class="small chever-error" role="alert" style="display:none"></div>
       <button class="btn primary block" id="jgo">Join my church</button>
     </div>
     <div class="card row" style="gap:14px">
-      <div style="font-size:30px">✨</div><div class="grow"><b>Your church isn't here yet?</b><div class="small muted">Create its team in 30 seconds, then share the link in your church WhatsApp group.</div></div>
+      <div class="grow"><b>Your church isn't here yet?</b><div class="small muted">Create a team, then share its invite link with your church.</div><a class="btn ghost block league-create" href="#/church/new">➕ Create a church team</a></div>
     </div>
-    <a class="btn ghost block" href="#/church/new">➕ Create a church team</a>
     <a class="btn ghost block" href="#/ranks?tab=church">🏆 See the Church League</a>
   </div>`;
   const join = () => { const c = $("#jc").value.trim().toUpperCase().replace(/[^A-Z0-9]/g, ""); if (c.length < 4) { $("#jerr").textContent = "Type the invite code from your church."; $("#jerr").style.display = "block"; return; } go("#/c/" + c); };
@@ -1783,7 +1768,7 @@ async function createChurch() {
       <div class="field"><label for="cn">Name</label><input id="cn" maxlength="50" placeholder="e.g. RCCG Jesus House" autocomplete="off"><span class="small dim" id="cnc">3–50 characters. Use the name your members know.</span></div>
       <div class="field"><label for="cc">City or town</label><input id="cc" maxlength="40" placeholder="e.g. Akure" autocomplete="off"></div>
       <div class="field"><label for="cs">State</label><select id="cs"><option value="">Choose a state</option>${meta.states.map((s) => `<option>${esc(s)}</option>`).join("")}</select></div>
-      <div id="cerr" class="small" style="color:#ff8a80;display:none"></div>
+      <div id="cerr" class="small chever-error" role="alert" style="display:none"></div>
       <button class="btn primary block" id="cgo">Create team</button>
       <p class="small dim" style="margin:0">You'll get an invite link to share. You can be in one church team at a time; creating this one moves you into it.</p>
     </div></div>`;
@@ -1832,7 +1817,7 @@ async function churchPage(id, q) {
       <div style="font-size:40px;line-height:1">${c.kind === "campus" ? "🎓" : c.kind === "fellowship" ? "🙌" : "⛪"}</div>
       <h2 style="font-family:var(--serif);margin:8px 0 2px">${esc(c.name)}${c.verified ? ` <span class="vtick" title="Verified church">✅</span>` : ""}</h2>
       <div class="small muted">${placeLine(c)}</div>
-      ${c.verified ? `<div class="small" style="color:#3DDC97;margin-top:4px">✅ Verified church</div>` : ""}
+      ${c.verified ? `<div class="small" style="color:var(--ui-success);margin-top:4px">✅ Verified church</div>` : ""}
       ${c.titles ? `<div class="small gold" style="margin-top:6px">🏆 ${c.titles}× weekly champion</div>` : ""}
     </div>
     <div class="stats3">
@@ -1852,7 +1837,7 @@ async function churchPage(id, q) {
       <div id="mb">${board()}</div>
     </div>
     ${d.isOwner ? `<div id="verbox"></div>` : ""}
-    ${d.isMember ? `<button class="btn ghost block" id="cleave" style="color:#ff8a80">Leave this team</button>` : ""}
+    ${d.isMember ? `<button class="btn ghost block" id="cleave" style="color:var(--ui-danger)">Leave this team</button>` : ""}
     <p class="small dim center" style="margin:0">Points = round scores members earn after joining. Switching churches never carries points across.</p>
   </div>`;
   $$("[data-per]", el).forEach((b) => (b.onclick = () => { per = b.dataset.per; $$("[data-per]", el).forEach((x) => x.classList.toggle("on", x === b)); $("#mb").innerHTML = board(); bindRm(); sfx.chip(); }));
@@ -1980,7 +1965,7 @@ async function verifyBox(c) {
       <div class="small dim">Asked by ${esc(r.requester)} (${esc(r.role)}). A real person checks every request. Nothing is approved automatically.</div></div>`;
   if (d.verified) { b.innerHTML = `<div class="card row" style="gap:12px"><div style="font-size:26px">✅</div><div class="grow"><b>Verified church</b><div class="small muted">The tick shows on your church page, the league and your invite link.</div></div></div>`; return; }
   if (r && r.status === "pending") { b.innerHTML = codeCard(r); $("#vcopy").onclick = async () => { try { await navigator.clipboard.writeText(r.code); toast("Code copied ✓"); } catch (e) { prompt("Copy this code:", r.code); } }; return; }
-  const was = r && (r.status === "rejected" || r.status === "revoked") ? `<div class="small" style="color:#ff8a80;margin-top:6px">${r.status === "revoked" ? "Verification was removed" : "Last request was not approved"}${r.reason ? `: ${esc(r.reason)}` : ""}</div>` : "";
+  const was = r && (r.status === "rejected" || r.status === "revoked") ? `<div class="small" style="color:var(--ui-danger);margin-top:6px">${r.status === "revoked" ? "Verification was removed" : "Last request was not approved"}${r.reason ? `: ${esc(r.reason)}` : ""}</div>` : "";
   b.innerHTML = `<div class="card col" style="gap:8px"><div class="row" style="gap:12px"><div style="font-size:26px">✅</div><div class="grow"><b>Get the Verified tick</b><div class="small muted">Show members this is your church's official team. We check it against your church's official page.</div>${was}</div></div><button class="btn ghost block" id="vask">Request verification</button></div>`;
   $("#vask").onclick = () => verifyForm(c, d);
 }
@@ -1993,7 +1978,7 @@ function verifyForm(c, d) {
     <div class="field"><label for="vlk">Church's official page <span class="gold">(required)</span></label><input id="vlk" inputmode="url" maxlength="200" placeholder="https://facebook.com/yourchurch or your website"></div>
     <div class="field"><label for="vem">Official church email <span class="dim">(optional)</span></label><input id="vem" type="email" maxlength="120" placeholder="info@yourchurch.org"></div>
     <div class="field"><label for="vph">Church's public phone <span class="dim">(optional)</span></label><input id="vph" inputmode="tel" maxlength="20" placeholder="+234…"></div>
-    <div class="small" id="verr" style="color:#ff8a80"></div>
+    <div class="small" id="verr" style="color:var(--ui-danger)"></div>
     <div class="row" style="gap:8px"><button class="btn ghost grow" id="vcancel">Cancel</button><button class="btn primary grow" id="vsend">Send request</button></div></div>`;
   $("#vrl").onchange = () => { $("#vrl2").style.display = $("#vrl").value ? "none" : "block"; };
   $("#vcancel").onclick = () => verifyBox(c);
@@ -2015,13 +2000,13 @@ function koStatus(x) {
   return `${x.final ? "🏆 Final" : "Round " + x.round} · ${x.left} still in · watch & join next game`;
 }
 function liveItem(x) {
-  if (x.t === "ko") return `<div class="lnrow ${x.phase === "lobby" ? "hot" : ""}"><div class="avatar">⚔️</div><div class="grow"><div class="tiny" style="color:#3DDC97">● ${x.phase === "lobby" ? "Knockout lobby" : "Knockout playing"}</div><b>${esc(x.host)}'s knockout · ${x.here} player${x.here === 1 ? "" : "s"}</b><div class="small muted">${esc(koStatus(x))}</div></div><button class="btn ${x.phase === "lobby" ? "primary" : "ghost"} sm" data-ko="${esc(x.code)}">${x.phase === "lobby" ? "Join" : "Watch"}</button></div>`;
+  if (x.t === "ko") return `<div class="lnrow ${x.phase === "lobby" ? "hot" : ""}"><div class="avatar">⚔️</div><div class="grow"><div class="tiny" style="color:var(--ui-success)">● ${x.phase === "lobby" ? "Knockout lobby" : "Knockout playing"}</div><b>${esc(x.host)}'s knockout · ${x.here} player${x.here === 1 ? "" : "s"}</b><div class="small muted">${esc(koStatus(x))}</div></div><button class="btn ${x.phase === "lobby" ? "primary" : "ghost"} sm" data-ko="${esc(x.code)}">${x.phase === "lobby" ? "Join" : "Watch"}</button></div>`;
   if (x.t === "wait") {
     const tag = x.kind === "champ" ? "🏆 Winner stays on" : x.kind === "challenge" ? (x.forMe ? "⚔️ Challenged you" : "⚔️ Challenge") : "⚡ Open challenge";
-    return `<div class="lnrow ${x.forMe ? "hot" : ""}"><div class="avatar">${esc((x.name || "?")[0].toUpperCase())}</div><div class="grow"><div class="tiny" style="color:#3DDC97">${tag}</div><b>${esc(x.mine ? "You're waiting for a challenger" : x.text)}</b><div class="small muted">${TIER[x.tier] ? TIER[x.tier].name : ""} · ${esc(modeName(x.mode))} · waiting ${ago(x.age)}</div></div>${x.mine ? `<a class="chip on" href="#/qm">Open</a>` : `<button class="btn primary sm" data-join="${esc(x.id)}">Join</button>`}</div>`;
+    return `<div class="lnrow ${x.forMe ? "hot" : ""}"><div class="avatar">${esc((x.name || "?")[0].toUpperCase())}</div><div class="grow"><div class="tiny" style="color:var(--ui-success)">${tag}</div><b>${esc(x.mine ? "You're waiting for a challenger" : x.text)}</b><div class="small muted">${TIER[x.tier] ? TIER[x.tier].name : ""} · ${esc(modeName(x.mode))} · waiting ${ago(x.age)}</div></div>${x.mine ? `<a class="chip on" href="#/qm">Open</a>` : `<button class="btn primary sm" data-join="${esc(x.id)}">Join</button>`}</div>`;
   }
   if (x.t === "duel") return `<div class="lnrow"><div class="avatar">⚔️</div><div class="grow"><div class="tiny gold">● Playing now</div><b>${esc(x.names.join(" vs "))}</b><div class="small muted">${TIER[x.tier] ? TIER[x.tier].name : ""} · ${esc(modeName(x.mode))} · play the same questions</div></div><a class="btn ghost sm" href="#/d/${esc(x.code)}">Join</a></div>`;
-  if (x.t === "room") return `<div class="lnrow"><div class="avatar">📺</div><div class="grow"><div class="tiny" style="color:#FF8A9A">● Live room</div><b>${esc(x.title)}</b><div class="small muted">${x.church ? esc(x.church) + " · " : ""}${x.phase === "lobby" ? "In the lobby" : `Question ${x.qi + 1}/${x.qn}`} · ${x.n} player${x.n === 1 ? "" : "s"}</div></div><a class="btn ghost sm" href="/j/${esc(x.code)}">Join</a></div>`;
+  if (x.t === "room") return `<div class="lnrow"><div class="avatar">📺</div><div class="grow"><div class="tiny" style="color:var(--ui-danger)">● Live room</div><b>${esc(x.title)}</b><div class="small muted">${x.church ? esc(x.church) + " · " : ""}${x.phase === "lobby" ? "In the lobby" : `Question ${x.qi + 1}/${x.qn}`} · ${x.n} player${x.n === 1 ? "" : "s"}</div></div><a class="btn ghost sm" href="/j/${esc(x.code)}">Join</a></div>`;
   return "";
 }
 function bindJoins(el) {
@@ -2674,7 +2659,7 @@ async function profile() {
       <div class="setrow"><div class="grow"><div>Account</div><div class="small muted">${google ? "Signed in with Google ✓ (progress is safe across phones)" : "Playing as a guest — sign in with Google to keep your progress if you change or reset your phone."}</div></div>${google ? `<button class="chip" id="out">Sign out</button>` : `<a class="chip on" href="/api/oauth/google/start">Google</a>`}</div>
       <div class="setrow"><div class="grow"><div>Blocked players</div><div class="small muted" id="blktxt">${blockedList().length ? blockedList().length + " blocked. You won't hear each other in voice." : "No one. Tap a player in a game to mute, block or report."}</div></div>${blockedList().length ? `<button class="chip" id="blk">Manage</button>` : ""}</div>
       <div class="setrow"><div class="grow"><div>Privacy policy</div><div class="small muted">What we keep and why</div></div><a class="chip" href="/privacy">Read</a></div>
-      <div class="setrow"><div class="grow"><div>Delete account</div><div class="small muted">Permanently erase your profile, scores and duels</div></div><button class="chip" id="delacct" style="color:#ff8a80">Delete</button></div>
+      <div class="setrow"><div class="grow"><div>Delete account</div><div class="small muted">Permanently erase your profile, scores and duels</div></div><button class="chip" id="delacct" style="color:var(--ui-danger)">Delete</button></div>
     </div>
     <div class="card"><b>More</b><div class="row" style="flex-wrap:wrap;gap:8px;margin-top:10px"><a class="chip" href="/play">${pfIco("classic")} Classic app</a>${inAppShell() ? "" : `<a class="chip" href="/download">${pfIco("android")} Android app</a>`}<a class="chip" href="#/ranks?tab=church">${pfIco("church")} Church League</a></div>
       <p class="small dim" style="margin:12px 0 0">Scripture quotations are from the King James Version (public domain). Every answer carries its reference so you can read it yourself.</p></div>
@@ -2736,8 +2721,8 @@ async function profile() {
 function featureScripts() {
   const f = window.BA_FLAGS || {};
   const want = [];
-  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.3");
-  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.13.3");
+  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.4");
+  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.13.4");
   if (!want.length) return null;
   return Promise.all(want.map((src) => new Promise((done) => {
     const s = document.createElement("script"); s.src = src; s.onload = done; s.onerror = done; document.head.appendChild(s);

@@ -1,4 +1,4 @@
-/* Chever service worker (v3.13.3).
+/* Chever service worker (v3.13.4).
  * - Opens instantly on repeat visits, even while the free server is waking up:
  *   the home page is served from the saved copy at once and refreshed in the background;
  *   duel links (/d/...) try the network for 3 s, then fall back to the last saved copy.
@@ -6,25 +6,26 @@
  * - API calls, sign-in, downloads and legal pages always go to the network.
  * - Web Push (v3.5.0): shows "a challenger is waiting" notifications; a tap opens (or focuses) the game at the challenge.
  */
-const VERSION = "ba-3.13.3";
+const VERSION = "ba-3.13.4";
 const SHELL = "/";
 const PRECACHE = [
   "/",
-  "/v3/brand-tokens.css?v=3.13.3",
-  "/v3/app.css?v=3.13.3",
-  "/v3/app.js?v=3.13.3",
-  "/v3/social.js?v=3.13.3",
-  "/v3/bank.json?v=3.13.3",
-  "/v3/daily-verse.mjs?v=3.13.3",
-  "/v3/hall-of-fame.mjs?v=3.13.3",
-  "/v3/reading-screens.js?v=3.13.3",
-  "/v3/duel-screens.js?v=3.13.3",
-  "/v3/vod-365.json?v=3.13.3",
-  "/v3/avatars.js?v=3.13.3",
+  "/v3/brand-tokens.css?v=3.13.4",
+  "/v3/chever-ui.css?v=3.13.4",
+  "/v3/app.css?v=3.13.4",
+  "/v3/app.js?v=3.13.4",
+  "/v3/social.js?v=3.13.4",
+  "/v3/bank.json?v=3.13.4",
+  "/v3/daily-verse.mjs?v=3.13.4",
+  "/v3/hall-of-fame.mjs?v=3.13.4",
+  "/v3/reading-screens.js?v=3.13.4",
+  "/v3/duel-screens.js?v=3.13.4",
+  "/v3/vod-365.json?v=3.13.4",
+  "/v3/avatars.js?v=3.13.4",
   "/v3/fonts/cinzel-latin.woff2",
   "/v3/fonts/jakarta-latin.woff2",
   "/v3/icon-192.png",
-  "/v3/manifest.webmanifest",
+  "/v3/manifest.webmanifest?v=3.13.4",
 ];
 
 self.addEventListener("install", (event) => {
