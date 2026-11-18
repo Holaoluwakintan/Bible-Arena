@@ -370,7 +370,26 @@ async function route() {
     // Shared reading (preview): only when the flag is on and the screens file loaded.
     if (!(window.BA_FLAGS && window.BA_FLAGS.sharedReading) || !window.BAReading) return home();
     render('<div id="reading-root"></div>' + readingTabbar("bible"), "cv2 cv2-reading");
-    window.BAReading.mount(document.getElementById("reading-root"), {});
+    window.BAReading.mount(document.getElementById("reading-root"), {
+      startDuel: async (portion) => {
+        if (!portion) return;
+        render(`<div class="boot"><div class="boot-mark">✦</div><div class="boot-sub">Preparing passage arena…</div></div>`);
+        await loadBank();
+        const books = portion.books && portion.books.length ? portion.books : [portion.book || "John"];
+        let ids = bookSet(books, 10, S.tier);
+        if (ids.length < 5) {
+          const topUp = drawSet("arena", S.tier, 10 - ids.length);
+          ids = ids.concat(topUp);
+        }
+        const title = "Reading Duel · " + (portion.books ? portion.books.join(", ") : portion.book);
+        try {
+          const d = await api("/api/v3/duels", { body: { mode: "arena", tier: S.tier, name: S.name } });
+          runRound({ ids: d.ids || ids, tier: S.tier, mode: "duel", title, duel: { code: d.code, creator: true, mode: "arena" } });
+        } catch (e) {
+          runRound({ ids, tier: S.tier, mode: "book", title });
+        }
+      }
+    });
     return;
   }
   if (a === "duel" && b === "new") return newDuel(q.get("from"));
@@ -510,7 +529,7 @@ function chevrMenuHTML() {
 // ---------- Chever home guide (preview). Shown only when a Chever preview flag is on (sharedReading or chever2Duels). Nothing sets
 // the flags, so the live home is the one below. The guide says what the app is: solo first, then people, then the reading plan.
 // No emoji on this screen: every icon is an inline SVG.
-function homeGuideOn() { const f = window.BA_FLAGS || {}; return f.sharedReading === true || f.chever2Duels === true; }
+function homeGuideOn() { return false; }
 function homeIco(name) {
   const P = {
     play: '<path d="M8 5.5v13l10-6.5z"/>',
@@ -558,6 +577,9 @@ function homeGuideHTML() {
       ${homeGuideRow("#/play/mixed", "play", "Solo match", "Just you and the Word. Start now.", true)}
       ${homeGuideRow("#/qm", "users", "Match with someone", "Get paired with someone playing now.")}
       ${ranked ? homeGuideRow("#/duels", "trophy", "Ranked and find match", "Find an opponent at your level.") : ""}
+    </section>
+    <section class="gh-sec"><h3>Hall of Fame</h3>
+      ${homeGuideRow("#/ranks", "trophy", "Hall of Fame", "See who leads this week, church standings, and rivals.", true)}
     </section>
     <section class="gh-sec"><h3>Play with people</h3>
       ${homeGuideRow("#/ko/new", "plus", "Create private room", "Get a code, send it, last one standing wins.")}
@@ -614,6 +636,9 @@ function gameScreen() {
   const ranked = duelV2();
   render(`<div class="gh">
     <section class="gh-intro"><h1>Game</h1><p>Play on your own, go head to head with people, or join a room.</p></section>
+    <section class="gh-sec"><h3>Hall of Fame</h3>
+      ${homeGuideRow("#/ranks", "trophy", "Hall of Fame", "Weekly champions, all-time ranks, church leagues, and rivals.", true)}
+    </section>
     <section class="gh-sec"><h3>Public games</h3>
       ${homeGuideRow("#/public", "live", "Public lobby", "No code, no password. Watch live games or play now with anyone online.", true)}
     </section>
@@ -641,6 +666,9 @@ async function home() {
   const vod = VOD[day % VOD.length];
   let daily = null;
   try { daily = await api("/api/v3/daily"); } catch (e) {}
+  await ensureSession();
+  const p = ME.player || { xp: 0 };
+  const rk = rankOf(p.xp);
   const hello = new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 17 ? "Good afternoon" : "Good evening";
   const h = $("#h"); if (!h) return;
   h.innerHTML = `
@@ -648,6 +676,11 @@ async function home() {
     <div class="row between"><div><div class="small muted">${hello},</div><h2>${esc(S.name || "friend")}</h2><a class="onlinepill" href="#/online" id="onlpill"><i class="dot"></i><span data-online>${onlineText()}</span></a></div>
       <button class="chip on" id="tierchip">${TIER[S.tier].icon} ${TIER[S.tier].name}</button></div>
     ${guestNoteHTML()}
+    <div class="card">
+      <div class="row between"><b>Rank: <span class="gold">${rk.name} ${rk.division}</span></b><span class="small gold">${fmt(p.xp)} XP</span></div>
+      <div class="xpbar" style="margin:10px 0 6px"><i style="width:${Math.round(rk.progress * 100)}%"></i></div>
+      <div class="row between small muted"><span>${rk.next ? `${fmt(rk.nextXp - p.xp)} XP to ${rk.next}` : "Apostle (Highest Rank)"}</span><a class="gold" href="#/ranks">Hall of Fame ›</a></div>
+    </div>
     <div class="sechead"><b>How do you want to play?</b></div>
     <div class="card way">
       <div class="row" style="gap:12px"><div class="wayico">🎯</div><div class="grow"><b class="wayt">Play solo</b><div class="small muted">Just you and the Word. Pick a game, play as much as you like.</div></div></div>
@@ -672,6 +705,9 @@ async function home() {
         ? `<div class="row" style="gap:8px"><a class="btn ghost grow sm" href="#/play/practice">🔁 Practise again</a><a class="btn ghost grow sm" href="#/ranks?tab=daily">🌍 Scoreboard</a></div>`
         : `<a class="btn primary block" href="#/play/daily" id="dailygo">▶ Play today's ${dailyLen()}</a>`}
     </div>
+    <a class="card way" href="#/ranks" style="text-decoration:none;color:inherit">
+      <div class="row" style="gap:12px"><div class="wayico">🏆</div><div class="grow"><b class="wayt">Hall of Fame</b><div class="small muted">Weekly champions, all-time records, church league, and rivals head-to-head.</div></div><div class="gold">›</div></div>
+    </a>
     <div id="moregames" class="col" style="gap:14px">
     <div class="sechead"><b>🎮 All games</b><span class="small muted">Solo, anytime, as many times as you like.</span></div>
     <div class="grid2">
@@ -2226,20 +2262,21 @@ function duelBoardV2(v) {
   const L = BADuel.logic;
   const done = v.entries.filter((e) => e.finished).sort((a, b) => duelCmp(b, a));
   const pos = new Map(); done.forEach((e, i) => pos.set(e, i && duelCmp(e, done[i - 1]) === 0 ? pos.get(done[i - 1]) : i + 1));
-  const rows = [...done, ...v.entries.filter((e) => !e.finished && e.progress)].map((e) => ({
+  const unfinished = v.entries.filter((e) => !e.finished);
+  const rows = [...done, ...unfinished].map((e) => ({
     pos: e.finished ? pos.get(e) : "…", name: e.name, me: !!e.isMe, tag: e.isCreator ? "challenger" : "",
-    sub: e.finished ? `${e.correct}/${e.total} · ${secs(e.timeMs)}` : `playing… ${e.progress}/${v.ids.length}`, score: fmt(e.score) }));
+    sub: e.finished ? `${e.correct}/${e.total} · ${secs(e.timeMs)}` : e.progress ? `playing… ${e.progress}/${v.ids.length}` : "waiting to play",
+    score: e.finished ? fmt(e.score) : "–" }));
   return BADuel.renderBoard(rows);
 }
 function duelScreenV2(v) {
   BADuel.ensureStyle();
   const creator = v.entries.find((e) => e.isCreator && e.finished);
-  const finished = v.entries.filter((e) => e.finished).length;
   render(BADuel.renderDuel({
     code: v.code, modeName: modeName(v.mode), tierName: TIER[v.tier].name, count: v.ids.length,
     creatorName: BADuel.logic.plainName(v.creator.name), scoreToBeat: creator ? creator.score : null,
     needName: !S.onboarded, nameVal: S.name, churchVal: S.church,
-    boardHTML: finished > 1 ? duelBoardV2(v) : "", tabbarHTML: readingTabbar("community") }), "cv2 cv2-duel");
+    boardHTML: v.entries.length ? duelBoardV2(v) : "", tabbarHTML: readingTabbar("community") }), "cv2 cv2-duel");
   $("#acc").onclick = async () => {
     if (!S.onboarded && badNm($("#nm").value)) { $("#nm").focus(); return toast(KIND_NAME); }
     if (!S.onboarded) { S.name = ($("#nm").value || "").trim().slice(0, 40) || "Player"; S.church = ($("#ch").value || "").trim().slice(0, 60); S.onboarded = true; save(); await savePlayer(); }
@@ -2276,7 +2313,7 @@ function duelResultV2(v, r, cfg) {
     waHref: waLink(duelText(v.code, me ? me.score : null, v.tier, v.mode)),
     rematch: !!(me && opp && !botDuel), chwLabel, chwId: "chw", qm: !!(botDuel && me && opp),
     xpLine, achievementsHTML, extraHTML: codeCard,
-    boardHTML: v.entries.filter((e) => e.finished).length ? duelBoardV2(v) : "", tabbarHTML: readingTabbar("community") }), "cv2 cv2-res");
+    boardHTML: v.entries.length ? duelBoardV2(v) : "", tabbarHTML: readingTabbar("community") }), "cv2 cv2-res");
   if (state === "won") { confetti(90); sfx.win(); }
   $("#cp").onclick = async () => { try { await navigator.clipboard.writeText(url); toast("Link copied"); } catch (e) { prompt("Copy this link:", url); } };
   $("#sh").onclick = () => shareCard({ score: me ? me.score : 0, correct: me ? me.correct : 0, total: n, tier: v.tier, title: "Challenge", url, text: duelText(v.code, me ? me.score : null, v.tier, v.mode), cta: state === "won" ? "I won this duel. Your turn?" : state === "draw" ? "We drew this duel. Can you break the tie?" : "Can you beat me?" });
@@ -2386,10 +2423,10 @@ async function duelsScreen() {
   }).join("");
 }
 
-// ---------- leaderboards ----------
+// ---------- leaderboards / hall of fame ----------
 async function ranks(tab) {
   const tabs = [["week", "This week"], ["church", "Churches"], ["rivals", "Rivals"], ["daily", "Today"], ["all", "All-time"]];
-  render(`<h2 style="margin-bottom:12px">Leaderboards</h2><div class="segs">${tabs.map(([k, l]) => `<a class="chip ${tab === k ? "on" : ""}" href="#/ranks?tab=${k}">${l}</a>`).join("")}</div>${tab === "daily" ? `<p class="small muted" style="margin:0 0 10px">Global Scoreboard for today's Daily Challenge: one official try each. Longer sets can score more.</p>` : ""}<div id="lb" class="card"><div class="muted small">Loading…</div></div>${chTabbar("ranks")}`, "cv2 cv2-ranks");
+  render(`<h2 style="margin-bottom:12px">Hall of Fame</h2><div class="segs">${tabs.map(([k, l]) => `<a class="chip ${tab === k ? "on" : ""}" href="#/ranks?tab=${k}">${l}</a>`).join("")}</div>${tab === "daily" ? `<p class="small muted" style="margin:0 0 10px">Global Scoreboard for today's Daily Challenge: one official try each. Longer sets can score more.</p>` : ""}<div id="lb" class="card"><div class="muted small">Loading…</div></div>${chTabbar("ranks")}`, "cv2 cv2-ranks");
   await ensureSession();
   if (tab === "church") { const l = $("#lb"); if (l) leagueBoard(l, parseHash().q.get("p") === "all" ? "all" : "week"); return; }
   let r; try { r = await api("/api/v3/leaderboard?scope=" + tab); } catch (e) { const l = $("#lb"); if (l) l.innerHTML = "Couldn't load the board."; return; }
@@ -2564,7 +2601,7 @@ async function profile() {
       <div class="xpbar" style="margin:12px 0 6px"><i style="width:${Math.round(rk.progress * 100)}%"></i></div><div class="small muted">${fmt(p.xp)} XP${rk.next ? ` · ${fmt(rk.nextXp - p.xp)} to ${rk.next}` : ""}</div></div>
     <div class="card" id="facepick"><div class="row between"><b>Your face</b><span class="small muted">shows next to your name in duels and rooms</span></div>
     <div class="facegrid" style="margin-top:10px">${BAFace.ids.map((id) => `<button class="faceopt ${myFace() === id ? "on" : ""}" data-face="${id}" aria-label="Face ${Number(id.slice(5))}">${BAFace.html(id, "100%")}</button>`).join("")}</div></div>
-    <a class="card row reportlink" href="#/ranks"><div class="pico">${homeIco("trophy")}</div><div class="grow"><b>Ranks</b><div class="small muted">This week's board, and every rank</div></div><div class="gold">›</div></a>
+    <a class="card row reportlink" href="#/ranks"><div class="pico">${homeIco("trophy")}</div><div class="grow"><b>Hall of Fame</b><div class="small muted">This week's champions, all-time board, and rivals</div></div><div class="gold">›</div></a>
     <a class="card row reportlink" href="#/report"><div class="pico">${pfIco("report")}</div><div class="grow"><b>Your weekly report card</b><div class="small muted">Strongest and weakest books, accuracy vs last week</div></div><div class="gold">›</div></a>
     <div class="stats3"><div class="stat"><b>${pfIco("flame")} ${p.streak || 0}</b><span>Day streak</span></div><div class="stat"><b>${p.bestStreak || 0}</b><span>Best streak</span></div><div class="stat"><b>${p.rounds || 0}</b><span>Rounds</span></div></div>
     <div class="small muted center pfinl" style="margin-top:-6px">${pfIco("shield")} Streak saves: <b>${saves(p)}</b> · earn one every 7 days in a row (max 2). Miss a day and a save keeps your streak going.</div>

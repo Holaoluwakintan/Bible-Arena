@@ -590,8 +590,31 @@ export function registerV3(app: Express): void {
   };
   app.get("/api/v3/leaderboard", guard(async (req, res, me) => {
     const scope = String(req.query.scope || "week");
-    const pool = baPool()!;
+    const pool = baPool();
     let rows: any[] = [];
+    if (!pool) {
+      try {
+        const d = getDb();
+        if (scope === "church") {
+          return send(res, 200, { scope, churches: [] });
+        }
+        if (scope === "rivals") {
+          return send(res, 200, { scope, rows: [] });
+        }
+        const hasSessions = Boolean(d.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'session_records'").get());
+        if (hasSessions) {
+          rows = d.prepare(`
+            SELECT u.openId as open_id, coalesce(u.name, 'Player') as name, '' as church, sum(s.score) as score, coalesce(p.totalXp, 0) as xp
+            FROM session_records s
+            JOIN users u ON u.id = s.userId
+            LEFT JOIN player_progress p ON p.userId = u.id
+            GROUP BY u.openId, u.name, p.totalXp
+            ORDER BY score DESC LIMIT 50
+          `).all() as any[];
+        }
+      } catch {}
+      return send(res, 200, { scope, rows: rows.map((r: any) => ({ name: badName(r.name) ? "Player" : r.name, church: r.church, score: r.score, rank: rankOf(r.xp || 0).name, isMe: me?.openId === r.open_id, wins: r.wins, losses: r.losses, draws: r.draws })) });
+    }
     if (scope === "all") {
       rows = await cachedLb("all", async () => (await pool.query(`select open_id, name, church, xp as score, xp from ${SCH}.players where xp>0 order by xp desc limit 50`)).rows);
     } else if (scope === "week") {
