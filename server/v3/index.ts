@@ -28,6 +28,7 @@ import { initReportStore, registerReport, tallyBooks, mergeReport } from "./repo
 import { mergePlayerRows } from "./merge";
 import { renewSession } from "../_core/session-renew";
 import { initTesterStore, registerTesters } from "./testers";
+import { vodForDay } from "./vod";
 import { ST3_ID, EN_ID, story3Apply, story3Ad, endlessApply } from "./story3";
 
 type Tier = "b" | "s" | "t";
@@ -108,8 +109,9 @@ export function scoreRound(tier: Tier, answers: Array<{ id: string; choice: unkn
 
 // ---------- ranks & achievements ----------
 export const RANKS = [
-  { name: "Seeker", xp: 0 }, { name: "Disciple", xp: 600 }, { name: "Servant", xp: 1800 }, { name: "Watchman", xp: 4000 },
-  { name: "Scribe", xp: 8000 }, { name: "Elder", xp: 14000 }, { name: "Prophet", xp: 24000 }, { name: "Apostle", xp: 40000 },
+  { name: "Seeker", xp: 0 }, { name: "Disciple", xp: 2500 }, { name: "Servant", xp: 7500 }, { name: "Watchman", xp: 18000 },
+  { name: "Scribe", xp: 38000 }, { name: "Teacher", xp: 75000 }, { name: "Elder", xp: 135000 }, { name: "Prophet", xp: 225000 },
+  { name: "Theologian", xp: 360000 }, { name: "Apostle", xp: 500000 },
 ];
 export function rankOf(xp: number) {
   let i = 0;
@@ -128,7 +130,7 @@ const ACH: Array<[string, (s: any, p: any) => boolean]> = [
   ["correct_500", (s) => s.correct >= 500], ["streak_3", (_s, p) => p.best_streak >= 3], ["streak_7", (_s, p) => p.best_streak >= 7],
   ["streak_30", (_s, p) => p.best_streak >= 30], ["daily_5", (s) => s.dailies >= 5], ["duel_sent", (s) => s.duelsSent >= 1],
   ["duel_won", (s) => s.duelsWon >= 1], ["duel_5", (s) => s.duelsWon >= 5], ["rematch", (s) => s.rematches >= 1],
-  ["church", (_s, p) => !!p.church], ["rank_elder", (_s, p) => p.xp >= RANKS[5].xp], ["rank_apostle", (_s, p) => p.xp >= RANKS[7].xp],
+  ["church", (_s, p) => !!p.church], ["rank_elder", (_s, p) => p.xp >= 135000], ["rank_apostle", (_s, p) => p.xp >= 500000],
 ];
 function evalAchievements(stats: any, player: any): string[] {
   return ACH.filter(([, f]) => { try { return f(stats || {}, player); } catch { return false; } }).map(([k]) => k);
@@ -440,7 +442,8 @@ export function registerV3(app: Express): void {
       const r = await baPool()!.query(`select score, correct, total from ${SCH}.rounds where open_id=$1 and mode='daily' and day=$2 order by id limit 1`, [me.openId, day]);
       played = r.rows[0] || null;
     }
-    send(res, 200, { day, ids: dailySet(day), sets: { 10: dailySet(day, 10), 15: dailySet(day, 15), 20: dailySet(day, 20) }, played });
+    const verse = vodForDay(day);
+    send(res, 200, { day, ids: dailySet(day), sets: { 10: dailySet(day, 10), 15: dailySet(day, 15), 20: dailySet(day, 20) }, played, verse });
   }, false));
 
   app.post("/api/v3/round", limitWrites, guard(async (req, res, me) => {

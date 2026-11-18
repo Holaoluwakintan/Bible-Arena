@@ -177,9 +177,9 @@ const ACH = {
   streak_7: ["🔥", "Seven Days", "7-day streak"], streak_30: ["🏆", "Steadfast", "30-day streak"], daily_5: ["☀️", "Daily Bread", "5 daily challenges"],
   duel_sent: ["⚔️", "Challenger", "Send a challenge"], duel_won: ["🥇", "Giant Slayer", "Win a duel"], duel_5: ["🛡️", "Mighty Man", "Win 5 duels"],
   rematch: ["🔄", "Seventy Times Seven", "Ask for a rematch"], church: ["⛪", "One Body", "Join a church team"],
-  rank_elder: ["🧔", "Elder", "Reach Elder"], rank_apostle: ["✨", "Apostle", "Reach Apostle"],
+  rank_elder: ["🧔", "Elder", "Reach Elder (135,000 XP)"], rank_apostle: ["✨", "Apostle", "Reach Apostle (500,000 XP)"],
 };
-const RANKS = [["Seeker", 0], ["Disciple", 600], ["Servant", 1800], ["Watchman", 4000], ["Scribe", 8000], ["Elder", 14000], ["Prophet", 24000], ["Apostle", 40000]];
+const RANKS = [["Seeker", 0], ["Disciple", 2500], ["Servant", 7500], ["Watchman", 18000], ["Scribe", 38000], ["Teacher", 75000], ["Elder", 135000], ["Prophet", 225000], ["Theologian", 360000], ["Apostle", 500000]];
 function rankOf(xp) {
   xp = xp || 0; let i = 0;
   while (i + 1 < RANKS.length && xp >= RANKS[i + 1][1]) i++;
@@ -494,7 +494,7 @@ async function joinKo(code) {
 }
 
 // ---------- home ----------
-const VOD = [
+let VOD = [
   ["Thy word is a lamp unto my feet, and a light unto my path.", "Psalm 119:105"],
   ["Study to shew thyself approved unto God, a workman that needeth not to be ashamed, rightly dividing the word of truth.", "2 Timothy 2:15"],
   ["Thy word have I hid in mine heart, that I might not sin against thee.", "Psalm 119:11"],
@@ -503,6 +503,7 @@ const VOD = [
   ["Heaven and earth shall pass away, but my words shall not pass away.", "Matthew 24:35"],
   ["All scripture is given by inspiration of God, and is profitable for doctrine, for reproof, for correction, for instruction in righteousness:", "2 Timothy 3:16"],
 ];
+fetch("/v3/vod-365.json?v=" + (window.BA_V || "1")).then((r) => r.json()).then((list) => { if (Array.isArray(list) && list.length) VOD = list; }).catch(() => {});
 function topbar() {
   const p = ME.player || {}; const rk = rankOf(p.xp);
   return `<div class="topbar">

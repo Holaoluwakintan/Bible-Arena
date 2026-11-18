@@ -14,6 +14,7 @@ import { getDb } from "../db";
 import { logger } from "../_core/logger";
 import { sendPush, vapidPublicKey, endpointOk, type PushSub } from "./webpush";
 import { badName } from "./names";
+import { vodForDay } from "./vod";
 
 type Me = { openId: string; name: string };
 type Guard = (fn: (req: Request, res: Response, me: Me) => Promise<void>, needAuth?: boolean) => (req: Request, res: Response) => Promise<void>;
@@ -246,24 +247,47 @@ export const REMIND_LINES = [
   "Today's challenge closes at midnight. Jump in ⏰",
   "Got 5 minutes? Today's Daily Challenge is ready ☀️",
 ];
-export function reminderText(day: string, streak: number, lastDay: string | null): { title: string; body: string } {
+export function reminderText(day: string, streak: number, lastDay: string | null, verse?: [string, string]): { title: string; body: string } {
   const n = Math.floor(Date.parse(day + "T00:00:00Z") / 86_400_000);
   const yesterday = new Date(Date.parse(day + "T00:00:00Z") - 86_400_000).toISOString().slice(0, 10);
   const live = streak > 0 && (lastDay === yesterday || lastDay === day);
+  if (verse && verse[0] && verse[1]) {
+    const quote = verse[0].length > 95 ? verse[0].slice(0, 92) + "…" : verse[0];
+    const streakTag = live && streak >= 2 ? ` · 🔥 ${streak}` : "";
+    return {
+      title: `Verse of the Day · Chever${streakTag}`,
+      body: `“${quote}” — ${verse[1]}. Tap to read & keep your streak!`,
+    };
+  }
   if (live && streak >= 2 && n % 2 === 0) return { title: `🔥 ${streak}-day streak`, body: `Day ${lastDay === day ? streak : streak + 1} is waiting. Play today's Daily Challenge.` };
   const line = REMIND_LINES[((n % REMIND_LINES.length) + REMIND_LINES.length) % REMIND_LINES.length];
   return { title: live && streak >= 2 ? `Chever · 🔥 ${streak}` : "Chever ☀️", body: line };
 }
 function prefs() {
   const d = db();
-  d.exec(`CREATE TABLE IF NOT EXISTS v3_push_prefs (open_id TEXT PRIMARY KEY, daily INTEGER NOT NULL DEFAULT 1, reminded_day TEXT NOT NULL DEFAULT '');`);
+  d.exec(`CREATE TABLE IF NOT EXISTS v3_push_prefs (open_id TEXT PRIMARY KEY, daily INTEGER NOT NULL DEFAULT 1, remind_time TEXT NOT NULL DEFAULT 'evening', reminded_day TEXT NOT NULL DEFAULT '');`);
+  try { d.exec("ALTER TABLE v3_push_prefs ADD COLUMN remind_time TEXT NOT NULL DEFAULT 'evening';"); } catch {}
   return d;
 }
 export function dailyReminderOn(openId: string): boolean { const r = prefs().prepare("SELECT daily FROM v3_push_prefs WHERE open_id = ?").get(openId) as any; return r ? !!r.daily : true; }
-export function setDailyReminder(openId: string, on: boolean) {
-  prefs().prepare("INSERT INTO v3_push_prefs (open_id, daily) VALUES (?, ?) ON CONFLICT(open_id) DO UPDATE SET daily = excluded.daily").run(openId, on ? 1 : 0);
+export function getPushPrefs(openId: string): { daily: boolean; remindTime: string } {
+  const r = prefs().prepare("SELECT daily, remind_time FROM v3_push_prefs WHERE open_id = ?").get(openId) as any;
+  return { daily: r ? !!r.daily : true, remindTime: (r && r.remind_time) || "evening" };
 }
-export const reminderWindow = (t: number) => { const h = lagosHour(t); return h >= 19 && h < 22; };
+export function setDailyReminder(openId: string, on: boolean, remindTime = "evening") {
+  prefs().prepare("INSERT INTO v3_push_prefs (open_id, daily, remind_time) VALUES (?, ?, ?) ON CONFLICT(open_id) DO UPDATE SET daily = excluded.daily, remind_time = excluded.remind_time").run(openId, on ? 1 : 0, remindTime);
+}
+export const reminderWindow = (t: number) => {
+  const h = lagosHour(t);
+  // Support morning (8-10 AM), afternoon (12-2 PM), and evening (7-9 PM) windows in Lagos time
+  return (h >= 8 && h < 11) || (h >= 12 && h < 15) || (h >= 19 && h < 22);
+};
+export function userMatchesWindow(t: number, userPref = "evening"): boolean {
+  const h = lagosHour(t);
+  if (userPref === "morning") return h >= 8 && h < 11;
+  if (userPref === "afternoon") return h >= 12 && h < 15;
+  return h >= 19 && h < 22; // default: evening
+}
 let reminderDeps: ReminderDeps | null = null;
 let reminderBusy = false, reminderLastTick = 0;
 const reminderStats = { runs: 0, sent: 0, lastRun: "", lastSent: 0, skippedPlayed: 0, skippedOff: 0 };
@@ -276,9 +300,10 @@ export async function runDailyReminder(now = nowFn(), deps: ReminderDeps | null 
   reminderBusy = true;
   try {
     const day = lagosDay(now); const d = prefs();
-    const rows = (d.prepare(`SELECT s.* FROM v3_push_subs s LEFT JOIN v3_push_prefs p ON p.open_id = s.open_id
-      WHERE COALESCE(p.daily, 1) = 1 AND COALESCE(p.reminded_day, '') <> ?`).all(day) as any[]) as SubRow[];
-    const ids = [...new Set(rows.map((r) => r.open_id))];
+    const rows = (d.prepare(`SELECT s.*, COALESCE(p.remind_time, 'evening') as remind_time FROM v3_push_subs s LEFT JOIN v3_push_prefs p ON p.open_id = s.open_id
+      WHERE COALESCE(p.daily, 1) = 1 AND COALESCE(p.reminded_day, '') <> ?`).all(day) as any[]) as (SubRow & { remind_time: string })[];
+    const activeRows = rows.filter((r) => userMatchesWindow(now, r.remind_time));
+    const ids = [...new Set(activeRows.map((r) => r.open_id))];
     reminderStats.runs++; reminderStats.lastRun = new Date(now).toISOString();
     if (!ids.length) return { sent: 0, eligible: 0 };
     const played = await deps.playedDaily(ids, day);
@@ -287,14 +312,15 @@ export async function runDailyReminder(now = nowFn(), deps: ReminderDeps | null 
     reminderStats.skippedPlayed += played.size;
     const todo = ids.filter((id) => !played.has(id) && !isOnline(id, now));
     const st = await deps.streaks(todo);
+    const verse = vodForDay(day);
     let sent = 0;
     for (const id of todo) {
-      const subs = rows.filter((r) => r.open_id === id && pushAllowed(r, now));
+      const subs = activeRows.filter((r) => r.open_id === id && pushAllowed(r, now));
       if (!subs.length) continue; // cap or 1-hour gap: try again on a later tick in the window
       const s = st.get(id) || { streak: 0, lastDay: null };
-      const txt = reminderText(day, s.streak, s.lastDay);
+      const txt = reminderText(day, s.streak, s.lastDay, verse);
       const before = stats.pushSent;
-      await deliver(subs, { title: txt.title, body: txt.body, url: "/#/play/daily", tag: "ba-daily" });
+      await deliver(subs, { title: txt.title, body: txt.body, url: "/#/", tag: "ba-daily" });
       mark.run(id, day);
       if (stats.pushSent > before) sent++;
     }
@@ -500,16 +526,25 @@ export function registerSocial(app: Express, guard: Guard, send: Send, d: Social
     if (!allow("ptest:" + me.openId, 3, 600_000)) return send(res, 429, { error: "slow_down" });
     if (!vapidPublicKey()) return send(res, 503, { error: "push_not_configured" });
     const rows = subsOf(me.openId);
-    const results = await Promise.all(rows.map((r) => pushImpl({ endpoint: r.endpoint, p256dh: r.p256dh, auth: r.auth }, { title: "Chever 🔔", body: "Notifications are on. We'll tell you when a challenger is waiting.", url: "/#/live", tag: "ba-test" }, { ttl: 300, urgency: "high" })));
+    const v = vodForDay(lagosDay());
+    const quote = v[0].length > 90 ? v[0].slice(0, 87) + "…" : v[0];
+    const results = await Promise.all(rows.map((r) => pushImpl({ endpoint: r.endpoint, p256dh: r.p256dh, auth: r.auth }, { title: "Verse of the Day · Chever 📖", body: `“${quote}” — ${v[1]} (Test notification ✓)`, url: "/#/", tag: "ba-test" }, { ttl: 300, urgency: "high" })));
     for (let i = 0; i < rows.length; i++) if (results[i].gone) db().prepare("DELETE FROM v3_push_subs WHERE endpoint = ?").run(rows[i].endpoint);
     send(res, 200, { devices: rows.length, sent: results.filter((r) => r.ok).length, statuses: results.map((r) => r.status) });
   }));
-  // v3.10.3: the daily 7 PM reminder switch (on by default for anyone with notifications on)
-  app.get("/api/v3/push/prefs", guard(async (_req, res, me) => { send(res, 200, { daily: dailyReminderOn(me.openId), devices: subsOf(me.openId).length }); }));
+  // v3.10.3: daily reminder switch & preferred time (YouVersion style)
+  app.get("/api/v3/push/prefs", guard(async (_req, res, me) => {
+    const p = getPushPrefs(me.openId);
+    send(res, 200, { daily: p.daily, remindTime: p.remindTime, devices: subsOf(me.openId).length });
+  }));
   app.post("/api/v3/push/prefs", guard(async (req, res, me) => {
     if (!allow("pref:" + me.openId, 20, 600_000)) return send(res, 429, { error: "slow_down" });
-    setDailyReminder(me.openId, !!(req.body || {}).daily);
-    send(res, 200, { daily: dailyReminderOn(me.openId) });
+    const b = req.body || {};
+    const cur = getPushPrefs(me.openId);
+    const daily = b.daily !== undefined ? !!b.daily : cur.daily;
+    const remindTime = ["morning", "afternoon", "evening"].includes(b.remindTime) ? b.remindTime : cur.remindTime;
+    setDailyReminder(me.openId, daily, remindTime);
+    send(res, 200, { daily, remindTime });
   }));
   app.get("/api/v3/push/reminder-status", (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.json(reminderStatus()); });
   app.get("/api/v3/social/status", (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.json(socialStatus()); });
