@@ -1,9 +1,9 @@
-import { rankOf, RANKS } from "./hall-of-fame.mjs?v=3.13.2";
-import { lagosDay, msUntilLagosMidnight, verseForDay } from "./daily-verse.mjs?v=3.13.2";
+import { rankOf, RANKS } from "./hall-of-fame.mjs?v=3.13.3";
+import { lagosDay, msUntilLagosMidnight, verseForDay } from "./daily-verse.mjs?v=3.13.3";
 /* Chever v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.13.2";
+window.BA_V = "3.13.3";
 
 // Flat icon set (Chever look): every emoji on a game screen is drawn with these inline SVGs in the palette
 // (gold #FFC300, red #D62828, navy #0B1F4B, white). Cross = duel, church, reading, loading. Crown = ranks, wins, perfect round, mastery.
@@ -115,27 +115,36 @@ const BA_ADS = (() => {
     };
     const onVis = () => { if (document.visibilityState === "visible") { clearTimeout(timer); lastTick = Date.now(); poll(); } };
     document.addEventListener("visibilitychange", onVis);
-    api._open("intent://reward?n=" + n + "&r=" + reason + "#Intent;scheme=" + SCHEME + ";package=" + PKG + ";end");
+    try { api._open("intent://reward?n=" + n + "&r=" + reason + "#Intent;scheme=" + SCHEME + ";package=" + PKG + ";end"); }
+    catch (e) { return end("unavailable"); }
     timer = setTimeout(poll, 1200);
   }
   /** showRewarded(reason, {onReward, onDismiss, onUnavailable}) -> Promise<"reward"|"dismiss"|"unavailable"> */
   function showRewarded(reason, cb) {
     cb = cb || {};
     return new Promise((resolve) => {
-      const fire = (r) => {
-        busy = false; resolve(r);
-        try { (r === "reward" ? cb.onReward : r === "dismiss" ? cb.onDismiss : cb.onUnavailable || (() => {}))(); } catch (e) {}
+      const notify = (r) => {
+        resolve(r);
+        const callback = r === "reward" ? cb.onReward : r === "dismiss" ? cb.onDismiss : cb.onUnavailable;
+        try { if (typeof callback === "function") callback(); } catch (e) {}
       };
-      if (!available() || busy) return fire("unavailable");
+      if (!available() || busy) return notify("unavailable");
       busy = true;
-      const n = nonce(), why = cleanReason(reason);
-      if (bridge()) {
-        pend[n] = fire;
-        setTimeout(() => { if (pend[n]) { delete pend[n]; fire("unavailable"); } }, 180000);
-        try { window.BAAdsNative.showRewarded(n, why); } catch (e) { delete pend[n]; fire("unavailable"); }
-        return;
-      }
-      viaRelay(n, why, fire);
+      let timeout = null, finished = false;
+      const fire = (r) => {
+        if (finished) return;
+        finished = true; clearTimeout(timeout); busy = false; notify(r);
+      };
+      try {
+        const n = nonce(), why = cleanReason(reason);
+        if (bridge()) {
+          pend[n] = fire;
+          timeout = setTimeout(() => { delete pend[n]; fire("unavailable"); }, 180000);
+          try { window.BAAdsNative.showRewarded(n, why); } catch (e) { delete pend[n]; fire("unavailable"); }
+          return;
+        }
+        viaRelay(n, why, fire);
+      } catch (e) { fire("unavailable"); }
     });
   }
   const api = { available, showRewarded, _open(u) { location.href = u; }, _native(n, r) { const f = pend[n]; if (!f) return; delete pend[n]; f(r === "reward" || r === "dismiss" ? r : "unavailable"); } };
@@ -501,7 +510,7 @@ function mountVerse() {
   const update = async () => {
     if (inflight || !el.isConnected) return;
     clearTimeout(timer); inflight = true;
-    const query = "?v=" + (window.BA_V || "3.13.2");
+    const query = "?v=" + (window.BA_V || "3.13.3");
     try {
       if (!verseCorpus) {
         const request = new AbortController();
@@ -1185,10 +1194,10 @@ function runRound(cfg) {
       </div>${offerBonus ? `<button class="btn primary block adbtn" id="adlife" style="margin-top:12px">▶ Watch a short ad for a bonus life</button><div class="small muted center" style="margin-top:6px">Just for fun: your score stays at ${fmt(score)}.</div>` : ""}<button class="btn ${offerBonus ? "ghost" : "primary"} block" id="nx" style="margin-top:12px">${last ? "See results" : "Next ›"}</button>`;
     $("#nx").onclick = () => { idx++; sfx.tap(); next(); };
     if (offerBonus) $("#adlife").onclick = async () => {
-      const b = $("#adlife"), nx = $("#nx"); b.disabled = true; nx.disabled = true; b.textContent = "Opening the ad…";
-      const r = await BA_ADS.showRewarded("bonus_life");
-      if (!live() || !$("#adlife")) return;
-      nx.disabled = false;
+      const b = $("#adlife"); b.disabled = true; b.textContent = "Opening the ad…";
+      // Results / Play again stay reachable even if the Android handoff never answers.
+      const r = await BA_ADS.showRewarded("bonus_life").catch(() => "unavailable");
+      if (!live() || !b.isConnected) return;
       if (r === "reward") { cfg.bonusFrom = answers.length; toast("Bonus life ❤️ Keep going!"); idx++; next(); return; }
       if (r === "dismiss") { b.disabled = false; b.textContent = "▶ Watch a short ad for a bonus life"; toast("The ad was closed early, so no bonus life this time."); }
       else { b.remove(); toast("No ad available right now."); }
@@ -2727,8 +2736,8 @@ async function profile() {
 function featureScripts() {
   const f = window.BA_FLAGS || {};
   const want = [];
-  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.2");
-  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.13.2");
+  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.3");
+  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.13.3");
   if (!want.length) return null;
   return Promise.all(want.map((src) => new Promise((done) => {
     const s = document.createElement("script"); s.src = src; s.onload = done; s.onerror = done; document.head.appendChild(s);
