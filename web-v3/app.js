@@ -1,9 +1,9 @@
-import { rankOf, RANKS } from "./hall-of-fame.mjs?v=3.13.4";
-import { lagosDay, msUntilLagosMidnight, verseForDay } from "./daily-verse.mjs?v=3.13.4";
+import { rankOf, RANKS } from "./hall-of-fame.mjs?v=3.13.5";
+import { lagosDay, msUntilLagosMidnight, verseForDay } from "./daily-verse.mjs?v=3.13.5";
 /* Chever v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.13.4";
+window.BA_V = "3.13.5";
 
 // Flat icon set (Chever look): every emoji on a game screen is drawn with these inline SVGs in the palette
 // (gold #FFC300, red #D62828, navy #0B1F4B, white). Cross = duel, church, reading, loading. Crown = ranks, wins, perfect round, mastery.
@@ -508,7 +508,7 @@ function mountVerse() {
   const update = async () => {
     if (inflight || !el.isConnected) return;
     clearTimeout(timer); inflight = true;
-    const query = "?v=" + (window.BA_V || "3.13.4");
+    const query = "?v=" + (window.BA_V || "3.13.5");
     try {
       if (!verseCorpus) {
         const request = new AbortController();
@@ -2721,8 +2721,8 @@ async function profile() {
 function featureScripts() {
   const f = window.BA_FLAGS || {};
   const want = [];
-  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.4");
-  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.13.4");
+  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.5");
+  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.13.5");
   if (!want.length) return null;
   return Promise.all(want.map((src) => new Promise((done) => {
     const s = document.createElement("script"); s.src = src; s.onload = done; s.onerror = done; document.head.appendChild(s);
