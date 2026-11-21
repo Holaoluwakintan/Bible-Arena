@@ -38,18 +38,32 @@ type Mode = "arena" | "myth" | "who" | "gap";
 interface Item {
   id: string; m: Mode; tiers: Tier[]; k: string; q?: string; o?: string[]; a?: number | string;
   clues?: string[]; text?: string; g?: Record<Tier, { blanks: number[]; decoys: string[] }>; r?: string; x?: string;
+  soloOnly?: boolean; // Regular solo Arena/Mixed, not Daily, rooms, duels, or tournaments.
   since?: string; // Lagos day (YYYY-MM-DD) a top-up item joins the Daily Challenge pool; other modes use it at once
 }
 
 const WEB_DIR = path.resolve(process.env.V3_WEB_DIR || "web-v3");
 let BANK: Item[] = [];
+let MATCH_BANK: Item[] = [];
 let BY_ID = new Map<string, Item>();
+const SOLO_BANK_FILE = "bank-solo-3.13.7.json";
 function loadBank() {
   try {
-    BANK = JSON.parse(fs.readFileSync(path.join(WEB_DIR, "bank.json"), "utf8")).items as Item[];
+    const previous = JSON.parse(fs.readFileSync(path.join(WEB_DIR, "bank.json"), "utf8")).items as Item[];
+    const expanded = JSON.parse(fs.readFileSync(path.join(WEB_DIR, SOLO_BANK_FILE), "utf8")).items as Item[];
+    if (!Array.isArray(previous) || !Array.isArray(expanded) || expanded.length <= previous.length ||
+        !previous.every((item, i) => JSON.stringify(item) === JSON.stringify(expanded[i])) ||
+        expanded.slice(previous.length).some((item) => item.soloOnly !== true || item.m !== "arena" ||
+          item.tiers.length !== 1 || (item.tiers[0] !== "s" && item.tiers[0] !== "t")) ||
+        new Set(expanded.map((item) => item.id)).size !== expanded.length) {
+      throw new Error("Chever solo bank does not preserve the original competitive and Daily bank");
+    }
+    MATCH_BANK = previous;
+    BANK = expanded;
     BY_ID = new Map(BANK.map((i) => [i.id, i]));
-  } catch (error) {
-    logger.error("v3_bank_load_failed", { error: error instanceof Error ? error.message : String(error) });
+  } catch (e) {
+    logger.error("v3_bank_load_failed", { error: e instanceof Error ? e.message : String(e) });
+    throw e; // Keep the previous healthy deployment if the new question bank did not ship intact.
   }
 }
 
@@ -154,7 +168,7 @@ function seeded(seed: string) {
 // day: only items already in the bank on that Lagos day (no since, or since <= day), so a top-up
 // deployed mid-day never changes the Daily Challenge anyone is playing today.
 function pick(mode: Mode, tier: Tier, n: number, rnd: () => number, exclude = new Set<string>(), day?: string): string[] {
-  const pool = BANK.filter((i) => i.m === mode && i.tiers.includes(tier) && !exclude.has(i.id) && (!day || !i.since || i.since <= day));
+  const pool = MATCH_BANK.filter((i) => i.m === mode && i.tiers.includes(tier) && !exclude.has(i.id) && (!day || !i.since || i.since <= day));
   const out: string[] = [];
   const copy = [...pool];
   while (out.length < n && copy.length) out.push(copy.splice(Math.floor(rnd() * copy.length), 1)[0].id);
@@ -391,7 +405,7 @@ export function registerV3(app: Express): void {
   loadBank();
   const limitWrites = rateLimit({ windowMs: 60_000, max: 90, name: "v3-writes" });
 
-  registerLive(app, () => BANK as any, WEB_DIR);
+  registerLive(app, () => MATCH_BANK as any, WEB_DIR);
   shutdownHooks.push(flushLive);
   app.get("/api/v3/health", (_req, res) => { try { reminderTick(); } catch {} send(res, 200, { ok: true, bank: BANK.length, storage: !!baPool() }); }); // v3.10.3: the keep-alive ping also runs the 7 PM reminder
   setReminderDeps({

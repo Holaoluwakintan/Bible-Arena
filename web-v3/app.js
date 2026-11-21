@@ -1,9 +1,9 @@
-import { rankOf, RANKS } from "./hall-of-fame.mjs?v=3.13.6";
-import { lagosDay, msUntilLagosMidnight, verseForDay } from "./daily-verse.mjs?v=3.13.6";
+import { rankOf, RANKS } from "./hall-of-fame.mjs?v=3.13.7";
+import { lagosDay, msUntilLagosMidnight, verseForDay } from "./daily-verse.mjs?v=3.13.7";
 /* Chever v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.13.6";
+window.BA_V = "3.13.7";
 
 // Flat icon set (Chever look): every emoji on a game screen is drawn with these inline SVGs in the palette
 // (gold #FFC300, red #D62828, navy #0B1F4B, white). Cross = duel, church, reading, loading. Crown = ranks, wins, perfect round, mastery.
@@ -292,7 +292,10 @@ function guestNoteHTML() {
 }
 async function loadBank() {
   if (BANK) return BANK;
-  const r = await fetch("/v3/bank.json?v=" + (window.BA_V || "1"));
+  // Keep the expanded solo bank on a different URL so older cached clients never see its cards.
+  // The original bank stays usable if a connection drops mid-upgrade or the server is rolled back.
+  let r = await fetch("/v3/bank-solo-3.13.7.json?v=" + (window.BA_V || "3.13.7")).catch(() => null);
+  if (!r || !r.ok || !(r.headers.get("content-type") || "").includes("json")) r = await fetch("/v3/bank.json?v=" + (window.BA_V || "3.13.7"));
   if (!r.ok) throw Error("question bank unavailable");
   const bank = await r.json();
   if (!Array.isArray(bank?.items) || !bank.items.length) throw Error("question bank invalid");
@@ -508,7 +511,7 @@ function mountVerse() {
   const update = async () => {
     if (inflight || !el.isConnected) return;
     clearTimeout(timer); inflight = true;
-    const query = "?v=" + (window.BA_V || "3.13.6");
+    const query = "?v=" + (window.BA_V || "3.13.7");
     try {
       if (!verseCorpus) {
         const request = new AbortController();
@@ -880,15 +883,15 @@ function points(it, tier, c, ms, clues, combo) {
 }
 function rng(seed) { let h = 2166136261; for (let i = 0; i < seed.length; i++) { h ^= seed.charCodeAt(i); h = Math.imul(h, 16777619); } return () => { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; return ((h >>> 0) % 1e6) / 1e6; }; }
 function shuffled(arr, seed) { const r = rng(seed), a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-function pool(mode, tier) {
-  const p = BANK.items.filter((i) => i.m === mode && i.tiers.indexOf(tier) >= 0);
+function pool(mode, tier, solo = false) {
+  const p = BANK.items.filter((i) => i.m === mode && i.tiers.indexOf(tier) >= 0 && (solo || !i.soloOnly));
   // A thin tier borrows from the tier below it.
   if (p.length < 24 && tier !== "b") return p.concat(pool(mode, tier === "t" ? "s" : "b").filter((i) => p.indexOf(i) < 0));
   return p;
 }
-function drawSet(mode, tier, n) {
+function drawSet(mode, tier, n, solo = false) {
   const seen = S.seen[tier] || [];
-  let p = pool(mode, tier);
+  let p = pool(mode, tier, solo);
   let fresh = p.filter((i) => seen.indexOf(i.id) < 0);
   if (fresh.length < n) { S.seen[tier] = seen.filter((id) => !p.some((i) => i.id === id)); fresh = p; }
   return shuffled(fresh, Math.random() + "").slice(0, n).map((i) => i.id);
@@ -898,11 +901,11 @@ function markSeen(ids, tier) { const s = S.seen[tier] || []; ids.forEach((id) =>
 function bookOf(ref) { const m = String(ref || "").match(/^\s*((?:[1-3]\s)?[A-Za-z][A-Za-z ]*?)\s*\d/); if (!m) return ""; const b = m[1].replace(/\s+/g, " ").trim(); return b === "Psalm" ? "Psalms" : b; }
 /** Up to n random items from these books, preferring the player's level; tops up from other levels when a book is thin. */
 function bookSet(books, n, tier, seed) {
-  const want = new Set(books); const all = BANK.items.filter((i) => want.has(bookOf(i.r)));
+  const want = new Set(books); const all = BANK.items.filter((i) => !i.soloOnly && want.has(bookOf(i.r)));
   const pri = all.filter((i) => i.tiers.indexOf(tier) >= 0), rest = all.filter((i) => i.tiers.indexOf(tier) < 0);
   return shuffled(pri, seed || Math.random() + "").concat(shuffled(rest, (seed || Math.random()) + "x")).slice(0, n).map((i) => i.id);
 }
-function mixedSet(tier) { return shuffled([].concat(drawSet("arena", tier, 4), drawSet("gap", tier, 2), drawSet("myth", tier, 2), drawSet("who", tier, 2)), Math.random() + ""); }
+function mixedSet(tier) { return shuffled([].concat(drawSet("arena", tier, 4, true), drawSet("gap", tier, 2), drawSet("myth", tier, 2), drawSet("who", tier, 2)), Math.random() + ""); }
 
 async function startMode(mode, tier) {
   const seq = ROUND_SEQ;
@@ -954,7 +957,7 @@ async function startMode(mode, tier) {
     return runRound({ ids, tier, mode: "book", title: "Practise " + b });
   }
   const n = mode === "who" ? 6 : mode === "gap" ? 8 : mode === "myth" ? 12 : 10;
-  const ids = mode === "mixed" ? mixedSet(tier) : drawSet(mode, tier, n);
+  const ids = mode === "mixed" ? mixedSet(tier) : drawSet(mode, tier, n, mode === "arena");
   runRound({ ids, tier, mode, title: MODES[mode] ? MODES[mode].name : "Arena" });
 }
 
@@ -1282,7 +1285,7 @@ const ST_POOL = {};
 function stPool(s) {
   if (ST_POOL[s.k]) return ST_POOL[s.k];
   const want = new Set(s.books);
-  const items = BANK.items.filter((i) => want.has(bookOf(i.r)) && i.k !== "order").map((i) => ({ i, key: refKey(i.r) }));
+  const items = BANK.items.filter((i) => !i.soloOnly && want.has(bookOf(i.r)) && i.k !== "order").map((i) => ({ i, key: refKey(i.r) }));
   items.sort((a, b) => a.key[0] - b.key[0] || a.key[1] - b.key[1] || a.key[2] - b.key[2] || (a.i.id < b.i.id ? -1 : 1));
   return (ST_POOL[s.k] = items.map((x) => x.i));
 }
@@ -1310,7 +1313,7 @@ function stQuestions(L, m) {
   for (let d = 1; d <= 3; d++) { const a = ST_STAGES[si - d], b = ST_STAGES[si + d]; if (a) near.push(...stPool(a)); if (b && d === 1 && b.sec === L.s.sec) near.push(...stPool(b)); }
   take(prefTier(shuffled(near, seed + "n"), tier), N - pick.length);
   if (pick.length < N) take(prefTier(shuffled(pool.slice(start + per), seed + "a"), tier), N - pick.length);
-  if (pick.length < N) take(prefTier(shuffled(BANK.items.filter((i) => i.k !== "order"), seed + "z"), tier), N - pick.length);
+  if (pick.length < N) take(prefTier(shuffled(BANK.items.filter((i) => !i.soloOnly && i.k !== "order"), seed + "z"), tier), N - pick.length);
   return shuffled(pick, seed + "o");
 }
 window.__baStory = { levels: () => stLevels().map((L) => L.id), sets: () => stLevels().map((L) => ({ id: L.id, ids: stQuestions(L, false), tier: stTier(L), scale: stScale(L), label: stLabel(L) })) }; // for tests
@@ -1482,7 +1485,7 @@ function enBest() { return Math.max(Number(S.enBest) || 0, Number(ME.player && M
 function enOpen() { return (Number(stBest()["rev.b"]) || 0) >= 1; }
 function enQuestions(n) {
   const N = enBoss(n) ? ST_BOSS_N : ST_N, tier = enTier(n), seed = "endless:" + n;
-  const all = shuffled(BANK.items.filter((i) => i.k !== "order"), seed);
+  const all = shuffled(BANK.items.filter((i) => !i.soloOnly && i.k !== "order"), seed);
   const seen = new Set(Array.isArray(S.enSeen) ? S.enSeen : []);
   const pick = [], has = new Set();
   const take = (arr, k) => { for (const it of arr) { if (k <= 0 || pick.length >= N) break; if (it && !has.has(it.id)) { has.add(it.id); pick.push(it.id); k--; } } };
@@ -2721,8 +2724,8 @@ async function profile() {
 function featureScripts() {
   const f = window.BA_FLAGS || {};
   const want = [];
-  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.6");
-  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.13.6");
+  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.7");
+  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.13.7");
   if (!want.length) return null;
   return Promise.all(want.map((src) => new Promise((done) => {
     const s = document.createElement("script"); s.src = src; s.onload = done; s.onerror = done; document.head.appendChild(s);
