@@ -1,9 +1,9 @@
-import { rankOf, RANKS } from "./hall-of-fame.mjs?v=3.13.7";
-import { lagosDay, msUntilLagosMidnight, verseForDay } from "./daily-verse.mjs?v=3.13.7";
+import { rankOf, RANKS } from "./hall-of-fame.mjs?v=3.13.8";
+import { lagosDay, msUntilLagosMidnight, verseForDay } from "./daily-verse.mjs?v=3.13.8";
 /* Chever v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.13.7";
+window.BA_V = "3.13.8";
 
 // Flat icon set (Chever look): every emoji on a game screen is drawn with these inline SVGs in the palette
 // (gold #FFC300, red #D62828, navy #0B1F4B, white). Cross = duel, church, reading, loading. Crown = ranks, wins, perfect round, mastery.
@@ -294,8 +294,8 @@ async function loadBank() {
   if (BANK) return BANK;
   // Keep the expanded solo bank on a different URL so older cached clients never see its cards.
   // The original bank stays usable if a connection drops mid-upgrade or the server is rolled back.
-  let r = await fetch("/v3/bank-solo-3.13.7.json?v=" + (window.BA_V || "3.13.7")).catch(() => null);
-  if (!r || !r.ok || !(r.headers.get("content-type") || "").includes("json")) r = await fetch("/v3/bank.json?v=" + (window.BA_V || "3.13.7"));
+  let r = await fetch("/v3/bank-solo-3.13.7.json?v=3.13.7").catch(() => null);
+  if (!r || !r.ok || !(r.headers.get("content-type") || "").includes("json")) r = await fetch("/v3/bank.json?v=" + (window.BA_V || "3.13.8"));
   if (!r.ok) throw Error("question bank unavailable");
   const bank = await r.json();
   if (!Array.isArray(bank?.items) || !bank.items.length) throw Error("question bank invalid");
@@ -314,7 +314,11 @@ async function savePlayer(extra) {
 let cleanup = [];
 function onLeave(fn) { cleanup.push(fn); }
 function go(h) { if (location.hash === h) route(); else location.hash = h; }
-window.addEventListener("hashchange", route);
+window.addEventListener("hashchange", () => {
+  if (regularReady) return route();
+  if (welcomeStage && welcomeHomeEntry()) return;
+  startRegularApp();
+});
 function parseHash() {
   const h = location.hash.replace(/^#\/?/, "");
   const [p, q] = h.split("?");
@@ -422,6 +426,7 @@ function onboarding(after) {
       <h1 class="title-gold" style="font-size:34px;letter-spacing:.14em">CHEVER</h1>
       <p class="muted" style="margin:6px 0 0">Know the Word. Challenge the World.</p>
     </div>
+    ${welcomeStage === "setup" ? '<p class="muted center small" data-welcome-complete>Practice complete. Set up your player to enter Chever.</p>' : ""}
     <div class="card gold col">
       <div class="field"><label for="nm">What should we call you?</label><input id="nm" maxlength="40" placeholder="e.g. Michael" value="${esc(S.name)}"></div>
     </div>
@@ -511,7 +516,7 @@ function mountVerse() {
   const update = async () => {
     if (inflight || !el.isConnected) return;
     clearTimeout(timer); inflight = true;
-    const query = "?v=" + (window.BA_V || "3.13.7");
+    const query = "?v=" + (window.BA_V || "3.13.8");
     try {
       if (!verseCorpus) {
         const request = new AbortController();
@@ -2726,8 +2731,8 @@ async function profile() {
 function featureScripts() {
   const f = window.BA_FLAGS || {};
   const want = [];
-  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.7");
-  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.13.7");
+  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.8");
+  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.13.8");
   if (!want.length) return null;
   return Promise.all(want.map((src) => new Promise((done) => {
     const s = document.createElement("script"); s.src = src; s.onload = done; s.onerror = done; document.head.appendChild(s);
@@ -2735,9 +2740,47 @@ function featureScripts() {
 }
 
 // ---------- boot ----------
-(async function boot() {
+let regularStartup = null, regularReady = false, welcomeStage = "", welcomeHost = null;
+function welcomeHomeEntry() {
+  return (location.pathname === "/" || location.pathname === "/index.html") &&
+    ["", "#", "#/"].includes(location.hash) &&
+    !Array.from(new URLSearchParams(location.search).keys()).some(k => /^(code|join|invite|signedin|state|error)$/i.test(k));
+}
+function firstVisitWelcome() {
+  if (S.onboarded || !welcomeHomeEntry()) return false;
+  try { return !localStorage.getItem(LS) && !legacyXp(); } catch { return false; }
+}
+function clearWelcome() {
+  if (welcomeHost) { welcomeHost.remove(); welcomeHost = null; }
+  app.style.removeProperty("padding-bottom");
+  welcomeStage = "";
+}
+function startRegularApp() {
+  if (regularStartup) return regularStartup;
+  clearWelcome();
+  regularStartup = bootRegularApp();
+  return regularStartup;
+}
+function showSetupAfterWelcome() {
+  if (welcomeStage !== "practice" || regularStartup || !welcomeHomeEntry()) return;
+  clearWelcome();
+  welcomeStage = "setup";
+  onboarding(() => startRegularApp());
+  document.getElementById("nm")?.focus({preventScroll:true});
+}
+function loadRegularSocial() {
+  if (window.BAS) return null;
+  return new Promise((done) => {
+    const s = document.createElement("script");
+    s.src = "/v3/social.js?v=3.13.8"; s.onload = done; s.onerror = done;
+    document.head.appendChild(s);
+  });
+}
+async function bootRegularApp() {
+  const socialLoading = loadRegularSocial();
   const loading = featureScripts();
   if (loading) await loading;
+  if (socialLoading) await socialLoading;
   if (window.BAS) { BAS.toast = toast; BAS.onJoin = (inv) => go("#/qm?join=" + encodeURIComponent(inv.id)); BAS.onJoinKo = (code) => joinKo(code); BAS.on(() => $$("[data-online]").forEach((e) => (e.textContent = onlineText()))); }
   document.addEventListener("click", () => { const a = audio(); if (a && a.state === "suspended") a.resume(); }, { once: true });
   // v3.12: back from Google sign-in (also from the welcome screen after a reinstall): skip the welcome screen, the account has the profile
@@ -2751,6 +2794,26 @@ function featureScripts() {
     const sess = ensureSession().then(() => { if (late && (!location.hash || location.hash === "#/" || location.hash === "#")) route(); });
     await Promise.race([sess, new Promise((r) => setTimeout(() => { late = true; r(); }, 1500))]);
   }
+  regularReady = true;
   route();
+}
+(async function boot() {
+  if (firstVisitWelcome()) {
+    try {
+      const { mountWelcome } = await import("/v3/welcome-3.13.8.js");
+      if (!regularStartup && firstVisitWelcome()) {
+        const host = document.createElement("div");
+        host.id = "chever-welcome";
+        mountWelcome(host, { setup: showSetupAfterWelcome, restore: () => location.assign("/api/oauth/google/start") });
+        welcomeStage = "practice";
+        welcomeHost = host;
+        app.style.paddingBottom = "0";
+        app.replaceChildren(host);
+        try { window.BALoader?.finish(); } catch (e) {}
+        return;
+      }
+    } catch (e) { /* A partial cache update must not block the original onboarding. */ }
+  }
+  return startRegularApp();
 })();
 })();
