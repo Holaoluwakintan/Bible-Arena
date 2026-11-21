@@ -1651,6 +1651,7 @@ async function results(cfg, answers, local) {
   if (cfg.duel && r && r.duel) return duelResult(r.duel, r, cfg);
   const score = r ? r.score : local.score, correct = r ? r.correct : local.correct, total = r ? r.total : local.total;
   const perfect = total > 0 && correct === total;
+  const hasSoloOnly = answers.some((a) => BY[a.id]?.soloOnly === true);
   if (cfg.story) { stAfterRound(cfg, r, answers, correct, total); if (cfg.story.endless) enAfterRound(cfg, answers); }
   render(`
   <div class="col" style="gap:14px">
@@ -1667,7 +1668,7 @@ async function results(cfg, answers, local) {
     ${cfg.bonusNote ? `<div class="card small">❤️ ${esc(cfg.bonusNote)}</div>` : ""}
     ${err && !r ? `<div class="card small">⚠️ Couldn't save this round (no connection). Your score still counts here.</div>` : ""}
     ${r && r.newAchievements && r.newAchievements.length ? r.newAchievements.map((a) => ACH[a] ? `<div class="badge"><div class="bi">${ACH[a][0]}</div><div><b>Achievement: ${ACH[a][1]}</b><div class="small muted">${ACH[a][2]}</div></div></div>` : "").join("") : ""}
-    ${cfg.mode !== "daily" && cfg.mode !== "sudden" ? `<button class="card gold row" id="dset" style="text-align:left;gap:12px"><div style="font-size:28px">⚔️</div><div class="grow"><b>Challenge someone with this exact set</b><div class="small muted">They play the same ${total} questions and try to beat ${fmt(score)}</div></div><div class="gold">›</div></button>` : ""}
+    ${cfg.mode !== "daily" && cfg.mode !== "sudden" ? (hasSoloOnly ? `<a class="card gold row" id="dnew" href="#/duel/new" style="text-align:left;gap:12px"><span>${homeIco("users")}</span><div class="grow"><b>Challenge someone</b><div class="small muted">Start a fresh duel from the shared question bank</div></div><div class="gold">›</div></a>` : `<button class="card gold row" id="dset" style="text-align:left;gap:12px"><div style="font-size:28px">⚔️</div><div class="grow"><b>Challenge someone with this exact set</b><div class="small muted">They play the same ${total} questions and try to beat ${fmt(score)}</div></div><div class="gold">›</div></button>`) : ""}
     ${cfg.mode === "daily" ? `<div class="card gold"><b style="font-size:17px">What now?</b>${dailyGuide(true)}<div class="col" style="gap:8px"><button class="btn primary block" data-more>↓ Play more games</button><a class="btn ghost block" href="#/play/practice">🔁 Practise today's set (not scored)</a></div><div class="small muted" style="margin:14px 0 8px">Or jump straight into a game:</div>${modeChips()}</div>` : ""}
     <div class="row"><button class="btn ${cfg.mode === "daily" ? "ghost" : "primary"} grow" id="again">${cfg.mode === "daily" ? "🌍 See the Global Scoreboard" : "Play again"}</button><button class="btn ghost" id="share" aria-label="Share">📤</button></div>
     <div class="card"><b>Review</b>${answers.map((a) => { const it = BY[a.id]; return `<div class="review"><div>${a.correct ? "✅" : a.partial > 0 ? "🟨" : "❌"}</div><div class="grow"><div>${esc(shortQ(it))}</div><div class="small gold">${esc(it.r || "")}</div></div></div>`; }).join("")}</div>
@@ -2244,6 +2245,7 @@ async function newDuel() {
   draw();
 }
 async function createDuelFromSet(cfg, answers) {
+  if (answers.some((a) => BY[a.id]?.soloOnly === true)) return go("#/duel/new");
   try {
     toast("Creating your challenge…");
     const d = await api("/api/v3/duels", { body: { mode: ["gap", "who", "myth", "arena", "mixed"].includes(cfg.mode) ? cfg.mode : "mixed", tier: cfg.tier, name: S.name, ids: answers.map((a) => a.id), answers: answers.map((a) => ({ id: a.id, choice: a.choice, ms: a.ms, clues: a.clues })) } });

@@ -461,6 +461,8 @@ export function registerV3(app: Express): void {
       const r = await baPool()!.query(`select 1 from ${SCH}.rounds where open_id=$1 and mode='daily' and day=$2 limit 1`, [me.openId, day]);
       if (r.rows.length) return send(res, 409, { error: "daily_done" });
     }
+    if (answers.some((a: any) => BY_ID.get(String(a?.id))?.soloOnly === true) &&
+        mode !== "arena" && mode !== "mixed") return send(res, 400, { error: "questions_not_for_mode" });
     const scored = scoreRound(daily ? "s" : tier, answers);
     if (!scored.count) return send(res, 400, { error: "no_answers" });
     const story = mode === "story" && /^[a-z0-9]{2,8}$/.test(String(b.level || "")) ? String(b.level) : undefined;
@@ -486,7 +488,9 @@ export function registerV3(app: Express): void {
     const kind = ["mixed", "arena", "gap", "who", "myth"].includes(b.mode) ? b.mode : "mixed";
     const p = await getPlayer(me.openId);
     const name = cleanPlayerName(b.name, 40) || p?.name || me.name || "A player";
-    let ids: string[] = Array.isArray(b.ids) ? b.ids.map(String).filter((id: string) => BY_ID.has(id)).slice(0, 12) : [];
+    const requestedIds: string[] = Array.isArray(b.ids) ? b.ids.map(String) : [];
+    if (requestedIds.some((id) => BY_ID.get(id)?.soloOnly === true)) return send(res, 400, { error: "solo_questions_not_shareable" });
+    let ids: string[] = requestedIds.filter((id) => BY_ID.has(id)).slice(0, 12);
     if (ids.length < 4) ids = buildSet(kind, tier, code() + Date.now());
     const parent = b.parent ? clean(b.parent, 12) : null;
     let c = code();
