@@ -1,9 +1,9 @@
-import { rankOf, RANKS } from "./hall-of-fame.mjs?v=3.13.8";
-import { lagosDay, msUntilLagosMidnight, verseForDay } from "./daily-verse.mjs?v=3.13.8";
+import { rankOf, RANKS } from "./hall-of-fame.mjs?v=3.13.9";
+import { lagosDay, msUntilLagosMidnight, verseForDay } from "./daily-verse.mjs?v=3.13.9";
 /* Chever v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.13.8";
+window.BA_V = "3.13.9";
 
 // Flat icon set (Chever look): every emoji on a game screen is drawn with these inline SVGs in the palette
 // (gold #FFC300, red #D62828, navy #0B1F4B, white). Cross = duel, church, reading, loading. Crown = ranks, wins, perfect round, mastery.
@@ -295,7 +295,7 @@ async function loadBank() {
   // Keep the expanded solo bank on a different URL so older cached clients never see its cards.
   // The original bank stays usable if a connection drops mid-upgrade or the server is rolled back.
   let r = await fetch("/v3/bank-solo-3.13.7.json?v=3.13.7").catch(() => null);
-  if (!r || !r.ok || !(r.headers.get("content-type") || "").includes("json")) r = await fetch("/v3/bank.json?v=" + (window.BA_V || "3.13.8"));
+  if (!r || !r.ok || !(r.headers.get("content-type") || "").includes("json")) r = await fetch("/v3/bank.json?v=" + (window.BA_V || "3.13.9"));
   if (!r.ok) throw Error("question bank unavailable");
   const bank = await r.json();
   if (!Array.isArray(bank?.items) || !bank.items.length) throw Error("question bank invalid");
@@ -363,10 +363,12 @@ async function route() {
   if (pathDuel && !parts.length) { history.replaceState(null, "", "/#/d/" + pathDuel[1].toUpperCase()); return route(); }
   const pathChurch = location.pathname.match(/^\/c\/([A-Za-z0-9]{4,8})/);
   if (pathChurch && !parts.length) { history.replaceState(null, "", "/#/c/" + pathChurch[1].toUpperCase()); return route(); }
+  if (!S.onboarded && parts[0] === "daily") return dailyShareSetup(q);
   if (!S.onboarded && parts[0] !== "d" && parts[0] !== "c" && parts[0] !== "verse") return ["qm", "live", "ko", "online", "bot", "public"].includes(parts[0]) ? onboarding(() => route()) : onboarding();
   const [a, b] = parts;
   if (window.BAS) { BAS.setBusy(false); BAS.watchLive(!a || a === "live" || a === "online" || a === "public"); }
   if (!a) return home();
+  if (a === "daily") return dailyShareLanding(q);
   if (a === "live") return liveNow();
   if (a === "public") return publicScreen();
   if (a === "qm") return quickMatch(q);
@@ -516,7 +518,7 @@ function mountVerse() {
   const update = async () => {
     if (inflight || !el.isConnected) return;
     clearTimeout(timer); inflight = true;
-    const query = "?v=" + (window.BA_V || "3.13.8");
+    const query = "?v=" + (window.BA_V || "3.13.9");
     try {
       if (!verseCorpus) {
         const request = new AbortController();
@@ -796,6 +798,58 @@ function untilMidnight() {
 // v3.10: Daily Challenge length. The player picks 10, 15 or 20 (default 15); everyone with the same length gets the same set.
 const DAILY_LENS = [10, 15, 20];
 function dailyLen() { const n = Number(S.dailyLen); return DAILY_LENS.indexOf(n) >= 0 ? n : 15; }
+// Daily share links are a landing step, never an automatic start of a ranked round.
+const DAILY_SHARE_RETURN = "ba3:daily-return";
+function dailyLinkSize(q) { const n = Number(q.get("n")); return DAILY_LENS.includes(n) ? n : dailyLen(); }
+function dailyShareSetup(q) {
+  const n = dailyLinkSize(q);
+  onboarding(() => route());
+  $("#gback")?.addEventListener("click", () => {
+    try { sessionStorage.setItem(DAILY_SHARE_RETURN, JSON.stringify({ n, until: Date.now() + 15 * 60e3 })); } catch (e) {}
+  }, { once: true });
+}
+function dailyRestoreSharedLink() {
+  try {
+    const intent = safeJSON(sessionStorage.getItem(DAILY_SHARE_RETURN));
+    sessionStorage.removeItem(DAILY_SHARE_RETURN);
+    if (intent && DAILY_LENS.includes(intent.n) && Number.isFinite(intent.until) && intent.until > Date.now()) {
+      history.replaceState(history.state, "", `#/daily?n=${intent.n}`);
+    }
+  } catch (e) {}
+}
+async function dailyShareLanding(q) {
+  const size = dailyLinkSize(q), seq = ROUND_SEQ;
+  render(`<div class="boot"><div class="boot-mark">☀️</div><div class="boot-sub">Opening the Daily Challenge…</div></div>`);
+  const d = await api("/api/v3/daily").catch(() => null);
+  if (seq !== ROUND_SEQ) return;
+  render(`<div class="col" style="gap:14px"><a class="chip" href="#/">‹ Home</a><section class="card gold col" style="gap:14px">
+    <div class="tiny gold">DAILY CHALLENGE</div><h1 style="margin:0">Today’s ${size} questions</h1>
+    ${!d ? `<p class="small muted">Couldn’t load today’s challenge. Check your connection and try again.</p><button class="btn primary block" id="daily-link-retry">Retry</button>` : d.played
+      ? `<p class="small muted">You’ve already used today’s official try.</p><a class="btn primary block" href="#/ranks?tab=daily">See the Daily scoreboard</a><a class="btn ghost block" href="#/play/practice">Practise today’s set (unranked)</a>`
+      : `<p class="small muted">Same questions for everyone who picks ${size}. You have one official try today.</p><a class="btn primary block" href="#/play/daily?n=${size}">Play today’s ${size}</a>`}
+    </section></div>${tabbar("home")}`);
+  const retry = $("#daily-link-retry"); if (retry) retry.onclick = () => route();
+}
+function dailyShareText(summary, day) {
+  const rs = summary && summary.results, n = summary && summary.total;
+  if (!DAILY_LENS.includes(n) || !Array.isArray(rs) || rs.length !== n || !rs.every(a => a && typeof a.correct === "boolean") ||
+      typeof day !== "string" || !/^\d{4}-\d\d-\d\d$/.test(day)) return "";
+  const date = new Date(day + "T00:00:00Z"); if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== day) return "";
+  const correct = rs.filter(a => a.correct).length;
+  if (Number(summary.correct) !== correct) return "";
+  const streak = Number(summary.player?.streak);
+  const dateLabel = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(date);
+  const grid = [];
+  for (let i = 0; i < n; i += 5) grid.push(rs.slice(i, i + 5).map(a => a.correct ? "🟩" : a.partial > 0 ? "🟨" : "⬜").join(""));
+  const stats = `${correct}/${n} correct${Number.isSafeInteger(streak) && streak > 0 ? ` · 🔥 ${streak}-day streak` : ""}`;
+  const link = new URL(`/#/daily?n=${n}`, location.origin).href;
+  return [`Chever Daily · ${dateLabel}`, stats, ...grid, `Can you beat my ${correct}? Play today’s ${n}:`, link].join("\n");
+}
+async function shareDailyResult(text) {
+  if (!text) return;
+  if (navigator.share) { try { await navigator.share({ text }); return; } catch (e) { if (e?.name === "AbortError") return; } }
+  location.href = waLink(text);
+}
 function lenPicker() {
   return `<div class="lenpick" id="lenpick"><span class="small muted">How many?</span>${DAILY_LENS.map((n) => `<button class="chip ${dailyLen() === n ? "on" : ""}" data-len="${n}">${n}</button>`).join("")}<span class="small dim">${dailyLen() === 10 ? "about 4 min" : dailyLen() === 15 ? "about 6 min" : "about 8 min"}</span></div>`;
 }
@@ -930,7 +984,7 @@ async function startMode(mode, tier) {
     if (d.played) { toast("You've played today's challenge. See the board!"); return go("#/ranks?tab=daily"); }
     const qn = Number(parseHash().q.get("n")); if (DAILY_LENS.indexOf(qn) >= 0) { S.dailyLen = qn; save(); }
     const n = dailyLen(), ids = (d.sets && d.sets[n]) || d.ids;
-    return runRound({ ids, tier: "s", mode: "daily", title: `Daily Challenge · ${ids.length}` });
+    return runRound({ ids, tier: "s", mode: "daily", dailyDay: d.day, title: `Daily Challenge · ${ids.length}` });
   }
   if (mode === "practice") {
     // Practice replays today's Daily Challenge set on this phone only. Nothing is sent to the server,
@@ -964,6 +1018,56 @@ async function startMode(mode, tier) {
   const n = mode === "who" ? 6 : mode === "gap" ? 8 : mode === "myth" ? 12 : 10;
   const ids = mode === "mixed" ? mixedSet(tier) : drawSet(mode, tier, n, mode === "arena");
   runRound({ ids, tier, mode, title: MODES[mode] ? MODES[mode].name : "Arena" });
+}
+
+// Expand written references after feedback only; nothing is preloaded from the chapter reader.
+const KJV_BOOKS = new Map([
+  ["Genesis",50], ["Exodus",40], ["Leviticus",27], ["Numbers",36], ["Deuteronomy",34],
+  ["Joshua",24], ["Judges",21], ["Ruth",4], ["1 Samuel",31], ["2 Samuel",24],
+  ["1 Kings",22], ["2 Kings",25], ["1 Chronicles",29], ["2 Chronicles",36], ["Ezra",10],
+  ["Nehemiah",13], ["Esther",10], ["Job",42], ["Psalm",150], ["Proverbs",31],
+  ["Ecclesiastes",12], ["Song of Solomon",8], ["Isaiah",66], ["Jeremiah",52], ["Lamentations",5],
+  ["Ezekiel",48], ["Daniel",12], ["Hosea",14], ["Joel",3], ["Amos",9],
+  ["Obadiah",1], ["Jonah",4], ["Micah",7], ["Nahum",3], ["Habakkuk",3],
+  ["Zephaniah",3], ["Haggai",2], ["Zechariah",14], ["Malachi",4], ["Matthew",28],
+  ["Mark",16], ["Luke",24], ["John",21], ["Acts",28], ["Romans",16],
+  ["1 Corinthians",16], ["2 Corinthians",13], ["Galatians",6], ["Ephesians",6], ["Philippians",4],
+  ["Colossians",4], ["1 Thessalonians",5], ["2 Thessalonians",3], ["1 Timothy",6], ["2 Timothy",4],
+  ["Titus",3], ["Philemon",1], ["Hebrews",13], ["James",5], ["1 Peter",5],
+  ["2 Peter",3], ["1 John",5], ["2 John",1], ["3 John",1], ["Jude",1],
+  ["Revelation",22]
+].map(([book, chapters]) => [book.toLowerCase(), {book, chapters}]));
+KJV_BOOKS.set("psalms", KJV_BOOKS.get("psalm"));
+function kjvChapterLinks(ref) {
+  if (typeof ref !== "string" || ref.length > 240) return [];
+  const parts = ref.trim().replace(/[\u2010-\u2015]/g, "-").split(";");
+  let current;
+  const links = new Map();
+  for (const part of parts) {
+    const m = /^(?:(?<book>(?:[1-3]\s+)?[A-Za-z][A-Za-z ]*?)\s+)?(?<chapter>[1-9]\d{0,2})(?<tail>.*)$/.exec(part.trim());
+    if (!m) { current = undefined; continue; }
+    if (m.groups.book) current = KJV_BOOKS.get(m.groups.book.toLowerCase().replace(/\s+/g, " "));
+    if (!current) continue;
+    const chapter = Number(m.groups.chapter), tail = m.groups.tail.trim();
+    const chapterRange = /^(?::[1-9]\d{0,2}\s*)?-\s*([1-9]\d{0,2})(?::[1-9]\d{0,2})?$/.exec(tail);
+    // A dash between verse numbers stays in the same chapter. It spans chapters only if we have two chapter numbers.
+    const spans = chapterRange && (!tail.startsWith(":") || (tail.match(/:/g) || []).length === 2);
+    if (tail && !spans && !/^:[1-9]\d{0,2}(?:\s*-\s*[1-9]\d{0,2})?(?:\s*,\s*[1-9]\d{0,2}(?:\s*-\s*[1-9]\d{0,2})?)*$/.test(tail)) continue;
+    const end = spans ? Number(chapterRange[1]) : chapter;
+    if (end < chapter || end > current.chapters) continue;
+    const label = `${current.book} ${chapter}${end > chapter ? "–" + end : ""}`;
+    // Asking for the whole one-chapter book avoids a single number being read as a verse.
+    const query = current.chapters === 1 ? current.book : label.replace("–", "-");
+    const url = "https://www.biblegateway.com/passage/?" + new URLSearchParams({search: query, version: "KJV"});
+    links.set(label, { label, url, range: end > chapter });
+  }
+  return [...links.values()];
+}
+function kjvChapterLinksHTML(ref) {
+  const links = kjvChapterLinks(ref);
+  if (!links.length) return "";
+  return `<div class="row" role="group" aria-label="Read in the King James Version" style="flex-wrap:wrap;gap:6px;margin-top:8px">${links.map(({label, url, range}) =>
+    `<a class="chip" data-kjv-chapter href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="Read ${esc(label)} in KJV (opens a new tab)" style="display:inline-flex;min-height:44px;align-items:center">${links.length === 1 ? (range ? "Read the chapters ↗" : "Read the chapter ↗") : "Read " + esc(label) + " ↗"}</a>`).join("")}</div>`;
 }
 
 function runRound(cfg) {
@@ -1186,7 +1290,7 @@ function runRound(cfg) {
       ${ans ? `<div style="margin-top:6px">${ans}</div>` : ""}
       ${it.k === "gap" && !c.correct ? `<div class="vod" style="margin-top:8px;font-size:15.5px">“${esc(it.text)}”</div>` : ""}
       ${it.x ? `<div class="small muted" style="margin-top:6px">${esc(it.x)}</div>` : ""}
-      ${it.r ? `<div class="ref">📖 ${esc(it.r)} <span class="dim small" style="font-weight:600">KJV</span></div>` : ""}
+      ${it.r ? `<div class="ref">📖 ${esc(it.r)} <span class="dim small" style="font-weight:600">KJV</span></div>${kjvChapterLinksHTML(it.r)}` : ""}
       </div>${offerBonus ? `<button class="btn primary block adbtn" id="adlife" style="margin-top:12px">▶ Watch a short ad for a bonus life</button><div class="small muted center" style="margin-top:6px">Just for fun: your score stays at ${fmt(score)}.</div>` : ""}<button class="btn ${offerBonus ? "ghost" : "primary"} block" id="nx" style="margin-top:12px">${last ? "See results" : "Next ›"}</button>`;
     $("#nx").onclick = () => { idx++; sfx.tap(); next(); };
     if (offerBonus) $("#adlife").onclick = async () => {
@@ -1296,15 +1400,152 @@ function stPool(s) {
 }
 const prefTier = (arr, tier) => arr.filter((i) => i.tiers.indexOf(tier) >= 0).concat(arr.filter((i) => i.tiers.indexOf(tier) < 0));
 function stFocus(L) { const pool = stPool(L.s); const per = Math.max(1, Math.ceil(pool.length / L.s.n)); const start = ((L.i - 1) * per) % Math.max(1, pool.length); return { pool, per, start, focus: pool.slice(start, start + per) }; }
-function stLabel(L) {
+// Genesis 1–3 only: separate, vetted shared-bank pools keep repeats and recent misses out of the opening stretch.
+// Authored tiers set the content mix, not the round tier: existing timing, points, stars and energy rules stay put.
+const ST_GENESIS_START = [
+  {
+    "name": "Warm-up mix",
+    "draw": [
+      6,
+      4,
+      0
+    ],
+    "b": [
+      "arena-books-040",
+      "arena-events-001",
+      "arena-places-040",
+      "arena-people-008",
+      "arena-people-001",
+      "arena-events-002",
+      "bq-042",
+      "bq-043",
+      "arena-people-018",
+      "arena-events-013",
+      "arena-people-026",
+      "arena-places-017"
+    ],
+    "s": [
+      "myth3-012",
+      "myth3-021",
+      "tu02-tf-001",
+      "myth3-051",
+      "myth3-071",
+      "tu01-ws-047",
+      "tu04-tf-003",
+      "tu08-mc-012"
+    ],
+    "t": []
+  },
+  {
+    "name": "Deeper mix",
+    "draw": [
+      3,
+      5,
+      2
+    ],
+    "b": [
+      "gap-003",
+      "arena-people-038",
+      "arena-places-038",
+      "bq-019",
+      "arena-people-044",
+      "arena-events-045",
+      "bq-038",
+      "bq-001"
+    ],
+    "s": [
+      "tu01-who-037",
+      "tu05-mc-014",
+      "tu15-multiple_choice-003",
+      "tu06-mc-009",
+      "tu03-mc-002",
+      "tu01-ws-049",
+      "aq3-149",
+      "tu15-who_said_it-052",
+      "tu07-tf-010",
+      "tu08-mc-009"
+    ],
+    "t": [
+      "aq3-038",
+      "tu01-who-022",
+      "tu10-ws-005",
+      "aq3-097",
+      "tu16-128",
+      "tu08-ws-003"
+    ]
+  },
+  {
+    "name": "Challenge mix",
+    "draw": [
+      2,
+      4,
+      4
+    ],
+    "b": [
+      "bq-034",
+      "gap-004",
+      "gap-005",
+      "arena-places-013",
+      "gap-010",
+      "arena-people-027"
+    ],
+    "s": [
+      "aq3-083",
+      "tu03-ws-004",
+      "tu08-mc-001",
+      "tu06-mc-008",
+      "aq3-047",
+      "aq3-022",
+      "aq3-068",
+      "tu15-multiple_choice-005",
+      "tu03-who-001"
+    ],
+    "t": [
+      "tu15-multiple_choice-002",
+      "tu16-024",
+      "aq3-040",
+      "tu07-ws-002",
+      "tu16-045",
+      "tu16-126",
+      "tu01-ws-022",
+      "tu03-who-005",
+      "tu16-123",
+      "tu16-125",
+      "tu16-131"
+    ]
+  }
+];
+const stGenesisSlot = (L, m) => !m && !L.boss && L.s.k === "gen" ? ST_GENESIS_START[L.i - 1] || null : null;
+const stGenesisLast = new Map(); // One-round replay rotation on this tab; no new player data in storage or on the server.
+function stGenesisQuestions(L, slot, random = Math.random) {
+  const seed = `st-genesis:${L.id}:${random()}`;
+  const prior = new Set(stGenesisLast.get(L.id) || []);
+  const buckets = [slot.b, slot.s, slot.t].map((list, i) => {
+    const a = shuffled(list.filter((id) => BY[id] && !BY[id].soloOnly && bookOf(BY[id].r) === "Genesis"), `${seed}:${i}`);
+    return a.filter((id) => !prior.has(id)).concat(a.filter((id) => prior.has(id)));
+  });
+  const ids = buckets.flatMap((a, i) => a.slice(0, slot.draw[i]));
+  // If a later bank drops a curated card, top up only from this level's own pool.
+  const seen = new Set(ids);
+  for (const id of shuffled(buckets.flat().filter((id) => !seen.has(id)), `${seed}:topup`)) {
+    if (ids.length >= ST_N) break;
+    ids.push(id);
+  }
+  return shuffled(ids, `${seed}:order`);
+}
+function stLabel(L, m) {
+  const slot = stGenesisSlot(L, m);
+  if (slot) return `Genesis · ${slot.name}`;
   if (L.boss) return "Boss";
   const { focus } = stFocus(L); if (!focus.length) return L.s.title;
   const a = refKey(focus[0].r), b = refKey(focus[focus.length - 1].r), bk = BOOK_ORDER[a[0]], bk2 = BOOK_ORDER[b[0]];
   if (bk !== bk2) return `${bk} ${a[1]} – ${bk2} ${b[1]}`;
   return a[1] === b[1] ? `${bk} ${a[1]}` : `${bk} ${a[1]}–${b[1]}`;
 }
-/** The question ids for a level: same base set for everyone (seeded by level id), plus up to 2 of this player's recent misses. */
+/** Elsewhere: same base set by level id, plus up to 2 recent misses. */
 function stQuestions(L, m) {
+  const slot = stGenesisSlot(L, m);
+  if (slot) return stGenesisQuestions(L, slot);
   const tier = stTier(L, m), seed = (m ? "m" : "") + "st3:" + L.id, N = L.boss ? ST_BOSS_N : ST_N;
   const pick = []; const has = new Set();
   const take = (arr, n) => { for (const it of arr) { if (n <= 0 || pick.length >= N) break; if (it && !has.has(it.id)) { has.add(it.id); pick.push(it.id); n--; } } };
@@ -1416,7 +1657,7 @@ async function storyMap() {
       if (g && !g.ok) html += `<div class="card small stgate">🔒 <b>${esc(g.label)}</b> opens when ${g.need}% of ${g.scope === "ot" ? "Old Testament" : "earlier"} levels have 2★ or more. You have ${g.have}% (${g.count} more to go). Replay passed levels for free to earn stars.</div>`;
       html += `<div class="path">` + xs.map((x, n) => `<button class="node ${n % 2 ? "r" : "l"} ${x.passed ? "done" : x.open ? "cur" : "lock"} ${x.L.boss ? "boss" : ""}" data-lv="${x.L.id}" ${x.open || x.passed ? "" : 'aria-disabled="true"'}>
           <span class="nico">${x.L.boss ? "⚔️" : x.passed ? "✓" : x.open ? "▶" : "🔒"}</span>
-          <span class="ntxt"><b>${x.L.boss ? `${esc(st.title)} boss` : `Level ${x.L.i}`}</b><small>${esc(x.L.boss ? `15 questions, 13 to pass, shorter clock` : stLabel(x.L))}</small><small class="nst">${x.stars ? "★".repeat(x.stars) + "☆".repeat(3 - x.stars) : x.open ? "Play" : ""}</small></span></button>`).join("") + `</div>`;
+          <span class="ntxt"><b>${x.L.boss ? `${esc(st.title)} boss` : `Level ${x.L.i}`}</b><small>${esc(x.L.boss ? `15 questions, 13 to pass, shorter clock` : stLabel(x.L, m))}</small><small class="nst">${x.stars ? "★".repeat(x.stars) + "☆".repeat(3 - x.stars) : x.open ? "Play" : ""}</small></span></button>`).join("") + `</div>`;
     }
   });
   el.innerHTML = html;
@@ -1435,12 +1676,19 @@ function stStart(id, m) {
   if (!x) { toast("That level doesn't exist."); return go("#/story"); }
   if (!x.open && !x.passed) { toast("Pass the level before it first."); return go("#/story" + (m ? "?m=1" : "")); }
   const L = x.L, tier = stTier(L, m), scale = stScale(L, m);
+  const openingGenesis = !!stGenesisSlot(L, m);
+  const openingIds = openingGenesis ? stQuestions(L, m) : null;
+  if (openingIds && openingIds.length !== ST_N) {
+    toast("Could not load all the questions for this level. Please try again.");
+    return go("#/story");
+  }
   if (!x.passed) {
     const e = stEnergy();
     if (e.left <= 0) { toast(`Out of ⚡ for today. Refills in ${stTimeToMidnight()}. Replays of passed levels are free.`, 4000); return go("#/story" + (m ? "?m=1" : "")); }
     S.st3e = { d: e.d, u: e.u + 1, a: e.a }; save();
   }
-  const ids = stQuestions(L, m);
+  const ids = openingIds || stQuestions(L, m);
+  if (openingGenesis) stGenesisLast.set(L.id, ids.slice());
   const limitSum = ids.reduce((a, id) => a + (Math.round((limitOf(BY[id], tier) || 40) * scale) || 40), 0);
   return runRound({ ids, tier, mode: "story", title: `${m ? "Mastery · " : ""}${L.s.title} · ${L.boss ? "Boss" : "Level " + L.i}`, story: { id: (m ? "m" : "") + L.id, L, m, limitSum, replay: x.passed }, timeScale: scale, noPower: m });
 }
@@ -1657,6 +1905,7 @@ async function results(cfg, answers, local) {
   const score = r ? r.score : local.score, correct = r ? r.correct : local.correct, total = r ? r.total : local.total;
   const perfect = total > 0 && correct === total;
   const hasSoloOnly = answers.some((a) => BY[a.id]?.soloOnly === true);
+  const dailyCopy = cfg.mode === "daily" ? dailyShareText(r, cfg.dailyDay) : "";
   if (cfg.story) { stAfterRound(cfg, r, answers, correct, total); if (cfg.story.endless) enAfterRound(cfg, answers); }
   render(`
   <div class="col" style="gap:14px">
@@ -1668,6 +1917,7 @@ async function results(cfg, answers, local) {
     <div id="pushask"></div>
     ${cfg.story ? (cfg.story.endless ? enResultHTML(cfg, correct, total) : storyResultHTML(cfg, correct, total)) : ""}
     <div class="stats3"><div class="stat"><b>${correct}/${total}</b><span>Correct</span></div><div class="stat"><b>x${local.bestCombo}</b><span>Best streak</span></div><div class="stat"><b class="gold">+${fmt(r ? r.xp : 0)}</b><span>XP</span></div></div>
+    ${dailyCopy ? `<button class="btn primary block" id="share-daily">Share Daily result</button><div class="tiny muted center">Spoiler-free grid · no answers</div>` : ""}
     ${r && r.player ? `<div class="card"><div class="row between"><b>${esc(r.player.rank.name)} ${r.player.rank.division}</b><span class="small muted">${fmt(r.player.xp)} XP</span></div><div class="xpbar" style="margin-top:8px"><i id="xpb" style="width:${Math.round((r.rankBefore ? r.rankBefore.progress : 0) * 100)}%"></i></div><div class="small dim" style="margin-top:6px">${r.player.rank.next ? `${fmt(r.player.rank.nextXp - r.player.xp)} XP to ${r.player.rank.next}` : "You've reached Apostle"} · 🔥 ${r.player.streak}-day streak</div></div>` : ""}
     ${r && !cfg.duel ? `<div id="reschurch"></div>` : ""}
     ${cfg.bonusNote ? `<div class="card small">❤️ ${esc(cfg.bonusNote)}</div>` : ""}
@@ -1675,7 +1925,7 @@ async function results(cfg, answers, local) {
     ${r && r.newAchievements && r.newAchievements.length ? r.newAchievements.map((a) => ACH[a] ? `<div class="badge"><div class="bi">${ACH[a][0]}</div><div><b>Achievement: ${ACH[a][1]}</b><div class="small muted">${ACH[a][2]}</div></div></div>` : "").join("") : ""}
     ${cfg.mode !== "daily" && cfg.mode !== "sudden" ? (hasSoloOnly ? `<a class="card gold row" id="dnew" href="#/duel/new" style="text-align:left;gap:12px"><span>${homeIco("users")}</span><div class="grow"><b>Challenge someone</b><div class="small muted">Start a fresh duel from the shared question bank</div></div><div class="gold">›</div></a>` : `<button class="card gold row" id="dset" style="text-align:left;gap:12px"><div style="font-size:28px">⚔️</div><div class="grow"><b>Challenge someone with this exact set</b><div class="small muted">They play the same ${total} questions and try to beat ${fmt(score)}</div></div><div class="gold">›</div></button>`) : ""}
     ${cfg.mode === "daily" ? `<div class="card gold"><b style="font-size:17px">What now?</b>${dailyGuide(true)}<div class="col" style="gap:8px"><button class="btn primary block" data-more>↓ Play more games</button><a class="btn ghost block" href="#/play/practice">🔁 Practise today's set (not scored)</a></div><div class="small muted" style="margin:14px 0 8px">Or jump straight into a game:</div>${modeChips()}</div>` : ""}
-    <div class="row"><button class="btn ${cfg.mode === "daily" ? "ghost" : "primary"} grow" id="again">${cfg.mode === "daily" ? "🌍 See the Global Scoreboard" : "Play again"}</button><button class="btn ghost" id="share" aria-label="Share">📤</button></div>
+    <div class="row"><button class="btn ${cfg.mode === "daily" ? "ghost" : "primary"} grow" id="again">${cfg.mode === "daily" ? "🌍 See the Global Scoreboard" : "Play again"}</button>${cfg.mode === "daily" ? "" : `<button class="btn ghost" id="share" aria-label="Share">📤</button>`}</div>
     <div class="card"><b>Review</b>${answers.map((a) => { const it = BY[a.id]; return `<div class="review"><div>${a.correct ? "✅" : a.partial > 0 ? "🟨" : "❌"}</div><div class="grow"><div>${esc(shortQ(it))}</div><div class="small gold">${esc(it.r || "")}</div></div></div>`; }).join("")}</div>
     <a class="btn ghost block" href="#/">Home</a>
   </div>`);
@@ -1689,7 +1939,8 @@ async function results(cfg, answers, local) {
   const ds = $("#dset"); if (ds) ds.onclick = () => createDuelFromSet(cfg, answers);
   $$("[data-more]").forEach((b) => (b.onclick = () => { sfx.tap(); showMoreGames(); }));
   $$("[data-go]").forEach((b) => (b.onclick = () => { sfx.tap(); go(b.dataset.go); })); // v3.10 story: go() replays the same hash (Try again)
-  $("#share").onclick = () => shareCard({ score, correct, total, tier: cfg.tier, title: cfg.title });
+  const dShare = $("#share-daily"); if (dShare) dShare.onclick = () => shareDailyResult(dailyCopy);
+  const normalShare = $("#share"); if (normalShare) normalShare.onclick = () => shareCard({ score, correct, total, tier: cfg.tier, title: cfg.title });
 }
 // Practice results: scored on the phone only, never posted. Shows every correct answer.
 function practiceResults(cfg, answers, local) {
@@ -2731,8 +2982,8 @@ async function profile() {
 function featureScripts() {
   const f = window.BA_FLAGS || {};
   const want = [];
-  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.8");
-  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.13.8");
+  if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.9");
+  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.13.9");
   if (!want.length) return null;
   return Promise.all(want.map((src) => new Promise((done) => {
     const s = document.createElement("script"); s.src = src; s.onload = done; s.onerror = done; document.head.appendChild(s);
@@ -2772,7 +3023,7 @@ function loadRegularSocial() {
   if (window.BAS) return null;
   return new Promise((done) => {
     const s = document.createElement("script");
-    s.src = "/v3/social.js?v=3.13.8"; s.onload = done; s.onerror = done;
+    s.src = "/v3/social.js?v=3.13.9"; s.onload = done; s.onerror = done;
     document.head.appendChild(s);
   });
 }
@@ -2784,7 +3035,10 @@ async function bootRegularApp() {
   if (window.BAS) { BAS.toast = toast; BAS.onJoin = (inv) => go("#/qm?join=" + encodeURIComponent(inv.id)); BAS.onJoinKo = (code) => joinKo(code); BAS.on(() => $$("[data-online]").forEach((e) => (e.textContent = onlineText()))); }
   document.addEventListener("click", () => { const a = audio(); if (a && a.state === "suspended") a.resume(); }, { once: true });
   // v3.12: back from Google sign-in (also from the welcome screen after a reinstall): skip the welcome screen, the account has the profile
-  if (/[?&]signedin=1/.test(location.hash) && !S.onboarded) { S.onboarded = true; S.imported = true; save(); }
+  if (/[?&]signedin=1/.test(location.hash)) {
+    if (!S.onboarded) { S.onboarded = true; S.imported = true; save(); }
+    dailyRestoreSharedLink();
+  }
   ensureSession().then(() => { if (ME.player) { if (!S.name && ME.player.name) S.name = ME.player.name; if (!S.church && ME.player.church) S.church = ME.player.church; save(); } });
   loadBank().catch(() => {});
   // A sleeping server can take up to a minute to answer. Show the app after 1.5 s at most (the loading screen in index.html covers the wait) and
