@@ -3,7 +3,8 @@ import { lagosDay, msUntilLagosMidnight, verseForDay } from "./daily-verse.mjs?v
 /* Chever v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.13.9";
+window.BA_V = "3.13.10";
+const CONTENT_ASSET_VERSION = "3.13.9"; // Unchanged Bible question and verse assets.
 
 // Flat icon set (Chever look): every emoji on a game screen is drawn with these inline SVGs in the palette
 // (gold #FFC300, red #D62828, navy #0B1F4B, white). Cross = duel, church, reading, loading. Crown = ranks, wins, perfect round, mastery.
@@ -295,7 +296,7 @@ async function loadBank() {
   // Keep the expanded solo bank on a different URL so older cached clients never see its cards.
   // The original bank stays usable if a connection drops mid-upgrade or the server is rolled back.
   let r = await fetch("/v3/bank-solo-3.13.7.json?v=3.13.7").catch(() => null);
-  if (!r || !r.ok || !(r.headers.get("content-type") || "").includes("json")) r = await fetch("/v3/bank.json?v=" + (window.BA_V || "3.13.9"));
+  if (!r || !r.ok || !(r.headers.get("content-type") || "").includes("json")) r = await fetch("/v3/bank.json?v=" + CONTENT_ASSET_VERSION);
   if (!r.ok) throw Error("question bank unavailable");
   const bank = await r.json();
   if (!Array.isArray(bank?.items) || !bank.items.length) throw Error("question bank invalid");
@@ -518,7 +519,7 @@ function mountVerse() {
   const update = async () => {
     if (inflight || !el.isConnected) return;
     clearTimeout(timer); inflight = true;
-    const query = "?v=" + (window.BA_V || "3.13.9");
+    const query = "?v=" + CONTENT_ASSET_VERSION;
     try {
       if (!verseCorpus) {
         const request = new AbortController();
@@ -3012,10 +3013,10 @@ function startRegularApp() {
   regularStartup = bootRegularApp();
   return regularStartup;
 }
-function showSetupAfterWelcome() {
+function showSetupAfterWelcome(completed) {
   if (welcomeStage !== "practice" || regularStartup || !welcomeHomeEntry()) return;
   clearWelcome();
-  welcomeStage = "setup";
+  welcomeStage = completed ? "setup" : "skip-setup";
   onboarding(() => startRegularApp());
   document.getElementById("nm")?.focus({preventScroll:true});
 }
@@ -3054,11 +3055,11 @@ async function bootRegularApp() {
 (async function boot() {
   if (firstVisitWelcome()) {
     try {
-      const { mountWelcome } = await import("/v3/welcome-3.13.8.js");
+      const { mountWelcome } = await import("/v3/welcome-3.13.10.js");
       if (!regularStartup && firstVisitWelcome()) {
         const host = document.createElement("div");
         host.id = "chever-welcome";
-        mountWelcome(host, { setup: showSetupAfterWelcome, restore: () => location.assign("/api/oauth/google/start") });
+        mountWelcome(host, { setup: () => showSetupAfterWelcome(true), skip: () => showSetupAfterWelcome(false), restore: () => location.assign("/api/oauth/google/start") });
         welcomeStage = "practice";
         welcomeHost = host;
         app.style.paddingBottom = "0";
