@@ -1,4 +1,4 @@
-/* Chever service worker (v3.13.10).
+/* Chever service worker (v3.13.11).
  * - Opens instantly on repeat visits, even while the free server is waking up:
  *   the home page is served from the saved copy at once and refreshed in the background;
  *   duel links (/d/...) try the network for 3 s, then fall back to the last saved copy.
@@ -6,14 +6,41 @@
  * - API calls, sign-in, downloads and legal pages always go to the network.
  * - Web Push (v3.5.0): shows "a challenger is waiting" notifications; a tap opens (or focuses) the game at the challenge.
  */
-const VERSION = "ba-3.13.10";
+const VERSION = "ba-3.13.11";
 const SHELL = "/";
+// Kept separate from the game's startup cache. Saving one reader asset saves both editions atomically.
+const READER_URL = "/v3/offline-bible-2.html";
+const READER_CACHE = "chever-reader-pack-v2";
+async function offlineBible(request) {
+  let cache;
+  try { cache = await caches.open(READER_CACHE); const saved = await cache.match(READER_URL); if (saved) return saved; } catch (_) {}
+  try {
+    const response = await fetch(request);
+    if (cache && response.ok && !response.redirected && new URL(response.url).pathname === READER_URL && response.headers.get("content-type")?.includes("text/html")) {
+      try { await cache.put(READER_URL, response.clone()); } catch (_) {} // browser denied offline storage; still display the online copy
+    }
+    return response;
+  } catch (_) {
+    return new Response("<!doctype html><title>Chever offline reader</title><meta name=viewport content='width=device-width,initial-scale=1'><main style='max-width:34em;margin:3em auto;padding:1em;font:1rem/1.5 system-ui'><h1>Reader not saved yet</h1><p>Open the Bible reader once while online to keep both translations on this device.</p><a href='/#/verse'>Back to Chever</a></main>", {status:503, headers:{"content-type":"text/html;charset=utf-8"}});
+  }
+}
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "CHEVER_READER_PACK_V2_STATUS" || !event.ports?.[0]) return;
+  const answer = event.ports[0];
+  event.waitUntil((async () => {
+    let saved = false;
+    try { const pack = await caches.open(READER_CACHE); saved = Boolean(await pack.match(READER_URL)); } catch (_) {}
+    answer.postMessage({ saved });
+  })());
+});
+
 const PRECACHE = [
   "/",
   "/v3/brand-tokens.css?v=3.13.9",
   "/v3/chever-ui.css?v=3.13.9",
   "/v3/app.css?v=3.13.9",
-  "/v3/app.js?v=3.13.10",
+  "/v3/app.js?v=3.13.11",
   "/v3/welcome-3.13.10.js",
   "/v3/welcome-3.13.8.js", // Older open tabs may still import this module.
   "/v3/social.js?v=3.13.9",
@@ -98,6 +125,7 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  if (url.pathname === READER_URL) { event.respondWith(offlineBible(req)); return; }
   if (NETWORK_ONLY.test(url.pathname)) return;
   // Only the v3 game pages use the shell fallback; the classic app and Live keep their own behaviour.
   if (req.mode === "navigate") {

@@ -3,7 +3,7 @@ import { lagosDay, msUntilLagosMidnight, verseForDay } from "./daily-verse.mjs?v
 /* Chever v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.13.10";
+window.BA_V = "3.13.11";
 const CONTENT_ASSET_VERSION = "3.13.9"; // Unchanged Bible question and verse assets.
 
 // Flat icon set (Chever look): every emoji on a game screen is drawn with these inline SVGs in the palette
@@ -380,7 +380,7 @@ async function route() {
   if (a === "duels") return duelsScreen();
   if (a === "verse" || a === "reading") {
     const shared = Boolean(window.BA_FLAGS?.sharedReading && window.BAReading);
-    render(`<div class="col"><header class="gh-intro"><h1>Bible</h1><p>Daily Scripture in the King James Version</p></header>${verseCardHTML()}${shared ? (a === "reading" ? '<div id="reading-root"></div>' : '<a class="btn ghost" href="#/reading">Shared reading plans</a>') : ""}</div>${readingTabbar("bible")}`, "cv2 cv2-reading");
+    render(`<div class="col"><header class="gh-intro"><h1>Bible</h1><p>Daily Scripture in the King James Version</p></header>${a === "verse" ? '<section class="chever-panel col" aria-label="Offline Bible reader" style="gap:8px"><div class="chever-kicker">Offline Bible</div><h2 style="margin:0">Read the whole Bible</h2><p class="small muted" style="margin:0">World English Bible and Berean Standard Bible. Open online once to save both on this device.</p><a class="btn primary block" href="/v3/offline-bible-2.html?from=chever">Read the Bible offline</a></section>' : ""}${verseCardHTML()}${shared ? (a === "reading" ? '<div id="reading-root"></div>' : '<a class="btn ghost" href="#/reading">Shared reading plans</a>') : ""}</div>${readingTabbar("bible")}`, "cv2 cv2-reading");
     mountVerse();
     if (!shared || a === "verse") return;
     window.BAReading.mount(document.getElementById("reading-root"), {
