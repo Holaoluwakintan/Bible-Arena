@@ -1,0 +1,42 @@
+[
+  {
+    "id": "avatar-01",
+    "label": "Lion Crest",
+    "image": "assets/visual-pack/avatars/avatar-01.webp"
+  },
+  {
+    "id": "avatar-02",
+    "label": "Peace Dove",
+    "image": "assets/visual-pack/avatars/avatar-02.webp"
+  },
+  {
+    "id": "avatar-03",
+    "label": "Royal Crown",
+    "image": "assets/visual-pack/avatars/avatar-03.webp"
+  },
+  {
+    "id": "avatar-04",
+    "label": "Golden Harp",
+    "image": "assets/visual-pack/avatars/avatar-04.webp"
+  },
+  {
+    "id": "avatar-05",
+    "label": "Scroll & Quill",
+    "image": "assets/visual-pack/avatars/avatar-05.webp"
+  },
+  {
+    "id": "avatar-06",
+    "label": "Shield of Faith",
+    "image": "assets/visual-pack/avatars/avatar-06.webp"
+  },
+  {
+    "id": "avatar-07",
+    "label": "Glowing Lamp",
+    "image": "assets/visual-pack/avatars/avatar-07.webp"
+  },
+  {
+    "id": "avatar-08",
+    "label": "Compass Star",
+    "image": "assets/visual-pack/avatars/avatar-08.webp"
+  }
+]

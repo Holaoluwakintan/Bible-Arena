@@ -1,4 +1,4 @@
-/* Chever service worker (v3.13.11).
+/* Chever service worker (v3.13.12-preview).
  * - Opens instantly on repeat visits, even while the free server is waking up:
  *   the home page is served from the saved copy at once and refreshed in the background;
  *   duel links (/d/...) try the network for 3 s, then fall back to the last saved copy.
@@ -6,7 +6,8 @@
  * - API calls, sign-in, downloads and legal pages always go to the network.
  * - Web Push (v3.5.0): shows "a challenger is waiting" notifications; a tap opens (or focuses) the game at the challenge.
  */
-const VERSION = "ba-3.13.11";
+const VERSION = "ba-3.13.12";
+const VISUAL_PACK_PREFIX = "/v3/assets/visual-pack/";
 const SHELL = "/";
 // Kept separate from the game's startup cache. Saving one reader asset saves both editions atomically.
 const READER_URL = "/v3/offline-bible-2.html";
@@ -37,10 +38,10 @@ self.addEventListener("message", (event) => {
 
 const PRECACHE = [
   "/",
-  "/v3/brand-tokens.css?v=3.13.9",
-  "/v3/chever-ui.css?v=3.13.9",
-  "/v3/app.css?v=3.13.9",
-  "/v3/app.js?v=3.13.11",
+  "/v3/brand-tokens.css?v=3.13.12",
+  "/v3/chever-ui.css?v=3.13.12",
+  "/v3/app.css?v=3.13.12",
+  "/v3/app.js?v=3.13.12",
   "/v3/welcome-3.13.10.js",
   "/v3/welcome-3.13.8.js", // Older open tabs may still import this module.
   "/v3/social.js?v=3.13.9",
@@ -49,9 +50,9 @@ const PRECACHE = [
   "/v3/daily-verse.mjs?v=3.13.9",
   "/v3/hall-of-fame.mjs?v=3.13.9",
   "/v3/reading-screens.js?v=3.13.9",
-  "/v3/duel-screens.js?v=3.13.9",
+  "/v3/duel-screens.js?v=3.13.12",
   "/v3/vod-365.json?v=3.13.9",
-  "/v3/avatars.js?v=3.13.9",
+  "/v3/avatars.js?v=3.13.12",
   "/v3/fonts/cinzel-latin.woff2",
   "/v3/fonts/jakarta-latin.woff2",
   "/v3/icon-192.png",
@@ -133,6 +134,7 @@ self.addEventListener("fetch", (event) => {
     else if (url.pathname.startsWith("/d/")) event.respondWith(pageRequest(event));
     return;
   }
+  if (url.pathname.startsWith(VISUAL_PACK_PREFIX)) { event.respondWith(staticRequest(event)); return; }
   if (url.pathname.startsWith("/v3/")) event.respondWith(staticRequest(event));
 });
 

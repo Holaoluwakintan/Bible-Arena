@@ -3,7 +3,7 @@ import { lagosDay, msUntilLagosMidnight, verseForDay } from "./daily-verse.mjs?v
 /* Chever v3 — fast, cinematic web game. No framework: built to fly on low-end Android. */
 (function () {
 "use strict";
-window.BA_V = "3.13.11";
+window.BA_V = "3.13.12";
 const CONTENT_ASSET_VERSION = "3.13.9"; // Unchanged Bible question and verse assets.
 
 // Flat icon set (Chever look): every emoji on a game screen is drawn with these inline SVGs in the palette
@@ -179,6 +179,7 @@ const MODES = {
   myth: { name: "Bible or Myth", icon: MODE_ICON.myth, desc: "Fact or church folklore?" },
   daily: { name: "Daily Challenge", icon: "☀️", desc: "10, 15 or 20, same for everyone" },
   sudden: { name: "Sudden Death", icon: "💀", desc: "One mistake ends it" },
+  picture: { name: "Picture Quiz", icon: FI.camera, desc: "Guess the Bible character" },
 };
 const ACH = {
   first_round: ["🌱", "First Steps", "Finish a round"], ten_rounds: ["🔁", "Faithful", "10 rounds"], fifty_rounds: ["🏃", "Running the Race", "50 rounds"],
@@ -193,7 +194,7 @@ const ACH = {
 };
 // ---------- local state ----------
 const LS = "ba3:v1";
-const S = Object.assign({ name: "", church: "", tier: "s", sound: true, haptics: true, onboarded: false, imported: false, seen: {} }, safeJSON(localStorage.getItem(LS)) || {});
+const S = Object.assign({ name: "", church: "", tier: "s", sound: true, haptics: true, onboarded: false, imported: false, seen: {}, avatarType: "none", avatarId: null, avatarData: null }, safeJSON(localStorage.getItem(LS)) || {});
 function save() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) {} }
 function safeJSON(s) { try { return JSON.parse(s); } catch (e) { return null; } }
 let ME = { user: null, player: null };
@@ -285,6 +286,9 @@ function adoptAccount() {
   if (p.name) S.name = p.name;
   S.church = p.church || "";
   if (["b", "s", "t"].includes(p.tier)) S.tier = p.tier;
+  if (S.avatarType !== "photo" && p.avatarType === "preset" && p.avatarId) {
+    S.avatarType = "preset"; S.avatarId = p.avatarId; S.avatarData = null;
+  }
   S.onboarded = true; S.imported = true; save();
 }
 // v3.12: the guest note (guests only; hidden once signed in with Google)
@@ -376,7 +380,8 @@ async function route() {
   if (a === "ko") return b === "quick" ? quickKo() : newKo();
   if (a === "online") return onlineNow();
   if (a === "bot") return playBot(MODES[q.get("mode")] ? q.get("mode") : "mixed", TIER[q.get("tier")] ? q.get("tier") : S.tier);
-  if (a === "play") return startMode(b || q.get("mode") || "arena", q.get("tier") || S.tier);
+  if (a === "picture-quiz") return pictureQuizScreen(q);
+  if (a === "play") { if (b === "picture") return pictureQuizScreen(q); return startMode(b || q.get("mode") || "arena", q.get("tier") || S.tier); }
   if (a === "duels") return duelsScreen();
   if (a === "verse" || a === "reading") {
     const shared = Boolean(window.BA_FLAGS?.sharedReading && window.BAReading);
@@ -666,10 +671,12 @@ function homeGuide() {
 // The Game tab (2026-11-12): every way to play sits under this one bar item: solo modes (Bible or Myth included), multiplayer,
 // private rooms, join with code, group knockouts and live now. Same routes as before; nothing here is new behaviour.
 function gameScreen(focusJoin = false) {
-  const solo = ["mixed", "myth", "arena", "gap", "who", "daily", "sudden"];
+  const solo = ["mixed", "picture", "myth", "arena", "gap", "who", "daily", "sudden"];
   const soloRow = (k) => (k === "mixed"
     ? homeGuideRow(`#/play/${k}`, "play", "Solo match", "Just you and the Word. Start now.", true)
-    : homeGuideRow(`#/play/${k}`, "play", MODES[k].name, MODES[k].desc));
+    : k === "picture"
+      ? homeGuideRow("#/picture-quiz", "play", "Picture Quiz · Guess the Character", "Guess iconic Bible characters from illustrated picture clues.", false)
+      : homeGuideRow(`#/play/${k}`, "play", MODES[k].name, MODES[k].desc));
   const ranked = duelV2();
   render(`<div class="gh">
     <section class="gh-intro"><h1>Game</h1><p>Play on your own, go head to head with people, or join a room.</p></section>
@@ -705,8 +712,10 @@ async function home() {
     <section class="chever-panel home-start" aria-label="Start playing">
       <div class="row"><span class="chever-icon" aria-hidden="true">${FI.target}</span><div><h2>Ready to play?</h2><div class="small muted">Start a solo Bible quiz or join someone’s game.</div></div></div>
       <div class="home-start-actions"><a class="btn primary" href="#/play/mixed">${FI.play} Play solo</a><a class="btn ghost" href="#/game?join=1">Join with a code</a></div>
-    </section>${verseCardHTML()}<div id="homerank"></div><div id="h"></div></div>${tabbar("home")}`);
+    </section>
+    <div id="pqshowcase"></div>${verseCardHTML()}<div id="homerank"></div><div id="h"></div></div>${tabbar("home")}`);
   mountVerse();
+  mountPictureShowcase($("#pqshowcase"));
   onLeave(lenPickerWire());
   const h = $("#h"), lead = $("#homelead");
   let daily = null;
@@ -717,8 +726,16 @@ async function home() {
   const hello = new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 17 ? "Good afternoon" : "Good evening";
   if (!h.isConnected) return;
   lead.innerHTML = flatIcons(`
-    <div class="row between"><div><div class="small muted">${hello},</div><h2>${esc(S.name || "friend")}</h2><a class="onlinepill" href="#/online" id="onlpill"><i class="dot"></i><span data-online>${onlineText()}</span></a></div>
-      <button class="chip on" id="tierchip">${TIER[S.tier].icon} ${TIER[S.tier].name}</button></div>
+    <div class="home-lead-row">
+      <div class="home-lead-left">
+        <button class="home-av-btn" id="homeavbtn" type="button" aria-label="Edit profile photo or avatar">
+          ${avatarHTMLFor(myProfileAvatar(), "48px", S.name || "friend")}
+          <span class="home-av-badge" aria-hidden="true">${FI.camera}</span>
+        </button>
+        <div style="min-width:0"><div class="small muted">${hello},</div><h2 style="margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(S.name || "friend")}</h2><a class="onlinepill" href="#/online" id="onlpill"><i class="dot"></i><span data-online>${onlineText()}</span></a></div>
+      </div>
+      <button class="chip on" id="tierchip">${TIER[S.tier].icon} ${TIER[S.tier].name}</button>
+    </div>
     ${guestNoteHTML()}`);
   $("#homerank").innerHTML = flatIcons(`
     <section class="card chever-panel home-rank">
@@ -752,7 +769,7 @@ async function home() {
     <div id="moregames" class="col" style="gap:14px">
     <div class="sechead"><b>🎮 All games</b><span class="small muted">Solo, anytime, as many times as you like.</span></div>
     <div class="grid2">
-      ${modeTile("gap", true)}${modeTile("who")}${modeTile("myth")}${modeTile("arena")}${modeTile("mixed")}${modeTile("sudden")}
+      ${modeTile("picture", true)}${modeTile("gap")}${modeTile("who")}${modeTile("myth")}${modeTile("arena")}${modeTile("mixed")}${modeTile("sudden")}
     </div>
     </div>
     <div class="sechead"><b>More</b></div>
@@ -769,8 +786,9 @@ async function home() {
   $("#kocta").onclick = () => { sfx.tap(); buzz(10); go("#/ko/new"); };
   homeChurchCard();
   bindLiveCard();
+  $("#homeavbtn").onclick = () => { sfx.tap(); openProfileAvatarModal(() => home()); };
   $("#tierchip").onclick = () => tierSheet(() => home());
-  $$(".mode", h).forEach((m) => (m.onclick = () => { sfx.tap(); buzz(8); go("#/play/" + m.dataset.m); }));
+  $$(".mode", h).forEach((m) => (m.onclick = () => { sfx.tap(); buzz(8); go(m.dataset.m === "picture" ? "#/picture-quiz" : "#/play/" + m.dataset.m); }));
   $$("[data-more]", h).forEach((b) => (b.onclick = () => { sfx.tap(); showMoreGames(); }));
   if (WANT_MORE) { WANT_MORE = false; setTimeout(showMoreGames, 250); }
 }
@@ -906,7 +924,7 @@ function practiceQ(it) {
 }
 function modeTile(k, isNew) {
   const m = MODES[k];
-  const colors = { gap: "rgba(245,185,66,.18)", who: "rgba(155,140,255,.18)", myth: "rgba(60,201,192,.18)", arena: "rgba(90,184,255,.18)", mixed: "rgba(255,138,101,.18)", sudden: "rgba(255,93,115,.16)" };
+  const colors = { picture: "rgba(6,72,194,.14)", gap: "rgba(245,185,66,.18)", who: "rgba(155,140,255,.18)", myth: "rgba(60,201,192,.18)", arena: "rgba(90,184,255,.18)", mixed: "rgba(255,138,101,.18)", sudden: "rgba(255,93,115,.16)" };
   return `<button class="mode" data-m="${k}">${isNew ? `<span class="new">NEW</span>` : ""}<div class="ico" style="background:${colors[k]}">${m.icon}</div><div><b>${m.name}</b><span>${m.desc}</span></div></button>`;
 }
 function tierSheet(done) {
@@ -2547,7 +2565,7 @@ async function acceptDuel(code) {
 function board(v) {
   const done = v.entries.filter((e) => e.finished).sort((a, b) => duelCmp(b, a));
   const pos = new Map(); done.forEach((e, i) => pos.set(e, i && duelCmp(e, done[i - 1]) === 0 ? pos.get(done[i - 1]) : i + 1));
-  return [...done, ...v.entries.filter((e) => !e.finished && e.progress)].map((e) => `<div class="lb ${e.isMe ? "me" : ""}"><div class="pos ${e.finished ? "p" + pos.get(e) : ""}">${e.finished ? pos.get(e) : "…"}</div><div class="grow"><b>${esc(e.name)}</b>${e.isCreator ? ` <span class="small gold">challenger</span>` : ""}<div class="small muted">${e.finished ? `${e.correct}/${e.total} · ${secs(e.timeMs)}` : `playing… ${e.progress}/${v.ids.length}`}${e.church ? " · " + esc(e.church) : ""}</div></div><div class="gold serif" style="font-weight:800">${fmt(e.score)}</div></div>`).join("");
+  return [...done, ...v.entries.filter((e) => !e.finished && e.progress)].map((e) => `<div class="lb ${e.isMe ? "me" : ""}"><div class="pos ${e.finished ? "p" + pos.get(e) : ""}">${e.finished ? pos.get(e) : "…"}</div><div class="lb-av">${avatarHTMLFor(e.isMe ? myProfileAvatar() : e, "34px", e.name)}</div><div class="grow"><b>${esc(e.name)}</b>${e.isCreator ? ` <span class="small gold">challenger</span>` : ""}<div class="small muted">${e.finished ? `${e.correct}/${e.total} · ${secs(e.timeMs)}` : `playing… ${e.progress}/${v.ids.length}`}${e.church ? " · " + esc(e.church) : ""}</div></div><div class="gold serif" style="font-weight:800">${fmt(e.score)}</div></div>`).join("");
 }
 
 // ---------- Chever duel, ranked/join and results screens (preview). Flag-gated: window.BA_FLAGS.chever2Duels, with
@@ -2569,7 +2587,7 @@ function duelScreenV2(v) {
   const creator = v.entries.find((e) => e.isCreator && e.finished);
   render(BADuel.renderDuel({
     code: v.code, modeName: modeName(v.mode), tierName: TIER[v.tier].name, count: v.ids.length,
-    creatorName: BADuel.logic.plainName(v.creator.name), scoreToBeat: creator ? creator.score : null,
+    creatorName: BADuel.logic.plainName(v.creator.name), creatorAvatar: v.creator && v.creator.avatarType === "preset" ? v.creator : null, scoreToBeat: creator ? creator.score : null,
     needName: !S.onboarded, nameVal: S.name, churchVal: S.church,
     boardHTML: v.entries.length ? duelBoardV2(v) : "", tabbarHTML: readingTabbar("community") }), "cv2 cv2-duel");
   $("#acc").onclick = async () => {
@@ -2604,7 +2622,7 @@ function duelResultV2(v, r, cfg) {
     code: v.code, outcome: state, headline: hl.title, sub: hl.sub, count: n,
     me: { score: me ? me.score : 0, correct: me ? me.correct : 0, total: n, time: me ? L.secsLabel(me.timeMs) : "" },
     opp: opp ? { score: opp.score, correct: opp.correct, total: n, time: L.secsLabel(opp.timeMs) } : null,
-    oppName: opp ? opp.name : "", myGrid: me ? L.gridOf(me.answers, n) : [], oppGrid: opp ? L.gridOf(opp.answers, n) : [],
+    oppName: opp ? opp.name : "", oppAvatar: opp && opp.avatarType === "preset" ? opp : null, myGrid: me ? L.gridOf(me.answers, n) : [], oppGrid: opp ? L.gridOf(opp.answers, n) : [],
     waHref: waLink(duelText(v.code, me ? me.score : null, v.tier, v.mode)),
     rematch: !!(me && opp && !botDuel), chwLabel, chwId: "chw", qm: !!(botDuel && me && opp),
     xpLine, achievementsHTML, extraHTML: codeCard,
@@ -2736,7 +2754,7 @@ async function ranks(tab) {
   if (!el.isConnected) return;
   const rows = r.rows || [];
   const empty = { week: "No rounds this week yet. Play one and top the board!", daily: "Nobody has played today's challenge yet.", rivals: "Your rivals appear here after your first duel.", all: "No players yet." }[tab];
-  el.innerHTML = rows.length ? rows.map((x, i) => `<div class="lb ${x.isMe ? "me" : ""}"><div class="pos p${i + 1}">${i + 1}</div><div class="grow"><b>${esc(x.name)}</b>${x.isMe ? ` <span class="small gold">you</span>` : ""}<div class="small muted">${esc(x.rank)}${x.church ? " · " + esc(x.church) : ""}${tab === "rivals" ? ` · You ${x.wins}–${x.losses}${x.draws ? ` · ${x.draws} draw${x.draws > 1 ? "s" : ""}` : ""}` : ""}${tab === "daily" && x.total ? ` · ${x.correct}/${x.total}` : ""}</div></div><div class="gold serif" style="font-weight:800">${fmt(x.score)}</div></div>`).join("") : `<div class="muted">${empty}</div>${tab === "rivals" ? `<a class="btn primary block" style="margin-top:12px" href="#/ko/new">${homeIco("swords")}Challenge someone</a>` : ""}`;
+  el.innerHTML = rows.length ? rows.map((x, i) => `<div class="lb ${x.isMe ? "me" : ""}"><div class="pos p${i + 1}">${i + 1}</div><div class="lb-av">${avatarHTMLFor(x.isMe ? myProfileAvatar() : x, "36px", x.name)}</div><div class="grow"><b>${esc(x.name)}</b>${x.isMe ? ` <span class="small gold">you</span>` : ""}<div class="small muted">${esc(x.rank)}${x.church ? " · " + esc(x.church) : ""}${tab === "rivals" ? ` · You ${x.wins}–${x.losses}${x.draws ? ` · ${x.draws} draw${x.draws > 1 ? "s" : ""}` : ""}` : ""}${tab === "daily" && x.total ? ` · ${x.correct}/${x.total}` : ""}</div></div><div class="gold serif" style="font-weight:800">${fmt(x.score)}</div></div>`).join("") : `<div class="muted">${empty}</div>${tab === "rivals" ? `<a class="btn primary block" style="margin-top:12px" href="#/ko/new">${homeIco("swords")}Challenge someone</a>` : ""}`;
 }
 
 
@@ -2895,11 +2913,22 @@ async function profile() {
   const google = ME.user && ME.user.openId === "google";
   if (!$("#pf")) return; // left the Me tab while it was loading
   $("#pf").innerHTML = `<div class="col" style="gap:14px">
-    <div class="hero center"><div class="rays"></div><div class="emblem" style="width:84px;height:84px;font-size:36px;border-radius:24px;margin:0 auto 10px">${rk.name[0]}</div>
+    <div class="hero center"><div class="rays"></div>
+      <button class="pf-av-wrap" id="pfavbtn" type="button" aria-label="Edit profile photo or avatar">
+        <span class="pf-av-inner">${avatarHTMLFor(myProfileAvatar(), "86px", S.name || "Player")}</span>
+        <span class="pf-av-cam" aria-hidden="true">${FI.camera}</span>
+      </button>
       <h2 style="font-family:var(--serif)">${esc(S.name || "Player")}</h2><div class="gold" style="font-weight:800">${rk.name} ${rk.division}</div>${S.church ? `<div class="small muted pfline">${pfIco("church")} ${esc(S.church)}</div>` : ""}
+      <div class="pf-av-actions"><button class="chip on" id="pfeditav" type="button">${FI.camera} Edit photo &amp; avatar</button></div>
       <div class="xpbar" style="margin:12px 0 6px"><i style="width:${Math.round(rk.progress * 100)}%"></i></div><div class="small muted">${fmt(p.xp)} XP${rk.next ? ` · ${fmt(rk.nextXp - p.xp)} to ${rk.next}` : ""}</div></div>
-    <div class="card" id="facepick"><div class="row between"><b>Your face</b><span class="small muted">shows next to your name in duels and rooms</span></div>
-    <div class="facegrid" style="margin-top:10px">${BAFace.ids.map((id) => `<button class="faceopt ${myFace() === id ? "on" : ""}" data-face="${id}" aria-label="Face ${Number(id.slice(5))}">${BAFace.html(id, "100%")}</button>`).join("")}</div></div>
+    <div class="card" id="facepick">
+      <div class="row between"><b>Chever Avatars</b><button class="chip" id="pfuploadbtn" type="button">${FI.camera} Upload photo</button></div>
+      <div class="small muted" style="margin-top:4px">${myProfileAvatar().avatarType === "photo" ? "Using an on-device photo in this preview. Tap any avatar below or Edit to change or remove it." : "Choose an illustrated Chever emblem or upload an opt-in photo on this device."}</div>
+      <div class="av-preset-grid" style="margin-top:10px">${(BAFace.presets || []).map((av) => `<button class="av-preset-btn ${myProfileAvatar().avatarType === "preset" && myProfileAvatar().avatarId === av.id ? "on" : ""}" data-preset="${av.id}" type="button" aria-label="${esc(av.label)}"><img src="${av.image}" alt="" loading="lazy"><span>${esc(av.label)}</span></button>`).join("")}</div>
+      <details style="margin-top:12px"><summary class="small muted" style="cursor:pointer;font-weight:700">Classic lobby faces (${BAFace.ids.length})</summary>
+        <div class="facegrid" style="margin-top:8px">${BAFace.ids.map((id) => `<button class="faceopt ${myFace() === id ? "on" : ""}" data-face="${id}" aria-label="Face ${Number(id.slice(5))}">${BAFace.html(id, "100%")}</button>`).join("")}</div>
+      </details>
+    </div>
     <a class="card row reportlink" href="#/ranks"><div class="pico">${homeIco("trophy")}</div><div class="grow"><b>Hall of Fame</b><div class="small muted">This week's champions, all-time board, and rivals</div></div><div class="gold">›</div></a>
     <a class="card row reportlink" href="#/report"><div class="pico">${pfIco("report")}</div><div class="grow"><b>Your weekly report card</b><div class="small muted">Strongest and weakest books, accuracy vs last week</div></div><div class="gold">›</div></a>
     <div class="stats3"><div class="stat"><b>${pfIco("flame")} ${p.streak || 0}</b><span>Day streak</span></div><div class="stat"><b>${p.bestStreak || 0}</b><span>Best streak</span></div><div class="stat"><b>${p.rounds || 0}</b><span>Rounds</span></div></div>
@@ -2926,11 +2955,21 @@ async function profile() {
     <div class="card"><b>More</b><div class="row" style="flex-wrap:wrap;gap:8px;margin-top:10px"><a class="chip" href="/play">${pfIco("classic")} Classic app</a>${inAppShell() ? "" : `<a class="chip" href="/download">${pfIco("android")} Android app</a>`}<a class="chip" href="#/ranks?tab=church">${pfIco("church")} Church League</a></div>
       <p class="small dim" style="margin:12px 0 0">Scripture quotations are from the King James Version (public domain). Every answer carries its reference so you can read it yourself.</p></div>
   </div>`;
-  $("#facepick").querySelectorAll(".faceopt").forEach((b) => (b.onclick = () => {
-    let m = {}; try { m = JSON.parse(localStorage.getItem("bal:me") || "{}") || {}; } catch (e) {}
-    m.avatar = b.dataset.face; try { localStorage.setItem("bal:me", JSON.stringify(m)); } catch (e) {}
-    $("#facepick").querySelectorAll(".faceopt").forEach((x) => x.classList.toggle("on", x === b));
+  const openAv = () => { sfx.tap(); openProfileAvatarModal(() => profile()); };
+  $("#pfavbtn").onclick = openAv;
+  $("#pfeditav").onclick = openAv;
+  $("#pfuploadbtn").onclick = openAv;
+  $("#facepick").querySelectorAll(".av-preset-btn").forEach((b) => (b.onclick = async () => {
+    sfx.tap();
+    await saveProfileAvatar({ avatarType: "preset", avatarId: b.dataset.preset, avatarData: null });
+    toast("Avatar saved ✓");
+    profile();
+  }));
+  $("#facepick").querySelectorAll(".faceopt").forEach((b) => (b.onclick = async () => {
+    sfx.tap();
+    await saveProfileAvatar({ avatarType: "preset", avatarId: b.dataset.face, avatarData: null });
     toast("Face saved");
+    profile();
   }));
   const ed = async (key, label, max) => { const v = prompt(label, S[key] || ""); if (v == null) return; if (key === "name" && badNm(v)) return toast(KIND_NAME); S[key] = v.trim().slice(0, max); save(); await savePlayer(); profile(); };
   $("#ename").onclick = () => ed("name", "Your name", 40);
@@ -2978,13 +3017,540 @@ async function profile() {
   const out = $("#out"); if (out) out.onclick = async () => { await api("/api/auth/logout", { body: {} }).catch(() => {}); ME = { user: null, player: null }; await ensureSession(); toast("Signed out"); profile(); };
 }
 
+
+// ---------- v3.13.12-preview: Player Profile Avatars & Picture-Clue "Guess the Character" ----------
+let PQ_CACHE = null;
+let AVATAR_LIST_CACHE = null;
+
+function resolveVisualAsset(path) {
+  if (!path) return "";
+  if (path.startsWith("/") || path.startsWith("http://") || path.startsWith("https://") || path.startsWith("data:")) return path;
+  if (path.startsWith("assets/")) return "/v3/" + path;
+  return "/v3/assets/visual-pack/" + path.replace(/^\/+/, "");
+}
+
+async function loadPictureQuizPack() {
+  if (PQ_CACHE) return PQ_CACHE;
+  const r = await fetch("/v3/assets/visual-pack/picture-quiz.json?v=3.13.12");
+  if (!r.ok) throw Error("picture quiz unavailable");
+  const raw = await r.json();
+  if (!Array.isArray(raw) || !raw.length) throw Error("picture quiz invalid");
+  PQ_CACHE = raw.map((item) => Object.assign({}, item, { imageUrl: resolveVisualAsset(item.image) }));
+  return PQ_CACHE;
+}
+
+async function loadAvatarPresets() {
+  if (AVATAR_LIST_CACHE) return AVATAR_LIST_CACHE;
+  try {
+    const r = await fetch("/v3/assets/visual-pack/avatars.json?v=3.13.12");
+    if (r.ok) {
+      const raw = await r.json();
+      if (Array.isArray(raw) && raw.length) {
+        AVATAR_LIST_CACHE = raw.map((a) => ({ id: a.id, label: a.label, image: resolveVisualAsset(a.image) }));
+        return AVATAR_LIST_CACHE;
+      }
+    }
+  } catch (e) {}
+  AVATAR_LIST_CACHE = (window.BAFace && window.BAFace.presets) || [];
+  return AVATAR_LIST_CACHE;
+}
+
+function myProfileAvatar() {
+  if (S.avatarType === "photo" && window.BAFace && BAFace.isPhotoData(S.avatarData)) {
+    return { avatarType: "photo", avatarId: null, avatarData: S.avatarData };
+  }
+  if (S.avatarType === "preset" && S.avatarId && window.BAFace && (BAFace.isPreset(S.avatarId) || BAFace.isFace(S.avatarId))) {
+    return { avatarType: "preset", avatarId: S.avatarId, avatarData: null };
+  }
+  if (S.avatarType === "none") {
+    return { avatarType: "none", avatarId: null, avatarData: null };
+  }
+  const f = myFace();
+  if (f) return { avatarType: "preset", avatarId: f, avatarData: null };
+  return { avatarType: "none", avatarId: null, avatarData: null };
+}
+
+function avatarHTMLFor(av, size, name, cls) {
+  if (window.BAFace && BAFace.profileHTML) return BAFace.profileHTML(av, size, name, cls);
+  return window.BAFace ? BAFace.initial(name, size) : "";
+}
+
+async function saveProfileAvatar(av, nextName) {
+  const type = av && (av.avatarType === "photo" || av.avatarType === "preset" || av.avatarType === "none") ? av.avatarType : "none";
+  if (typeof nextName === "string") {
+    const trimmed = nextName.trim().slice(0, 40);
+    if (trimmed && !badNm(trimmed)) S.name = trimmed;
+  }
+  if (type === "photo" && window.BAFace && BAFace.isPhotoData(av.avatarData)) {
+    S.avatarType = "photo"; S.avatarId = null; S.avatarData = av.avatarData;
+  } else if (type === "preset" && window.BAFace && (BAFace.isPreset(av.avatarId) || BAFace.isFace(av.avatarId))) {
+    S.avatarType = "preset"; S.avatarId = av.avatarId; S.avatarData = null;
+    try {
+      const m = JSON.parse(localStorage.getItem("bal:me") || "{}") || {};
+      m.avatar = av.avatarId;
+      localStorage.setItem("bal:me", JSON.stringify(m));
+    } catch (e) {}
+  } else {
+    S.avatarType = "none"; S.avatarId = null; S.avatarData = null;
+    try {
+      const m = JSON.parse(localStorage.getItem("bal:me") || "{}") || {};
+      delete m.avatar;
+      localStorage.setItem("bal:me", JSON.stringify(m));
+    } catch (e) {}
+  }
+  save();
+  // Privacy & DB safety for preview:
+  // - Uploaded photos stay strictly on-device (never sent to server or stored in DB/snapshots).
+  // - Preset avatars / initials sync to server ONLY for verified Google-signed-in players.
+  if (isGoogle()) {
+    if (S.avatarType === "preset" || S.avatarType === "none") {
+      await savePlayer({ avatarType: S.avatarType, avatarId: S.avatarId });
+    } else if (typeof nextName === "string" && S.name) {
+      await savePlayer();
+    }
+  } else if (typeof nextName === "string" && S.name) {
+    await savePlayer();
+  }
+}
+
+function compressAvatarPhoto(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type || !/^image\/(jpeg|png|webp|gif|avif|bmp)$/i.test(file.type)) {
+      return reject(new Error("Please pick a valid photo (JPG, PNG, or WebP)."));
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      return reject(new Error("That file is too large. Please pick a photo under 15 MB."));
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Couldn't read that photo. Please try another."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Couldn't decode that image. Please pick a JPG, PNG, or WebP photo."));
+      img.onload = () => {
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        if (!w || !h) return reject(new Error("Image appears empty. Please pick another photo."));
+        const side = Math.min(w, h);
+        const sx = Math.floor((w - side) / 2);
+        const sy = Math.floor((h - side) / 2);
+        const canvas = document.createElement("canvas");
+        canvas.width = 192;
+        canvas.height = 192;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("Canvas unavailable on this browser."));
+        // Drawing to a fresh canvas center-crops to 192x192 and strips all EXIF metadata.
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, 192, 192);
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, 192, 192);
+        const attempts = [
+          ["image/webp", 0.82], ["image/webp", 0.70], ["image/webp", 0.56],
+          ["image/jpeg", 0.80], ["image/jpeg", 0.66], ["image/jpeg", 0.50], ["image/jpeg", 0.36]
+        ];
+        const TARGET_BYTES = 30 * 1024;
+        const HARD_CAP = 45 * 1024;
+        let best = null;
+        for (const [mime, q] of attempts) {
+          let out = "";
+          try { out = canvas.toDataURL(mime, q); } catch (e) { continue; }
+          if (!out || !out.startsWith("data:" + mime + ";base64,")) continue;
+          if (!best || out.length < best.length) best = out;
+          if (out.length <= TARGET_BYTES) return resolve(out);
+        }
+        if (best && best.length <= HARD_CAP) return resolve(best);
+        reject(new Error("Photo couldn't be compressed under 45 KB. Try a simpler image."));
+      };
+      img.src = String(reader.result || "");
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function openProfileAvatarModal(onSaved) {
+  const presets = await loadAvatarPresets();
+  let draft = Object.assign({}, myProfileAvatar());
+  let draftName = S.name || "";
+  const el = document.createElement("div");
+  el.className = "modal";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-modal", "true");
+  el.setAttribute("aria-label", "Edit Profile and Avatar");
+
+  const close = () => { document.removeEventListener("keydown", onKey); el.remove(); };
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  document.addEventListener("keydown", onKey);
+
+  const privacyText = () => {
+    if (draft.avatarType === "photo") {
+      return {
+        cls: "photo",
+        text: "On-device preview only: your photo is center-cropped on your phone, stays privately on this device, and is not uploaded to Chever servers or shown to other players yet. You can remove it or switch to an avatar/initials anytime."
+      };
+    }
+    return {
+      cls: "",
+      text: isGoogle()
+        ? "Visible to others: your chosen Chever avatar or initials appears beside your name on Leaderboards, Hall of Fame, and Duels (synced to your Google account)."
+        : "Visible on this device: your chosen Chever avatar or initials shows across your Home, Profile, Hall of Fame, and Duels. Sign in with Google to sync presets across devices."
+    };
+  };
+
+  el.innerHTML = `<div class="sheet col av-sheet">
+    <div class="av-sheet-head">
+      <h2>Edit Profile &amp; Avatar</h2>
+      <button class="av-close-x" id="av-x" type="button" aria-label="Close">${FI.x}</button>
+    </div>
+    <div class="av-preview-card">
+      <div class="av-preview-ring" id="av-prev"></div>
+      <div class="av-preview-meta">
+        <label for="av-name">Display name</label>
+        <input id="av-name" maxlength="40" placeholder="Your name" value="${esc(draftName)}">
+      </div>
+    </div>
+    <div class="av-upload-row">
+      <label class="av-file-label" for="av-file">${FI.camera} Upload Photo (optional)</label>
+      <input id="av-file" type="file" accept="image/*" style="display:none">
+      <button class="chip" id="av-reset" type="button">Reset to Initials</button>
+    </div>
+    <div class="av-err" id="av-err" role="alert"></div>
+    <div>
+      <div class="small muted" style="font-weight:700;margin-bottom:8px">Or choose a Chever Avatar</div>
+      <div class="av-preset-grid" id="av-grid">
+        ${presets.map((p) => `<button class="av-preset-btn" data-id="${esc(p.id)}" type="button" aria-label="${esc(p.label)}"><img src="${esc(p.image)}" alt=""><span>${esc(p.label)}</span></button>`).join("")}
+      </div>
+    </div>
+    <div class="av-privacy-note" id="av-priv"></div>
+    <div class="av-sheet-foot">
+      <button class="btn primary" id="av-save" type="button">Save Profile</button>
+      <button class="btn ghost" id="av-cancel" type="button">Cancel</button>
+    </div>
+  </div>`;
+
+  document.body.appendChild(el);
+  const prevEl = el.querySelector("#av-prev");
+  const nameEl = el.querySelector("#av-name");
+  const errEl = el.querySelector("#av-err");
+  const privEl = el.querySelector("#av-priv");
+  const resetBtn = el.querySelector("#av-reset");
+
+  const syncUI = () => {
+    prevEl.innerHTML = avatarHTMLFor(draft, "70px", nameEl.value || S.name || "Player");
+    el.querySelectorAll(".av-preset-btn").forEach((b) => {
+      b.classList.toggle("on", draft.avatarType === "preset" && draft.avatarId === b.dataset.id);
+    });
+    const note = privacyText();
+    privEl.className = "av-privacy-note" + (note.cls ? " " + note.cls : "");
+    privEl.textContent = note.text;
+    resetBtn.textContent = draft.avatarType === "photo" ? "Remove Photo" : "Reset to Initials";
+  };
+  syncUI();
+
+  nameEl.oninput = () => { errEl.textContent = ""; syncUI(); };
+  el.querySelector("#av-x").onclick = close;
+  el.querySelector("#av-cancel").onclick = close;
+  el.onclick = (e) => { if (e.target === el) close(); };
+
+  el.querySelectorAll(".av-preset-btn").forEach((b) => {
+    b.onclick = () => {
+      sfx.tap();
+      errEl.textContent = "";
+      draft = { avatarType: "preset", avatarId: b.dataset.id, avatarData: null };
+      syncUI();
+    };
+  });
+
+  resetBtn.onclick = () => {
+    sfx.tap();
+    errEl.textContent = "";
+    draft = { avatarType: "none", avatarId: null, avatarData: null };
+    el.querySelector("#av-file").value = "";
+    syncUI();
+  };
+
+  el.querySelector("#av-file").onchange = async (e) => {
+    errEl.textContent = "";
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      const dataUrl = await compressAvatarPhoto(file);
+      draft = { avatarType: "photo", avatarId: null, avatarData: dataUrl };
+      sfx.ok();
+      syncUI();
+    } catch (err) {
+      errEl.textContent = (err && err.message) || "Couldn't use that photo. Please try another image.";
+    }
+  };
+
+  el.querySelector("#av-save").onclick = async () => {
+    const nm = (nameEl.value || "").trim();
+    if (nm && badNm(nm)) {
+      errEl.textContent = KIND_NAME;
+      nameEl.focus();
+      return;
+    }
+    const saveBtn = el.querySelector("#av-save");
+    saveBtn.disabled = true;
+    try {
+      await saveProfileAvatar(draft, nm);
+      sfx.ok(); buzz(15);
+      close();
+      toast("Profile saved ✓");
+      if (onSaved) onSaved();
+    } catch (err) {
+      saveBtn.disabled = false;
+      errEl.textContent = "Couldn't save profile right now. Try again.";
+    }
+  };
+}
+
+// ---------- Home Rolling Visual Showcase ----------
+function mountPictureShowcase(host) {
+  if (!host) return;
+  loadPictureQuizPack().then((items) => {
+    if (!host.isConnected || !items.length) return;
+    const featured = items.slice(0, 8);
+    let idx = 0;
+    let paused = false;
+
+    host.innerHTML = `<section class="chever-panel pq-showcase" aria-label="Picture Quiz: Guess the Character">
+      <div class="pq-showcase-top">
+        <span class="pq-pill-new">${FI.camera} Picture Quiz</span>
+        <span class="small muted">${items.length} Bible scenes</span>
+      </div>
+      <div class="pq-stage" id="pqstage" role="button" tabindex="0" aria-label="Preview Bible clue scenes and play Picture Quiz">
+        ${featured.map((it, i) => `<div class="pq-slide ${i === 0 ? "on" : ""}" data-slide="${i}"><img src="${esc(it.imageUrl)}" alt="Biblical scene clue ${i + 1}" ${i === 0 ? 'loading="eager"' : 'loading="lazy"'}></div>`).join("")}
+        <div class="pq-stage-grad"></div>
+        <div class="pq-stage-prompt">
+          <span>Who is this? Guess from the picture</span>
+          <span class="pq-stage-tag">Tap to play ›</span>
+        </div>
+      </div>
+      <div class="pq-dots" role="tablist" aria-label="Preview scenes">
+        ${featured.map((_, i) => `<button class="pq-dot ${i === 0 ? "on" : ""}" type="button" data-dot="${i}" aria-label="Scene ${i + 1}" aria-selected="${i === 0 ? "true" : "false"}"></button>`).join("")}
+      </div>
+      <div class="pq-showcase-copy">
+        <h3>Guess the Character</h3>
+        <p>Study the illustrated clue, pick the Bible hero, and uncover the verse behind the moment.</p>
+      </div>
+      <a class="btn primary block" href="#/picture-quiz" id="pqplaycta">${FI.play} Play Picture Quiz</a>
+    </section>`;
+
+    const slides = $$(".pq-slide", host);
+    const dots = $$(".pq-dot", host);
+    const show = (next) => {
+      idx = (next + featured.length) % featured.length;
+      slides.forEach((s, i) => s.classList.toggle("on", i === idx));
+      dots.forEach((d, i) => {
+        d.classList.toggle("on", i === idx);
+        d.setAttribute("aria-selected", i === idx ? "true" : "false");
+      });
+    };
+
+    const stage = $("#pqstage", host);
+    stage.onclick = () => { sfx.tap(); buzz(10); go("#/picture-quiz"); };
+    stage.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go("#/picture-quiz"); } };
+    stage.addEventListener("mouseenter", () => { paused = true; });
+    stage.addEventListener("mouseleave", () => { paused = false; });
+    stage.addEventListener("touchstart", () => { paused = true; }, { passive: true });
+    stage.addEventListener("touchend", () => { setTimeout(() => { paused = false; }, 4000); }, { passive: true });
+    dots.forEach((d) => {
+      d.onclick = (e) => {
+        e.stopPropagation();
+        paused = true;
+        show(Number(d.dataset.dot) || 0);
+        setTimeout(() => { paused = false; }, 5000);
+      };
+    });
+
+    const timer = setInterval(() => {
+      if (!host.isConnected) { clearInterval(timer); return; }
+      if (!paused) show(idx + 1);
+    }, 3500);
+    onLeave(() => clearInterval(timer));
+  }).catch(() => {});
+}
+
+// ---------- Full Playable Picture-Clue "Guess the Character" Mode ----------
+async function pictureQuizScreen(q) {
+  render(`<div class="boot"><div class="boot-mark">${FI.camera}</div><div class="boot-sub">Loading Picture Quiz…</div></div>${tabbar("game")}`);
+  let pack = [];
+  try {
+    pack = await loadPictureQuizPack();
+  } catch (e) {
+    render(`<div class="col"><section class="chever-panel col"><h2>Couldn't load Picture Quiz</h2><p class="small muted">Check your connection and try again.</p><a class="btn primary block" href="#/picture-quiz">Retry</a><a class="btn ghost block" href="#/">Back home</a></section></div>${tabbar("game")}`);
+    return;
+  }
+
+  const reqLen = Number(q && q.get("n"));
+  let roundSize = [8, 10, 15].includes(reqLen) ? Math.min(reqLen, pack.length) : Math.min(10, pack.length);
+
+  render(`<div id="pqroot" class="pq-wrap"></div>${tabbar("game")}`);
+  const rootEl = $("#pqroot");
+
+  const startNewRound = (size) => {
+    roundSize = Math.min(size, pack.length);
+    const seed = "pq:" + Date.now() + ":" + Math.random();
+    const deck = shuffled(pack, seed).slice(0, roundSize).map((item, idx) => ({
+      item,
+      choices: shuffled(item.options || [item.answer], seed + ":" + idx),
+    }));
+    let cur = 0;
+    let score = 0;
+    let streak = 0;
+    let bestStreak = 0;
+    let answered = false;
+    let picked = null;
+    let hintOpen = false;
+    const history = [];
+
+    const drawCard = () => {
+      if (!rootEl || !rootEl.isConnected) return;
+      const entry = deck[cur];
+      const it = entry.item;
+      if (deck[cur + 1]) { const pre = new Image(); pre.src = deck[cur + 1].item.imageUrl; }
+      const pct = Math.round(((cur + (answered ? 1 : 0)) / deck.length) * 100);
+      const isRight = answered && picked === it.answer;
+
+      rootEl.innerHTML = flatIcons(`
+        <div class="pq-top">
+          <a class="pq-back" href="#/">‹ Home</a>
+          <div class="pq-meta">
+            <span>Card ${cur + 1} of ${deck.length}</span>
+            <span class="pq-streak" aria-label="Current streak ${streak}">${FI.flame} ${streak}</span>
+          </div>
+        </div>
+        <div class="pq-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
+        ${cur === 0 && !answered ? `<div class="pq-sizes"><span class="small muted" style="font-weight:700">Round length:</span><div class="pq-size-pills">${[8, 10, 15].map((n) => `<button type="button" class="${roundSize === n ? "on" : ""}" data-pqn="${n}">${n === 8 ? "Quick 8" : n === 10 ? "10 cards" : "Full 15"}</button>`).join("")}</div></div>` : ""}
+        <section class="chever-panel pq-card">
+          <div class="pq-img-frame"><img src="${esc(it.imageUrl)}" alt="Illustrated Bible character clue"></div>
+          <div class="pq-question-row">
+            <h2>Who is this?</h2>
+            ${!answered && it.hint ? `<button class="pq-hint-btn" id="pqhint" type="button" aria-expanded="${hintOpen ? "true" : "false"}">${FI.question} ${hintOpen ? "Hide hint" : "Need a hint?"}</button>` : ""}
+          </div>
+          ${!answered && hintOpen && it.hint ? `<div class="pq-hint-box" id="pqhintbox"><b>Hint:</b> ${esc(it.hint)}</div>` : ""}
+          <div class="pq-opts" role="group" aria-label="Character choices">
+            ${entry.choices.map((opt) => {
+              let cls = "pq-opt";
+              if (answered) {
+                if (opt === it.answer) cls += " ok";
+                else if (opt === picked) cls += " no";
+              }
+              return `<button class="${cls}" type="button" data-opt="${esc(opt)}" ${answered ? "disabled" : ""}>${esc(opt)}</button>`;
+            }).join("")}
+          </div>
+          ${answered ? `
+            <div class="pq-reveal ${isRight ? "ok" : "no"}" role="status" aria-live="polite">
+              <div class="pq-reveal-head">
+                <b>${isRight ? "Correct — " + esc(it.answer) + "!" : "It’s " + esc(it.answer)}</b>
+                <span class="pq-verse-pill">${esc(it.verseRef)}</span>
+              </div>
+              <p>${esc(it.explanation)}</p>
+              ${kjvChapterLinksHTML(it.verseRef)}
+            </div>
+            <button class="btn primary block" id="pqnext" type="button">${cur + 1 < deck.length ? "Next character ›" : "See results ›"}</button>
+          ` : ""}
+        </section>`);
+
+      $$("[data-pqn]", rootEl).forEach((b) => {
+        b.onclick = () => { sfx.tap(); startNewRound(Number(b.dataset.pqn) || 10); };
+      });
+
+      const hintBtn = $("#pqhint", rootEl);
+      if (hintBtn) {
+        hintBtn.onclick = () => { sfx.tap(); hintOpen = !hintOpen; drawCard(); };
+      }
+
+      $$(".pq-opt", rootEl).forEach((b) => {
+        b.onclick = () => {
+          if (answered) return;
+          answered = true;
+          hintOpen = false;
+          picked = b.dataset.opt;
+          const ok = picked === it.answer;
+          if (ok) { score++; streak++; bestStreak = Math.max(bestStreak, streak); sfx.ok(); buzz(15); }
+          else { streak = 0; sfx.bad(); buzz([25, 35, 25]); }
+          history.push({ item: it, ok, picked });
+          drawCard();
+          const nb = $("#pqnext", rootEl);
+          if (nb && nb.scrollIntoView) nb.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        };
+      });
+
+      const nextBtn = $("#pqnext", rootEl);
+      if (nextBtn) {
+        nextBtn.onclick = () => {
+          sfx.tap();
+          if (cur + 1 < deck.length) {
+            cur++; answered = false; picked = null; hintOpen = false;
+            drawCard();
+            window.scrollTo(0, 0);
+          } else {
+            drawSummary();
+          }
+        };
+      }
+    };
+
+    const drawSummary = () => {
+      if (!rootEl || !rootEl.isConnected) return;
+      const acc = deck.length ? Math.round((score / deck.length) * 100) : 0;
+      const emojiGrid = history.map((h) => (h.ok ? "🟩" : "🟥")).join("");
+      const shareText = `Chever Picture Quiz: ${score}/${deck.length} (${acc}%)\nBest streak: ${bestStreak}\n${emojiGrid}\nCan you guess the Bible characters from the picture clues?\n${origin()}/#/picture-quiz`;
+      if (acc >= 70) { confetti(70); sfx.win(); }
+
+      rootEl.innerHTML = flatIcons(`
+        <section class="chever-panel pq-summary-hero">
+          <div class="chever-kicker">Picture Quiz Complete</div>
+          <div class="pq-score-big">${score}/${deck.length}</div>
+          <div class="small muted" style="font-weight:700">${acc >= 90 ? "Sharp eye for Scripture!" : acc >= 70 ? "Great biblical knowledge!" : "Good warm-up — play again to beat your score."}</div>
+          <div class="stats3" style="margin-top:6px">
+            <div class="stat"><b>${score}/${deck.length}</b><span>Score</span></div>
+            <div class="stat"><b>${acc}%</b><span>Accuracy</span></div>
+            <div class="stat"><b>${FI.flame} ${bestStreak}</b><span>Best streak</span></div>
+          </div>
+        </section>
+        <section class="chever-panel col" style="gap:10px">
+          <b>Scene recap</b>
+          <div class="pq-review-strip">
+            ${history.map((h) => `<div class="pq-rev-tile ${h.ok ? "ok" : "no"}" title="${esc(h.item.answer)} (${esc(h.item.verseRef)})"><img src="${esc(h.item.imageUrl)}" alt="${esc(h.item.answer)}"><span class="pq-rev-badge">${h.ok ? "✓" : "✕"}</span></div>`).join("")}
+          </div>
+        </section>
+        <section class="chever-panel col" style="gap:10px">
+          <div class="pq-sizes"><span class="small muted" style="font-weight:700">Play another round:</span><div class="pq-size-pills">${[8, 10, 15].map((n) => `<button type="button" class="${roundSize === n ? "on" : ""}" data-pqagain="${n}">${n === 8 ? "Quick 8" : n === 10 ? "10 cards" : "Full 15"}</button>`).join("")}</div></div>
+          <button class="btn primary block" id="pqplayagain" type="button">${FI.rematch} Play Again (${roundSize} cards)</button>
+          <div class="row" style="gap:8px">
+            <button class="btn ghost grow" id="pqshare" type="button">${FI.share} Share Result</button>
+            <a class="btn ghost grow" href="#/">Home</a>
+          </div>
+        </section>
+      `); window.scrollTo(0, 0);
+
+      $$("[data-pqagain]").forEach((b) => {
+        b.onclick = () => { sfx.tap(); startNewRound(Number(b.dataset.pqagain) || 10); };
+      });
+      $("#pqplayagain").onclick = () => { sfx.tap(); startNewRound(roundSize); };
+      $("#pqshare").onclick = async () => {
+        sfx.tap();
+        if (navigator.share) {
+          try { await navigator.share({ title: "Chever Picture Quiz", text: shareText }); return; } catch (e) {}
+        }
+        try { await navigator.clipboard.writeText(shareText); toast("Result copied to clipboard ✓"); }
+        catch (e) { window.open(waLink(shareText), "_blank", "noopener"); }
+      };
+    };
+
+    drawCard();
+  };
+
+  startNewRound(roundSize);
+}
+
 // ---------- Chever preview scripts. Each file loads only when its flag is set on window.BA_FLAGS; nothing sets the flags, so on
 // the live site neither file is requested and boot does not wait. Returns a promise only when something is loading.
 function featureScripts() {
   const f = window.BA_FLAGS || {};
   const want = [];
   if (f.sharedReading === true) want.push("/v3/reading-screens.js?v=3.13.9");
-  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.13.9");
+  if (f.chever2Duels === true) want.push("/v3/duel-screens.js?v=3.13.12");
   if (!want.length) return null;
   return Promise.all(want.map((src) => new Promise((done) => {
     const s = document.createElement("script"); s.src = src; s.onload = done; s.onerror = done; document.head.appendChild(s);

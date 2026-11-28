@@ -1,0 +1,212 @@
+[
+  {
+    "id": "clue-01-moses",
+    "image": "assets/visual-pack/clues/clue-01-moses.webp",
+    "answer": "Moses",
+    "options": [
+      "Moses",
+      "Aaron",
+      "Joshua",
+      "Elijah"
+    ],
+    "verseRef": "Exodus 14:21",
+    "hint": "He stretched his staff over the Red Sea so Israel could cross on dry ground.",
+    "explanation": "God parted the Red Sea when Moses raised his staff, opening a dry path for Israel to escape Egypt (Exodus 14:21)."
+  },
+  {
+    "id": "clue-02-david",
+    "image": "assets/visual-pack/clues/clue-02-david.webp",
+    "answer": "David",
+    "options": [
+      "David",
+      "Jonathan",
+      "Samson",
+      "Gideon"
+    ],
+    "verseRef": "1 Samuel 17:40–49",
+    "hint": "A young shepherd who chose five smooth stones from the stream before facing a giant.",
+    "explanation": "Armed with only a sling, five smooth stones, and faith in the Lord, David defeated the Philistine giant Goliath (1 Samuel 17:40–49)."
+  },
+  {
+    "id": "clue-03-daniel",
+    "image": "assets/visual-pack/clues/clue-03-daniel.webp",
+    "answer": "Daniel",
+    "options": [
+      "Daniel",
+      "Joseph",
+      "Jeremiah",
+      "Ezekiel"
+    ],
+    "verseRef": "Daniel 6:16–22",
+    "hint": "He kept praying to God even when a royal decree threatened a night with hungry beasts.",
+    "explanation": "God sent His angel to shut the lions’ mouths and keep Daniel completely safe through the night in the den (Daniel 6:16–22)."
+  },
+  {
+    "id": "clue-04-noah",
+    "image": "assets/visual-pack/clues/clue-04-noah.webp",
+    "answer": "Noah",
+    "options": [
+      "Noah",
+      "Abraham",
+      "Jonah",
+      "Job"
+    ],
+    "verseRef": "Genesis 8:11; 9:13",
+    "hint": "A dove returned to his wooden vessel carrying a fresh olive leaf after the great flood.",
+    "explanation": "Noah built the ark in obedience to God, saw the dove return with an olive leaf, and received the rainbow as God’s covenant sign (Genesis 8:11; 9:13)."
+  },
+  {
+    "id": "clue-05-joseph",
+    "image": "assets/visual-pack/clues/clue-05-joseph.webp",
+    "answer": "Joseph",
+    "options": [
+      "Joseph",
+      "Benjamin",
+      "Jacob",
+      "Solomon"
+    ],
+    "verseRef": "Genesis 37:3–9",
+    "hint": "His father gave him a richly ornamented robe, and he dreamed of sheaves and eleven stars bowing.",
+    "explanation": "Jacob gave Joseph an ornate multicolored robe, and God gave him prophetic dreams of wheat sheaves and eleven stars before his rise in Egypt (Genesis 37:3–9)."
+  },
+  {
+    "id": "clue-06-jonah",
+    "image": "assets/visual-pack/clues/clue-06-jonah.webp",
+    "answer": "Jonah",
+    "options": [
+      "Jonah",
+      "Peter",
+      "Paul",
+      "Noah"
+    ],
+    "verseRef": "Jonah 1:17",
+    "hint": "He fled by ship from his mission to Nineveh and spent three days inside a great sea creature.",
+    "explanation": "After Jonah fled God’s call to Nineveh, the Lord appointed a great fish to swallow him for three days and three nights (Jonah 1:17)."
+  },
+  {
+    "id": "clue-07-elijah",
+    "image": "assets/visual-pack/clues/clue-07-elijah.webp",
+    "answer": "Elijah",
+    "options": [
+      "Elijah",
+      "Elisha",
+      "Isaiah",
+      "Moses"
+    ],
+    "verseRef": "2 Kings 2:11",
+    "hint": "This prophet was taken up to heaven in a whirlwind as a chariot of fire separated him from his apprentice.",
+    "explanation": "A chariot of fire and horses of fire appeared beside the Jordan, and Elijah went up to heaven in a whirlwind while Elisha watched (2 Kings 2:11)."
+  },
+  {
+    "id": "clue-08-samson",
+    "image": "assets/visual-pack/clues/clue-08-samson.webp",
+    "answer": "Samson",
+    "options": [
+      "Samson",
+      "Gideon",
+      "David",
+      "Saul"
+    ],
+    "verseRef": "Judges 16:29–30",
+    "hint": "A Nazirite judge whose supernatural strength returned one last time between two temple columns.",
+    "explanation": "Calling on the Lord for strength one final time, Samson pushed against the two central temple pillars and brought the Philistine house down (Judges 16:29–30)."
+  },
+  {
+    "id": "clue-09-esther",
+    "image": "assets/visual-pack/clues/clue-09-esther.webp",
+    "answer": "Esther",
+    "options": [
+      "Esther",
+      "Ruth",
+      "Deborah",
+      "Hannah"
+    ],
+    "verseRef": "Esther 5:2",
+    "hint": "A courageous queen who approached the Persian throne uninvited and saw the king extend his golden scepter.",
+    "explanation": "Queen Esther risked her life to enter the king’s court unannounced, and King Xerxes extended his golden scepter to spare her and hear her plea for her people (Esther 5:2)."
+  },
+  {
+    "id": "clue-10-zacchaeus",
+    "image": "assets/visual-pack/clues/clue-10-zacchaeus.webp",
+    "answer": "Zacchaeus",
+    "options": [
+      "Zacchaeus",
+      "Matthew",
+      "Nicodemus",
+      "Bartimaeus"
+    ],
+    "verseRef": "Luke 19:4",
+    "hint": "A short chief tax collector in Jericho who climbed a sycamore-fig tree just to see Jesus pass by.",
+    "explanation": "Too short to see over the crowd in Jericho, Zacchaeus climbed a sycamore-fig tree where Jesus called him down and invited Himself to his house (Luke 19:4)."
+  },
+  {
+    "id": "clue-11-gideon",
+    "image": "assets/visual-pack/clues/clue-11-gideon.webp",
+    "answer": "Gideon",
+    "options": [
+      "Gideon",
+      "Joshua",
+      "Caleb",
+      "Barak"
+    ],
+    "verseRef": "Judges 7:20",
+    "hint": "With just 300 men, he routed Midian at night using trumpets, empty clay jars, and hidden torches.",
+    "explanation": "At Gideon’s signal, his 300 men blew their trumpets, smashed their clay jars, and held up blazing torches, throwing the Midianite camp into panic (Judges 7:20)."
+  },
+  {
+    "id": "clue-12-ruth",
+    "image": "assets/visual-pack/clues/clue-12-ruth.webp",
+    "answer": "Ruth",
+    "options": [
+      "Ruth",
+      "Naomi",
+      "Esther",
+      "Abigail"
+    ],
+    "verseRef": "Ruth 2:2–7",
+    "hint": "A loyal Moabite widow who gleaned leftover barley in the fields of Boaz to care for her mother-in-law.",
+    "explanation": "Out of steadfast devotion to Naomi, Ruth worked faithfully gleaning grain in Boaz’s barley fields in Bethlehem (Ruth 2:2–7)."
+  },
+  {
+    "id": "clue-13-joshua",
+    "image": "assets/visual-pack/clues/clue-13-joshua.webp",
+    "answer": "Joshua",
+    "options": [
+      "Joshua",
+      "Moses",
+      "Caleb",
+      "Gideon"
+    ],
+    "verseRef": "Joshua 6:20",
+    "hint": "He led Israel around Jericho for seven days until the priests’ ram’s horns sounded and the walls fell flat.",
+    "explanation": "Following God’s command under Joshua’s leadership, the priests blew seven ram’s horns, the people shouted, and Jericho’s walls collapsed (Joshua 6:20)."
+  },
+  {
+    "id": "clue-14-peter",
+    "image": "assets/visual-pack/clues/clue-14-peter.webp",
+    "answer": "Peter",
+    "options": [
+      "Peter",
+      "John",
+      "Andrew",
+      "Thomas"
+    ],
+    "verseRef": "Matthew 14:29",
+    "hint": "This bold fisherman climbed out of the boat on the Sea of Galilee to walk on the waves toward Jesus.",
+    "explanation": "When Jesus said 'Come,' Peter stepped out of the boat and walked on the water toward Him on the Sea of Galilee (Matthew 14:29)."
+  },
+  {
+    "id": "clue-15-abraham",
+    "image": "assets/visual-pack/clues/clue-15-abraham.webp",
+    "answer": "Abraham",
+    "options": [
+      "Abraham",
+      "Isaac",
+      "Jacob",
+      "Job"
+    ],
+    "verseRef": "Genesis 15:5",
+    "hint": "God brought this patriarch outside his tent at night and promised descendants as numerous as the stars.",
+    "explanation": "God led Abraham outside to gaze at the starry night sky and promised his offspring would be as countless as the stars, and Abraham believed the Lord (Genesis 15:5)."
+  }
+]

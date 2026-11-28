@@ -28,6 +28,7 @@ import { publicRooms, liveWinner, publicKo, onKoOpen } from "./live";
 import { badName } from "./names";
 import { initReportStore, registerReport, tallyBooks, mergeReport } from "./report";
 import { mergePlayerRows } from "./merge";
+import { sanitizeProfileAvatar, readProfileAvatar, type ProfileAvatar } from "./avatar";
 import { renewSession } from "../_core/session-renew";
 import { initTesterStore, registerTesters } from "./testers";
 import { vodForDay } from "./vod";
@@ -205,13 +206,21 @@ function code(): string {
   const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   return Array.from(crypto.randomBytes(6), (b) => A[b % A.length]).join("");
 }
+
+
 async function getPlayer(openId: string) {
   const r = await baPool()!.query(`select * from ${SCH}.players where open_id=$1`, [openId]);
   return r.rows[0] || null;
 }
 function publicPlayer(p: any) {
   if (!p) return null;
-  return { name: p.name, church: p.church, tier: p.tier, xp: p.xp, streak: p.streak, bestStreak: p.best_streak, lastDay: p.last_day, rounds: p.rounds, achievements: p.achievements, stats: p.stats, rank: rankOf(p.xp) };
+  const av = readProfileAvatar(p.stats?.profileAvatar);
+  return {
+    name: p.name, church: p.church, tier: p.tier, xp: p.xp, streak: p.streak,
+    bestStreak: p.best_streak, lastDay: p.last_day, rounds: p.rounds,
+    achievements: p.achievements, stats: p.stats, rank: rankOf(p.xp),
+    avatarType: av.avatarType, avatarId: av.avatarId,
+  };
 }
 function send(res: Response, status: number, body: unknown) {
   res.status(status).setHeader("Cache-Control", "no-store");
@@ -299,19 +308,24 @@ async function bumpStat(openId: string, key: string, by = 1) {
 
 async function duelView(codeStr: string, meId?: string) {
   const pool = baPool()!;
-  const d = (await pool.query(`select * from ${SCH}.duels where code=$1`, [codeStr])).rows[0];
+  const d = (await pool.query(
+    `select d.*, cp.stats->'profileAvatar' as creator_avatar from ${SCH}.duels d left join ${SCH}.players cp on cp.open_id=d.creator_open_id where d.code=$1`,
+    [codeStr],
+  )).rows[0];
   if (!d) return null;
   const entries = (await pool.query(
-    `select e.open_id, e.name, e.church, e.score, e.correct, e.total, e.time_ms, e.answers, e.progress, e.finished, e.updated_at, p.xp from ${SCH}.duel_entries e left join ${SCH}.players p on p.open_id=e.open_id where e.code=$1 order by e.finished desc, e.score desc, e.time_ms asc limit 60`,
+    `select e.open_id, e.name, e.church, e.score, e.correct, e.total, e.time_ms, e.answers, e.progress, e.finished, e.updated_at, p.xp, p.stats->'profileAvatar' as profile_avatar from ${SCH}.duel_entries e left join ${SCH}.players p on p.open_id=e.open_id where e.code=$1 order by e.finished desc, e.score desc, e.time_ms asc limit 60`,
     [codeStr],
   )).rows;
+  const creatorAv = readProfileAvatar(d.creator_avatar);
   return {
     code: d.code, mode: d.mode, tier: d.tier, ids: d.question_ids, parent: d.parent_code, createdAt: d.created_at,
-    creator: { name: d.creator_name, isMe: meId === d.creator_open_id },
+    creator: { name: d.creator_name, isMe: meId === d.creator_open_id, ...creatorAv },
     entries: entries.map((e: any) => ({
       name: e.name, church: e.church, score: e.score, correct: e.correct, total: e.total, timeMs: e.time_ms,
       answers: e.finished ? e.answers : [], progress: e.progress, finished: e.finished, isMe: e.open_id === meId,
       isCreator: e.open_id === d.creator_open_id, rank: rankOf(e.xp || 0).name, updatedAt: e.updated_at,
+      ...readProfileAvatar(e.profile_avatar),
     })),
   };
 }
@@ -421,20 +435,56 @@ export function registerV3(app: Express): void {
     send(res, 200, { user: { openId: me.openId.startsWith("guest_") ? "guest" : "google", name: me.name }, player: publicPlayer(await getPlayer(me.openId)) });
   }, false));
 
+  const lbCache = new Map<string, { at: number; data: Promise<any> }>();
+
   app.post("/api/v3/player", limitWrites, guard(async (req, res, me) => {
     const b = req.body || {};
     const name = cleanPlayerName(b.name, 40) || me.name || "Player";
     const church = teamNameFor(me.openId) || clean(b.church, 60) || null; // a church-team member always plays for the team
     const tier = asTier(b.tier);
     const importXp = Math.max(0, Math.min(Number(b.importXp) || 0, 20000));
+    let nextAvatar: ProfileAvatar | null = null;
+    if (b.avatarType !== undefined || b.profileAvatar !== undefined) {
+      if (me.openId.startsWith("guest_")) return send(res, 403, { error: "verified_sign_in_required" });
+      const checked = sanitizeProfileAvatar(b.profileAvatar ?? { avatarType: b.avatarType, avatarId: b.avatarId, avatarData: b.avatarData });
+      if (!checked.ok) return send(res, 400, { error: checked.error });
+      nextAvatar = checked.value;
+    }
     const pool = baPool()!;
-    await pool.query(
-      `insert into ${SCH}.players(open_id, name, church, tier, xp) values ($1,$2,$3,$4,$5)
-       on conflict (open_id) do update set name=excluded.name, church=excluded.church, tier=excluded.tier, updated_at=now()`,
-      [me.openId, name, church, tier, importXp],
-    );
+    if (nextAvatar) {
+      await pool.query(
+        `insert into ${SCH}.players(open_id, name, church, tier, xp, stats) values ($1,$2,$3,$4,$5,jsonb_build_object('profileAvatar', $6::jsonb))
+         on conflict (open_id) do update set name=excluded.name, church=excluded.church, tier=excluded.tier,
+           stats=coalesce(${SCH}.players.stats, '{}'::jsonb) || jsonb_build_object('profileAvatar', $6::jsonb), updated_at=now()`,
+        [me.openId, name, church, tier, importXp, JSON.stringify(nextAvatar)],
+      );
+      lbCache.clear();
+    } else {
+      await pool.query(
+        `insert into ${SCH}.players(open_id, name, church, tier, xp) values ($1,$2,$3,$4,$5)
+         on conflict (open_id) do update set name=excluded.name, church=excluded.church, tier=excluded.tier, updated_at=now()`,
+        [me.openId, name, church, tier, importXp],
+      );
+    }
     if (church) await bumpStat(me.openId, "churchSet");
     send(res, 200, { player: publicPlayer(await getPlayer(me.openId)) });
+  }));
+
+  app.post("/api/v3/profile/avatar", limitWrites, guard(async (req, res, me) => {
+    if (me.openId.startsWith("guest_")) return send(res, 403, { error: "verified_sign_in_required" });
+    const b = req.body || {};
+    const checked = sanitizeProfileAvatar(b.profileAvatar ?? { avatarType: b.avatarType, avatarId: b.avatarId, avatarData: b.avatarData });
+    if (!checked.ok) return send(res, 400, { error: checked.error });
+    const name = cleanPlayerName(b.name, 40) || me.name || "Player";
+    const pool = baPool()!;
+    await pool.query(
+      `insert into ${SCH}.players(open_id, name, stats) values ($1,$2,jsonb_build_object('profileAvatar', $3::jsonb))
+       on conflict (open_id) do update set name=case when $4 then excluded.name else ${SCH}.players.name end,
+         stats=coalesce(${SCH}.players.stats, '{}'::jsonb) || jsonb_build_object('profileAvatar', $3::jsonb), updated_at=now()`,
+      [me.openId, name, JSON.stringify(checked.value), Boolean(cleanPlayerName(b.name, 40))],
+    );
+    lbCache.clear();
+    send(res, 200, { ok: true, player: publicPlayer(await getPlayer(me.openId)) });
   }));
 
   app.get("/api/v3/daily", guard(async (_req, res, me) => {
@@ -590,7 +640,6 @@ export function registerV3(app: Express): void {
 
   // ---- leaderboards ----
   // v3.5.0: the shared boards (all, week, daily, church) are cached for 20 s; rivals are per player and never cached.
-  const lbCache = new Map<string, { at: number; data: Promise<any> }>();
   const cachedLb = (key: string, fn: () => Promise<any>) => {
     const hit = lbCache.get(key);
     if (hit && Date.now() - hit.at < 20_000) return hit.data;
@@ -625,14 +674,14 @@ export function registerV3(app: Express): void {
       return send(res, 200, { scope, rows: rows.map((r: any) => ({ name: badName(r.name) ? "Player" : r.name, church: r.church, score: r.score, rank: rankOf(r.xp || 0).name, isMe: me?.openId === r.open_id, wins: r.wins, losses: r.losses, draws: r.draws })) });
     }
     if (scope === "all") {
-      rows = await cachedLb("all", async () => (await pool.query(`select open_id, name, church, xp as score, xp from ${SCH}.players where xp>0 order by xp desc limit 50`)).rows);
+      rows = await cachedLb("all", async () => (await pool.query(`select open_id, name, church, xp as score, xp, stats->'profileAvatar' as profile_avatar from ${SCH}.players where xp>0 order by xp desc limit 50`)).rows);
     } else if (scope === "week") {
-      rows = await cachedLb("week", async () => (await pool.query(`select r.open_id, p.name, p.church, sum(r.score)::int as score, p.xp from ${SCH}.rounds r join ${SCH}.players p on p.open_id=r.open_id where r.created_at > now() - interval '7 days' group by r.open_id, p.name, p.church, p.xp order by score desc limit 50`)).rows);
+      rows = await cachedLb("week", async () => (await pool.query(`select r.open_id, p.name, p.church, sum(r.score)::int as score, p.xp, p.stats->'profileAvatar' as profile_avatar from ${SCH}.rounds r join ${SCH}.players p on p.open_id=r.open_id where r.created_at > now() - interval '7 days' group by r.open_id, p.name, p.church, p.xp, p.stats order by score desc limit 50`)).rows);
     } else if (scope === "daily") {
       const day = lagosDay();
-      rows = await cachedLb("daily:" + day, async () => (await pool.query(`select r.open_id, p.name, p.church, r.score, r.correct, r.total, p.xp from ${SCH}.rounds r join ${SCH}.players p on p.open_id=r.open_id where r.mode='daily' and r.day=$1 order by r.score desc limit 50`, [day])).rows);
+      rows = await cachedLb("daily:" + day, async () => (await pool.query(`select r.open_id, p.name, p.church, r.score, r.correct, r.total, p.xp, p.stats->'profileAvatar' as profile_avatar from ${SCH}.rounds r join ${SCH}.players p on p.open_id=r.open_id where r.mode='daily' and r.day=$1 order by r.score desc limit 50`, [day])).rows);
     } else if (scope === "endless") { // v3.11.1: highest Endless level passed
-      rows = await cachedLb("endless", async () => (await pool.query(`select open_id, name, church, (stats->>'endless')::int as score, xp from ${SCH}.players where stats->>'endless' ~ '^[0-9]{1,6}$' and (stats->>'endless')::int > 0 order by score desc, updated_at asc limit 50`)).rows);
+      rows = await cachedLb("endless", async () => (await pool.query(`select open_id, name, church, (stats->>'endless')::int as score, xp, stats->'profileAvatar' as profile_avatar from ${SCH}.players where stats->>'endless' ~ '^[0-9]{1,6}$' and (stats->>'endless')::int > 0 order by score desc, updated_at asc limit 50`)).rows);
     } else if (scope === "church") {
       const r = await cachedLb("church", () => pool.query(`select min(church) as church, count(*)::int as players, sum(xp)::int as score, max(xp) as top from ${SCH}.players where church is not null and church<>'' group by lower(regexp_replace(church,'\\s+',' ','g')) order by score desc limit 40`));
       return send(res, 200, { scope, churches: r.rows });
@@ -642,12 +691,13 @@ export function registerV3(app: Express): void {
       const n = (cond: string) => `sum(case when ${cond} then 1 else 0 end)::int`;
       rows = (await pool.query(
         `select o.open_id, max(o.name) as name, max(p.church) as church, coalesce(max(p.xp),0) as xp, coalesce(max(p.xp),0) as score,
+           (array_agg(p.stats->'profileAvatar'))[1] as profile_avatar,
            ${n(rule.win)} as wins, ${n(rule.loss)} as losses, ${n(rule.draw)} as draws
          from ${SCH}.duel_entries m join ${SCH}.duel_entries o on o.code=m.code and o.open_id<>m.open_id and o.finished
          left join ${SCH}.players p on p.open_id=o.open_id
          where m.open_id=$1 and m.finished group by o.open_id order by count(*) desc limit 30`, [me.openId])).rows;
     }
-    send(res, 200, { scope, rows: rows.map((r: any) => ({ name: badName(r.name) ? "Player" : r.name, church: r.church, score: r.score, rank: rankOf(r.xp || 0).name, isMe: me?.openId === r.open_id, wins: r.wins, losses: r.losses, draws: r.draws, ...(scope === "daily" ? { correct: r.correct, total: r.total } : {}) })) });
+    send(res, 200, { scope, rows: rows.map((r: any) => ({ name: badName(r.name) ? "Player" : r.name, church: r.church, score: r.score, rank: rankOf(r.xp || 0).name, isMe: me?.openId === r.open_id, wins: r.wins, losses: r.losses, draws: r.draws, ...readProfileAvatar(r.profile_avatar), ...(scope === "daily" ? { correct: r.correct, total: r.total } : {}) })) });
   }, false));
 
   // ---- Church League (teams, invite codes, weekly + all-time boards) ----

@@ -43,6 +43,12 @@ export function mergeStats(target: unknown, guest: unknown): Record<string, unkn
     if (t == null) { out[k] = g; continue; } // the account had nothing here (or a value an old merge broke): take the guest's
     if (k === "st3e") { out[k] = mergeEnergy(t, g); continue; }
     if (k === "streakSaves") { out[k] = Math.min(2, Math.max(num(t) || 0, num(g) || 0)); continue; }
+    if (k === "profileAvatar") {
+      const tHas = isObj(t) && t.avatarType === "preset" && typeof t.avatarId === "string";
+      const gHas = isObj(g) && g.avatarType === "preset" && typeof g.avatarId === "string";
+      out[k] = tHas ? { avatarType: "preset", avatarId: t.avatarId } : (gHas ? { avatarType: "preset", avatarId: g.avatarId } : { avatarType: "none", avatarId: null });
+      continue;
+    }
     const x = num(t), y = num(g);
     if (x != null && y != null) { out[k] = isMaxKey(k) ? Math.max(x, y) : x + y; continue; }
     if (isObj(t) && isObj(g)) { out[k] = unionMax(t, g); continue; }
